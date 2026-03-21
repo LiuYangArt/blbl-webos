@@ -1,5 +1,9 @@
 # webOS 官方推荐播放路径与 B 站适配实施方案
 
+> 说明：本文档中的“外部 media-gateway / 服务端整理媒体地址”主路线已被废弃。
+> 当前最新主方案请优先参考：
+> [2026-03-21-webos-self-contained-shaka-plan.md](/F:/CodeProjects/bilibili_webos/docs/plans/2026-03-21-webos-self-contained-shaka-plan.md)
+
 ## 1. 结论
 
 本项目后续播放器实施，应明确切换到下面这条路线：
@@ -70,6 +74,24 @@ npm run verify:simulator-proxy
 - 用结构化媒体网关地址构建 webOS bundle
 - 启动 `webOS TV 6.0 Simulator`
 - 检查是否收到 `play` 事件
+
+## 1.2 2026-03-21 夜间补充（编码策略真实语义）
+
+针对“模拟器可播但真机 LG C1 有声音无画面”和“编码按钮存在假切换语义”的问题，本轮已补充以下实现约束：
+
+- 播放器里的 `HEVC / AV1` 手动选择，在当前兼容流执行链路下不再伪装为“已强制生效”。
+- 当用户选择当前链路不可强制的编码时，会明确提示并回退到可执行策略（当前为 `AVC` 兼容流）。
+- 设置面板新增“编码偏好 / 当前执行策略 / 当前执行 codec”区分，避免把“偏好”误认为“真实执行结果”。
+- 新增“音频无画面”检测 telemetry 字段，会上报：
+  - `currentTime`
+  - `videoWidth / videoHeight`
+  - `decodedVideoFrames`
+  - 当前 attempt 与候选地址索引
+
+这次补充的目标不是宣布“已解决所有真机黑屏”，而是先保证两件事：
+
+1. 编码切换功能行为真实、可解释、可验证  
+2. 真机后续排障有足够观测信息，不再只能靠主观现象判断
 
 ## 2. 官方推荐方案总结
 

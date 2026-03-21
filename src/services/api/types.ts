@@ -74,6 +74,11 @@ export type VideoCodecPreference = 'auto' | 'avc' | 'hevc' | 'av1';
 
 export type ParsedVideoCodec = 'avc' | 'hevc' | 'av1' | 'unknown';
 
+export type PlayDashSegmentBase = {
+  initialization: string;
+  indexRange: string;
+};
+
 export type PlayVideoStream = {
   id: number;
   quality: number;
@@ -82,6 +87,8 @@ export type PlayVideoStream = {
   codecs: string;
   url: string;
   backupUrls: string[];
+  mimeType: string;
+  segmentBase: PlayDashSegmentBase | null;
   width: number;
   height: number;
   bandwidth: number;
@@ -92,6 +99,8 @@ export type PlayAudioStream = {
   id: number;
   url: string;
   backupUrls: string[];
+  mimeType: string;
+  segmentBase: PlayDashSegmentBase | null;
   bandwidth: number;
   codecs: string;
 };

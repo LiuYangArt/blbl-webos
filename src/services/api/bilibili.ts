@@ -108,7 +108,20 @@ type RawDashStream = {
   base_url?: string;
   backupUrl?: string[];
   backup_url?: string[];
+  mime_type?: string;
   codecs?: string;
+  segment_base?: {
+    Initialization?: string;
+    initialization?: string;
+    indexRange?: string;
+    index_range?: string;
+  };
+  segmentBase?: {
+    Initialization?: string;
+    initialization?: string;
+    indexRange?: string;
+    index_range?: string;
+  };
   width?: Numeric;
   height?: Numeric;
   bandwidth?: Numeric;
@@ -285,6 +298,21 @@ function parseFrameRate(value: string | undefined) {
   return Number((numerator / denominator).toFixed(2));
 }
 
+function parseSegmentBase(stream: RawDashStream) {
+  const segmentBase = stream.segment_base ?? stream.segmentBase;
+  const initialization = String(segmentBase?.Initialization ?? segmentBase?.initialization ?? '').trim();
+  const indexRange = String(segmentBase?.indexRange ?? segmentBase?.index_range ?? '').trim();
+
+  if (!initialization || !indexRange) {
+    return null;
+  }
+
+  return {
+    initialization,
+    indexRange,
+  };
+}
+
 function buildPlayQualities(data: RawPlaySource): PlayQualityOption[] {
   const supportFormats = data.support_formats ?? [];
   if (supportFormats.length > 0) {
@@ -316,6 +344,8 @@ function buildVideoStreams(data: RawPlaySource, qualities: PlayQualityOption[]):
       codecs: String(stream.codecs ?? ''),
       url: urls[0] ?? '',
       backupUrls: urls.slice(1),
+      mimeType: String(stream.mime_type ?? 'video/mp4'),
+      segmentBase: parseSegmentBase(stream),
       width: Number(stream.width ?? 0),
       height: Number(stream.height ?? 0),
       bandwidth: Number(stream.bandwidth ?? 0),
@@ -331,6 +361,8 @@ function buildAudioStreams(data: RawPlaySource): PlayAudioStream[] {
       id: Number(stream.id ?? 0),
       url: urls[0] ?? '',
       backupUrls: urls.slice(1),
+      mimeType: String(stream.mime_type ?? 'audio/mp4'),
+      segmentBase: parseSegmentBase(stream),
       bandwidth: Number(stream.bandwidth ?? 0),
       codecs: String(stream.codecs ?? ''),
     };

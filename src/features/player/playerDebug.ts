@@ -1,7 +1,7 @@
 import { readDebugTelemetryUrl } from '../../app/launchParams';
 
 export type PlayerDebugEvent = {
-  type: 'loadedmetadata' | 'play' | 'error';
+  type: 'loadedmetadata' | 'play' | 'error' | 'audio-only-detected' | 'attempt-switch';
   bvid: string;
   cid: number;
   sourceUrl: string;
@@ -11,6 +11,13 @@ export type PlayerDebugEvent = {
   sourceTypeLabel?: string;
   message?: string;
   code?: number | null;
+  currentTime?: number;
+  videoWidth?: number;
+  videoHeight?: number;
+  decodedVideoFrames?: number | null;
+  attemptId?: string;
+  attemptIndex?: number;
+  candidateUrlIndex?: number;
 };
 
 let cachedTelemetryUrl: string | null | undefined;

@@ -57,7 +57,7 @@ const getConfigValue = (name) => {
   return plainMatch?.[1]?.trim();
 };
 
-const device = getArg('--device', 'tv');
+const device = getArg('--device', process.env.WEBOS_DEVICE ?? getConfigValue('DEVICE') ?? 'tv');
 const simulatorVersion = getArg('--simulator-version', process.env.WEBOS_SIMULATOR_VERSION ?? getConfigValue('SIMULATOR_VERSION') ?? '25');
 const simulatorPath = getArg('--simulator-path', process.env.WEBOS_SIMULATOR_PATH ?? getConfigValue('SIMULATOR_PATH') ?? '');
 const simulatorParams = getArg('--params', '{}');

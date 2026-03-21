@@ -9,7 +9,7 @@ import { PlayerControlBar } from '../../components/PlayerControlBar';
 import { SectionHeader } from '../../components/SectionHeader';
 import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
 import { fetchPlaySource, fetchRelatedVideos } from '../../services/api/bilibili';
-import type { VideoCodecPreference } from '../../services/api/types';
+import type { PlayAudioStream, VideoCodecPreference } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
 import {
   buildPlaybackAttempts,
@@ -18,15 +18,15 @@ import {
   getAvailableCodecsForQuality,
   getCodecLabel,
 } from './playerCodec';
+import { createDashManifestSource } from './playerDashManifest';
+import { reportPlayerDebugEvent } from './playerDebug';
 import {
   readPlayerCodecMemory,
   readPlayerSettings,
   writePlayerCodecPreference,
   writePlayerCodecResult,
 } from './playerSettings';
-import { reportPlayerDebugEvent } from './playerDebug';
-import { applyPlayerMediaSource, resolvePlayerMediaSource } from './playerMediaSource';
-import { getPlayerTransportHint, resolvePlayerTransport } from './playerTransport';
+import { createShakaPlayer, formatShakaError } from './playerShaka';
 
 type PlayerPageProps = {
   bvid: string;
@@ -49,11 +49,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progressView, setProgressView] = useState({ current: 0, duration: 0 });
-  const [activeAttemptIndex, setActiveAttemptIndex] = useState(0);
   const [activeCandidateUrlIndex, setActiveCandidateUrlIndex] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [playbackNotice, setPlaybackNotice] = useState<string | null>(null);
-  const [sourceResumeSeconds, setSourceResumeSeconds] = useState(0);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const { setWatchProgress, watchProgress } = useAppStore();
 
   const playerData = useAsyncData(async () => {
@@ -92,27 +91,13 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     return buildPlaybackAttempts(play, codecPreference, capability, codecMemory);
   }, [capability, codecMemory, codecPreference, play]);
 
-  const currentAttempt = playbackPlan.attempts[activeAttemptIndex] ?? null;
-  const currentRawSourceUrl = currentAttempt?.source.candidateUrls[activeCandidateUrlIndex] ?? currentAttempt?.source.url ?? '';
-  const currentTransport = useMemo(() => resolvePlayerTransport({
-    rawUrl: currentRawSourceUrl,
-    bvid,
-    cid,
-    quality: currentAttempt?.quality,
-    candidateIndex: activeCandidateUrlIndex,
-    format: currentAttempt?.source.format,
-  }), [activeCandidateUrlIndex, bvid, cid, currentAttempt?.quality, currentAttempt?.source.format, currentRawSourceUrl]);
-  const currentSourceUrl = currentTransport.url;
+  const currentAttempt = playbackPlan.attempts[0] ?? null;
+  const currentSourceUrl = currentAttempt?.candidateUrls[activeCandidateUrlIndex] ?? '';
   const availableCodecs = play && currentAttempt ? getAvailableCodecsForQuality(play, currentAttempt.quality) : [];
   const isWebOS = isWebOSAvailable();
-  const transportHint = getPlayerTransportHint(currentTransport.mode, isWebOS);
-  const resolvedMediaSource = useMemo(() => resolvePlayerMediaSource({
-    mediaUrl: currentSourceUrl,
-    format: currentAttempt?.source.format,
-    resumeSeconds: sourceResumeSeconds,
-    capability,
-    isWebOS,
-  }), [capability, currentAttempt?.source.format, currentSourceUrl, isWebOS, sourceResumeSeconds]);
+  const engineLabel = currentAttempt?.mode === 'dash' ? 'Shaka Player + MSE' : 'HTML5 Video';
+  const playbackModeLabel = currentAttempt?.mode === 'dash' ? 'App 内生成 DASH 清单' : '兼容流直连';
+  const currentMimeType = currentAttempt?.videoStream?.mimeType ?? 'video/mp4';
   usePageBackHandler(isSettingsOpen ? () => {
     setIsSettingsOpen(false);
     queueFocus('[data-focus-row="0"][data-focus-col="15"]');
@@ -132,17 +117,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     resumeProgressRef.current = initialProgress;
     lastPersistedProgressRef.current = initialProgress > 0 ? initialProgress : -1;
     recordedAttemptIdRef.current = '';
-    setActiveAttemptIndex(0);
     setActiveCandidateUrlIndex(0);
     setPlaybackError(null);
     setPlaybackNotice(playbackPlan.warning);
     setProgressView({ current: 0, duration: 0 });
-    setSourceResumeSeconds(initialProgress);
-  }, [bvid, cid, playbackPlan.warning, playbackPlan.attempts.length]);
-
-  useEffect(() => {
-    setActiveCandidateUrlIndex(0);
-  }, [activeAttemptIndex]);
+    setReloadNonce(0);
+  }, [bvid, cid, playbackPlan.warning, currentAttempt?.id]);
 
   useEffect(() => {
     if (!isSettingsOpen) {
@@ -162,10 +142,71 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     }
 
     let cancelled = false;
+    let failed = false;
+    let manifestRevoke: (() => void) | null = null;
+    let destroyPlayer: (() => Promise<void>) | null = null;
     setPlaybackError(null);
-    video.removeAttribute('crossorigin');
-    video.removeAttribute('referrerpolicy');
-    applyPlayerMediaSource(video, resolvedMediaSource);
+
+    const getDebugSnapshot = () => ({
+      currentTime: Math.floor(video.currentTime),
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      decodedVideoFrames: readDecodedVideoFrames(video),
+      attemptId: currentAttempt.id,
+      candidateUrlIndex: activeCandidateUrlIndex,
+    });
+
+    const markAttemptSuccess = () => {
+      if (recordedAttemptIdRef.current === currentAttempt.id) {
+        return;
+      }
+      recordedAttemptIdRef.current = currentAttempt.id;
+      writePlayerCodecResult(capability.deviceKey, {
+        lastSuccessfulCodec: currentAttempt.codec,
+        lastFailedCodec: null,
+      });
+    };
+
+    const finalizeFailure = (message: string, code: number | null = null) => {
+      if (cancelled || failed) {
+        return;
+      }
+      failed = true;
+
+      const nextResumePoint = Math.floor(video.currentTime || resumeProgressRef.current);
+      resumeProgressRef.current = nextResumePoint;
+
+      const nextUrlIndex = activeCandidateUrlIndex + 1;
+      if (nextUrlIndex < currentAttempt.candidateUrls.length) {
+        setPlaybackNotice(`当前地址不可用，正在切换备选线路 #${nextUrlIndex + 1}`);
+        setActiveCandidateUrlIndex(nextUrlIndex);
+        failed = false;
+        return;
+      }
+
+      writePlayerCodecResult(capability.deviceKey, {
+        lastFailedCodec: currentAttempt.codec,
+      });
+
+      reportPlayerDebugEvent({
+        type: 'error',
+        bvid,
+        cid,
+        sourceUrl: currentSourceUrl,
+        quality: currentAttempt.qualityLabel,
+        codec: currentAttempt.codecLabel,
+        mimeType: currentMimeType,
+        sourceTypeLabel: engineLabel,
+        message,
+        code,
+        ...getDebugSnapshot(),
+      });
+
+      const fallbackMessage = currentAttempt.mode === 'dash'
+        ? '当前 DASH 线路在此设备上未能稳定播放，请优先尝试 AVC 编码。'
+        : '当前兼容流暂时无法播放，请稍后重试。';
+      setPlaybackError(message || fallbackMessage);
+    };
 
     const handleLoadedMetadata = () => {
       reportPlayerDebugEvent({
@@ -175,17 +216,21 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
         sourceUrl: currentSourceUrl,
         quality: currentAttempt.qualityLabel,
         codec: currentAttempt.codecLabel,
-        mimeType: resolvedMediaSource.mimeType,
-        sourceTypeLabel: resolvedMediaSource.sourceTypeLabel,
+        mimeType: currentMimeType,
+        sourceTypeLabel: engineLabel,
+        ...getDebugSnapshot(),
       });
+
       const resumePoint = resumeProgressRef.current;
-      if (resumePoint > 0 && !resolvedMediaSource.useMediaOption) {
+      if (resumePoint > 0) {
         video.currentTime = Math.min(resumePoint, video.duration || resumePoint);
       }
+
       setProgressView({
         current: Math.floor(video.currentTime),
         duration: getDurationSeconds(video, play.durationMs),
       });
+
       void video.play().catch((error) => {
         if (cancelled) {
           return;
@@ -207,6 +252,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
           : { current, duration }
       ));
       resumeProgressRef.current = current;
+
       if (lastPersistedProgressRef.current !== current) {
         lastPersistedProgressRef.current = current;
         setWatchProgress({
@@ -219,17 +265,6 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       }
     };
 
-    const markAttemptSuccess = () => {
-      if (recordedAttemptIdRef.current === currentAttempt.id) {
-        return;
-      }
-      recordedAttemptIdRef.current = currentAttempt.id;
-      writePlayerCodecResult(capability.deviceKey, {
-        lastSuccessfulCodec: currentAttempt.codec,
-        lastFailedCodec: null,
-      });
-    };
-
     const handlePlay = () => {
       setIsPlaying(true);
       markAttemptSuccess();
@@ -240,69 +275,58 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
         sourceUrl: currentSourceUrl,
         quality: currentAttempt.qualityLabel,
         codec: currentAttempt.codecLabel,
-        mimeType: resolvedMediaSource.mimeType,
-        sourceTypeLabel: resolvedMediaSource.sourceTypeLabel,
+        mimeType: currentMimeType,
+        sourceTypeLabel: engineLabel,
+        ...getDebugSnapshot(),
       });
     };
 
     const handlePause = () => setIsPlaying(false);
 
-    const handleError = () => {
-      if (cancelled) {
-        return;
-      }
-
-      const nextResumePoint = Math.floor(video.currentTime || resumeProgressRef.current);
-      resumeProgressRef.current = nextResumePoint;
-      setSourceResumeSeconds(nextResumePoint);
-
-      const nextUrlIndex = activeCandidateUrlIndex + 1;
-      if (nextUrlIndex < currentAttempt.source.candidateUrls.length) {
-        setPlaybackNotice(`当前线路不可用，正在切换 ${currentAttempt.qualityLabel} 备选地址`);
-        setActiveCandidateUrlIndex(nextUrlIndex);
-        return;
-      }
-
-      writePlayerCodecResult(capability.deviceKey, {
-        lastFailedCodec: currentAttempt.codec,
-      });
-
-      const nextAttemptIndex = activeAttemptIndex + 1;
-      if (nextAttemptIndex < playbackPlan.attempts.length) {
-        const nextAttempt = playbackPlan.attempts[nextAttemptIndex];
-        setPlaybackNotice(
-          nextAttempt.quality === currentAttempt.quality
-            ? '当前编码格式不可用，正在切换兼容线路'
-            : `当前线路不可用，已降级到 ${nextAttempt.qualityLabel}`,
-        );
-        setActiveAttemptIndex(nextAttemptIndex);
-        return;
-      }
-
+    const handleVideoError = () => {
       const mediaError = video.error;
-      reportPlayerDebugEvent({
-        type: 'error',
-        bvid,
-        cid,
-        sourceUrl: currentSourceUrl,
-        quality: currentAttempt.qualityLabel,
-        codec: currentAttempt.codecLabel,
-        mimeType: resolvedMediaSource.mimeType,
-        sourceTypeLabel: resolvedMediaSource.sourceTypeLabel,
-        message: mediaError?.message ?? transportHint ?? '媒体播放失败',
-        code: mediaError?.code,
-      });
-      setPlaybackError(
-        mediaError?.message
-          || (transportHint ?? '当前视频暂时无法在此设备播放，可尝试切换 AVC 或降低清晰度'),
-      );
+      finalizeFailure(mediaError?.message ?? '媒体播放失败', mediaError?.code ?? null);
     };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
-    video.addEventListener('error', handleError);
+    video.addEventListener('error', handleVideoError);
+
+    const bootPlayer = async () => {
+      resetVideoElement(video);
+
+      if (currentAttempt.mode === 'dash') {
+        if (!currentAttempt.videoStream) {
+          finalizeFailure('当前 DASH 视频轨为空，无法开始播放。');
+          return;
+        }
+
+        const manifestSource = createDashManifestSource({
+          durationMs: play.durationMs,
+          videoStream: currentAttempt.videoStream,
+          audioStream: currentAttempt.audioStream,
+          videoUrl: currentSourceUrl,
+          audioUrl: currentAttempt.audioStream?.url,
+        });
+        manifestRevoke = manifestSource.revoke;
+
+        const shakaSession = await createShakaPlayer(video, (error) => {
+          finalizeFailure(error.message, error.code);
+        });
+        destroyPlayer = () => shakaSession.destroy();
+        await shakaSession.load(manifestSource.manifestUrl);
+        return;
+      }
+
+      loadDirectVideoSource(video, currentSourceUrl);
+    };
+
+    void bootPlayer().catch((error) => {
+      const shakaError = formatShakaError(error);
+      finalizeFailure(shakaError.message, shakaError.code);
+    });
 
     return () => {
       cancelled = true;
@@ -310,24 +334,26 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
-      video.removeEventListener('error', handleError);
+      video.removeEventListener('error', handleVideoError);
+      video.pause();
+      if (destroyPlayer) {
+        void destroyPlayer();
+      }
+      manifestRevoke?.();
     };
   }, [
-    activeAttemptIndex,
     activeCandidateUrlIndex,
     bvid,
     capability,
     cid,
     currentAttempt,
+    currentMimeType,
     currentSourceUrl,
-    currentTransport.mode,
-    isWebOS,
+    engineLabel,
     play,
-    playbackPlan.attempts,
-    resolvedMediaSource,
+    reloadNonce,
     setWatchProgress,
     title,
-    transportHint,
   ]);
 
   if (playerData.status !== 'success') {
@@ -341,14 +367,14 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
         />
       );
     }
-    return <PageStatus title="正在准备播放源" description="加载兼容线路、编码信息和相关推荐。" />;
+    return <PageStatus title="正在准备播放源" description="正在解析 DASH 轨道、编码信息和相关推荐。" />;
   }
 
   if (!currentAttempt) {
     return (
       <PageStatus
         title="暂无可用播放线路"
-        description="当前没有可用的兼容流，请稍后重试。"
+        description="当前没有可直接用于电视端的播放轨道，请稍后重试。"
         actionLabel="重新获取播放源"
         onAction={() => void playerData.reload()}
       />
@@ -381,7 +407,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
               {' · '}
               {currentAttempt.codecLabel}
               {' · '}
-              {currentAttempt.isCompatible ? '兼容流' : 'DASH'}
+              {currentAttempt.mode === 'dash' ? 'DASH' : '兼容流'}
             </p>
             {playbackNotice ? <small className="player-hero__notice">{playbackNotice}</small> : null}
             {playbackError ? <small className="player-hero__error">{playbackError}</small> : null}
@@ -408,9 +434,9 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
             onRefresh={() => {
               const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
               resumeProgressRef.current = currentTime;
-              setSourceResumeSeconds(currentTime);
-              setPlaybackNotice('正在按当前策略重新获取播放源');
-              void playerData.reload();
+              setPlaybackNotice('正在按当前策略重新加载播放器');
+              setActiveCandidateUrlIndex(0);
+              setReloadNonce((previous) => previous + 1);
             }}
             onOpenSettings={() => setIsSettingsOpen((previous) => !previous)}
           />
@@ -437,10 +463,18 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                     onClick={() => {
                       const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
                       resumeProgressRef.current = currentTime;
-                      setSourceResumeSeconds(currentTime);
-                      setCodecPreference(option);
-                      setPlaybackNotice(`已切换到 ${getCodecLabel(option)} 策略，正在重载线路`);
+                      const previewPlan = play && capability
+                        ? buildPlaybackAttempts(play, option, capability, codecMemory)
+                        : null;
+                      const effectivePreference = previewPlan?.effectivePreference ?? option;
+                      setCodecPreference(effectivePreference);
+                      setPlaybackNotice(
+                        previewPlan?.warning
+                          ?? `已切换到 ${getCodecLabel(effectivePreference)} 策略，正在重载播放器`,
+                      );
+                      setActiveCandidateUrlIndex(0);
                       setIsSettingsOpen(false);
+                      setReloadNonce((previous) => previous + 1);
                     }}
                   >
                     {getCodecLabel(option)}
@@ -457,7 +491,15 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                   <strong>{currentAttempt.qualityLabel}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
-                  <span>当前 codec</span>
+                  <span>编码偏好</span>
+                  <strong>{getCodecLabel(codecPreference)}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>当前执行策略</span>
+                  <strong>{getCodecLabel(playbackPlan.effectivePreference)}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>当前执行 codec</span>
                   <strong>{currentAttempt.codecLabel}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
@@ -466,35 +508,35 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                 </div>
                 <div className="player-settings-drawer__info-row">
                   <span>播放模式</span>
-                  <strong>{currentAttempt.isCompatible ? '兼容流 durl/mp4' : 'DASH'}</strong>
+                  <strong>{playbackModeLabel}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
-                  <span>媒体传输</span>
-                  <strong>{currentTransport.label}</strong>
+                  <span>播放引擎</span>
+                  <strong>{engineLabel}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
-                  <span>媒体类型</span>
-                  <strong>{resolvedMediaSource.transportLabel}</strong>
+                  <span>视频 MIME</span>
+                  <strong>{currentMimeType}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
-                  <span>Source 形态</span>
-                  <strong>{resolvedMediaSource.sourceTypeLabel}</strong>
+                  <span>音频轨</span>
+                  <strong>{formatAudioStreamLabel(currentAttempt.audioStream)}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
-                  <span>MIME</span>
-                  <strong>{resolvedMediaSource.mimeType}</strong>
+                  <span>可切换地址</span>
+                  <strong>{currentAttempt.candidateUrls.length}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
-                  <span>mediaOption</span>
-                  <strong>{resolvedMediaSource.useMediaOption ? '已启用' : '未启用'}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>可用编码</span>
+                  <span>接口可选编码</span>
                   <strong>{availableCodecs.length ? availableCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回'}</strong>
                 </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>运行环境</span>
+                  <strong>{isWebOS ? 'webOS TV' : '浏览器开发环境'}</strong>
+                </div>
               </div>
-              {transportHint ? (
-                <p className="player-settings-drawer__hint">{transportHint}</p>
+              {currentAttempt.codecNote ? (
+                <p className="player-settings-drawer__hint">{currentAttempt.codecNote}</p>
               ) : null}
             </div>
 
@@ -509,12 +551,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                   onClick={() => {
                     const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
                     resumeProgressRef.current = currentTime;
-                    setSourceResumeSeconds(currentTime);
                     setPlaybackNotice('正在按当前策略重新加载');
-                    void playerData.reload();
+                    setActiveCandidateUrlIndex(0);
+                    setReloadNonce((previous) => previous + 1);
                   }}
                 >
-                  重新加载当前编码
+                  重新加载当前策略
                 </FocusButton>
                 <FocusButton
                   row={3}
@@ -524,10 +566,11 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                   onClick={() => {
                     const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
                     resumeProgressRef.current = currentTime;
-                    setSourceResumeSeconds(currentTime);
                     setCodecPreference('auto');
                     setPlaybackNotice('已恢复自动策略，正在重新尝试');
+                    setActiveCandidateUrlIndex(0);
                     setIsSettingsOpen(false);
+                    setReloadNonce((previous) => previous + 1);
                   }}
                 >
                   恢复自动策略
@@ -536,7 +579,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
             </div>
 
             <div className="player-settings-drawer__section">
-              <span className="player-settings-drawer__label">回退顺序</span>
+              <span className="player-settings-drawer__label">当前候选顺序</span>
               <p className="player-settings-drawer__hint">
                 {playbackPlan.attempts.map((attempt) => `${attempt.qualityLabel} ${attempt.codecLabel}`).join(' -> ')}
               </p>
@@ -548,7 +591,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       <section className="content-section">
         <SectionHeader
           title="相关推荐"
-          description="播放页继续沿用卡片体系，验证长链路的跳转与返回。"
+          description="播放器已经切到电视端自包含播放链路，下面继续验证页面跳转与返回。"
           actionLabel={`默认策略 ${getCodecLabel(playbackPlan.effectivePreference)}`}
         />
         <div className="media-grid">
@@ -561,18 +604,18 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   );
 }
 
-function queueFocus(selector: string) {
+function queueFocus(selector: string): void {
   window.setTimeout(() => {
     const element = document.querySelector<HTMLElement>(selector);
     element?.focus();
   }, 0);
 }
 
-function getDurationSeconds(video: HTMLVideoElement, durationMs: number) {
+function getDurationSeconds(video: HTMLVideoElement, durationMs: number): number {
   return Math.floor(video.duration || durationMs / 1000);
 }
 
-function togglePlay(video: HTMLVideoElement | null) {
+function togglePlay(video: HTMLVideoElement | null): void {
   if (!video) {
     return;
   }
@@ -583,16 +626,73 @@ function togglePlay(video: HTMLVideoElement | null) {
   }
 }
 
-function seekVideo(video: HTMLVideoElement | null, delta: number) {
-  if (!video) {
+function seekVideo(video: HTMLVideoElement | null, seconds: number): void {
+  if (!video || !video.duration) {
     return;
   }
-  video.currentTime = Math.max(0, video.currentTime + delta);
+  const nextTime = Math.min(video.duration, Math.max(0, video.currentTime + seconds));
+  video.currentTime = nextTime;
 }
 
-function formatSeconds(value: number) {
-  const total = Math.floor(value);
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
+function formatSeconds(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return '00:00';
+  }
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  if (hours > 0) {
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function loadDirectVideoSource(video: HTMLVideoElement, sourceUrl: string): void {
+  resetVideoElement(video);
+  const sourceNode = document.createElement('source');
+  sourceNode.setAttribute('src', sourceUrl);
+  sourceNode.setAttribute('type', 'video/mp4');
+  video.appendChild(sourceNode);
+  video.load();
+}
+
+function resetVideoElement(video: HTMLVideoElement): void {
+  video.pause();
+  video.removeAttribute('src');
+  while (video.firstChild) {
+    video.removeChild(video.firstChild);
+  }
+  video.load();
+}
+
+function readDecodedVideoFrames(video: HTMLVideoElement): number | null {
+  const quality = (video as HTMLVideoElement & {
+    getVideoPlaybackQuality?: () => { totalVideoFrames: number };
+    webkitDecodedFrameCount?: number;
+  }).getVideoPlaybackQuality?.();
+  if (quality) {
+    return quality.totalVideoFrames;
+  }
+
+  const frameCount = (video as HTMLVideoElement & { webkitDecodedFrameCount?: number }).webkitDecodedFrameCount;
+  return typeof frameCount === 'number' ? frameCount : null;
+}
+
+function formatAudioStreamLabel(audioStream: PlayAudioStream | null): string {
+  if (!audioStream) {
+    return '未提供独立音频轨';
+  }
+
+  const codecs = audioStream.codecs.toLowerCase();
+  if (codecs.includes('mp4a')) {
+    return 'AAC';
+  }
+  if (codecs.includes('ec-3') || codecs.includes('eac3')) {
+    return 'E-AC3';
+  }
+  if (codecs.includes('flac')) {
+    return 'FLAC';
+  }
+  return audioStream.codecs || '未知音频';
 }

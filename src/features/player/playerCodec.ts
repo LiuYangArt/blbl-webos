@@ -1,7 +1,7 @@
 import type {
   ParsedVideoCodec,
+  PlayAudioStream,
   PlayCompatibleSource,
-  PlayQualityOption,
   PlaySource,
   PlayVideoStream,
   VideoCodecPreference,
@@ -23,18 +23,22 @@ export type PlayerCodecCapability = {
 
 export type PlaybackAttempt = {
   id: string;
+  mode: 'dash' | 'compatible';
   quality: number;
   qualityLabel: string;
-  source: PlayCompatibleSource;
   codec: ParsedVideoCodec;
   codecLabel: string;
+  codecNote: string | null;
   isCompatible: boolean;
   width: number;
   height: number;
+  candidateUrls: string[];
+  source: PlayCompatibleSource | null;
+  videoStream: PlayVideoStream | null;
+  audioStream: PlayAudioStream | null;
 };
 
 const AUTO_CODEC_PRIORITY: ParsedVideoCodec[] = ['avc', 'hevc', 'av1'];
-const QUALITY_FALLBACK_ORDER = [120, 116, 112, 80, 64, 32, 16];
 
 export function parseVideoCodec(codecs: string): ParsedVideoCodec {
   const normalized = codecs.trim().toLowerCase();
@@ -50,7 +54,7 @@ export function parseVideoCodec(codecs: string): ParsedVideoCodec {
   return 'unknown';
 }
 
-export function getCodecLabel(codec: ParsedVideoCodec | VideoCodecPreference) {
+export function getCodecLabel(codec: ParsedVideoCodec | VideoCodecPreference): string {
   switch (codec) {
     case 'auto':
       return '自动';
@@ -74,7 +78,7 @@ export function probePlayerCodecSupport(): PlayerCodecSupport {
   };
 }
 
-function canPlay(video: HTMLVideoElement, mimeType: string) {
+function canPlay(video: HTMLVideoElement, mimeType: string): boolean {
   const result = video.canPlayType(mimeType);
   return result === 'probably' || result === 'maybe';
 }
@@ -90,7 +94,7 @@ export function buildPlayerCodecCapability(deviceInfo: Record<string, unknown> |
   };
 }
 
-function resolveDeviceClass(modelName: string, platformVersion: string) {
+function resolveDeviceClass(modelName: string, platformVersion: string): string {
   const normalizedModel = modelName.toLowerCase();
   if (normalizedModel.includes('browser-dev')) {
     return 'browser-dev';
@@ -109,9 +113,7 @@ export function getAutoCodecPriority(
   memory?: PlayerCodecMemory,
 ): ParsedVideoCodec[] {
   return [...AUTO_CODEC_PRIORITY].sort((left, right) => {
-    const leftScore = getCodecPriorityScore(left, support, memory);
-    const rightScore = getCodecPriorityScore(right, support, memory);
-    return rightScore - leftScore;
+    return getCodecPriorityScore(right, support, memory) - getCodecPriorityScore(left, support, memory);
   });
 }
 
@@ -119,7 +121,7 @@ function getCodecPriorityScore(
   codec: ParsedVideoCodec,
   support: PlayerCodecSupport,
   memory?: PlayerCodecMemory,
-) {
+): number {
   let score = 0;
   if (codec !== 'unknown') {
     score += support[codec] ? 4 : 0;
@@ -152,96 +154,233 @@ export function buildPlaybackAttempts(
   effectivePreference: VideoCodecPreference;
   warning: string | null;
 } {
-  const qualityOrder = buildQualityFallbackOrder(playSource.qualities, playSource.currentQuality);
+  const dashResolution = buildDashAttempts(playSource, codecPreference, capability, memory);
+  if (dashResolution.attempts.length > 0) {
+    return dashResolution;
+  }
+
+  return buildCompatibleAttempts(playSource, codecPreference, capability);
+}
+
+function buildDashAttempts(
+  playSource: PlaySource,
+  codecPreference: VideoCodecPreference,
+  capability: PlayerCodecCapability,
+  memory?: PlayerCodecMemory,
+): {
+  attempts: PlaybackAttempt[];
+  effectivePreference: VideoCodecPreference;
+  warning: string | null;
+} {
+  const streamsAtCurrentQuality = playSource.videoStreams.filter((stream) => stream.quality === playSource.currentQuality);
+  const targetStreams = streamsAtCurrentQuality.length > 0 ? streamsAtCurrentQuality : playSource.videoStreams;
+  const quality = targetStreams[0]?.quality ?? playSource.currentQuality;
+  const qualityLabel = targetStreams[0]?.qualityLabel
+    ?? playSource.qualities.find((item) => item.qn === quality)?.label
+    ?? playSource.qualityLabel;
+
+  const uniqueStreams = pickBestStreamPerCodec(targetStreams);
+  if (uniqueStreams.length === 0) {
+    return {
+      attempts: [],
+      effectivePreference: codecPreference,
+      warning: null,
+    };
+  }
+
+  const audioStream = pickPreferredAudioStream(playSource.audioStreams);
   const preferredCodecs = codecPreference === 'auto'
     ? getAutoCodecPriority(capability.support, memory)
     : [codecPreference];
-  const qualityByQn = new Map(playSource.qualities.map((item) => [item.qn, item]));
-  const streamIndex = indexVideoStreams(playSource.videoStreams);
+  const orderedStreams = orderStreamsByCodec(uniqueStreams, preferredCodecs);
+  const exactStream = codecPreference === 'auto'
+    ? null
+    : orderedStreams.find((stream) => stream.codec === codecPreference);
+  const warning = codecPreference !== 'auto' && !exactStream
+    ? `当前清晰度没有 ${getCodecLabel(codecPreference)} 编码，已切换到当前清晰度可用编码。`
+    : null;
+  const effectivePreference = exactStream ? codecPreference : 'auto';
 
-  let warning: string | null = null;
-  let effectivePreference = codecPreference;
-
-  const attempts = qualityOrder
-    .map((quality) => playSource.compatibleSources.find((item) => item.quality === quality))
-    .filter((item): item is PlayCompatibleSource => Boolean(item))
-    .map((source) => {
-      const qualityMeta = qualityByQn.get(source.quality);
-      const codec = pickCodecForQuality(qualityMeta, preferredCodecs, capability.support);
-      const hasPreferredCodec = codecPreference !== 'auto' && Boolean(qualityMeta?.codecs.includes(codecPreference));
-      if (!hasPreferredCodec && codecPreference !== 'auto' && !warning) {
-        warning = `当前清晰度没有 ${getCodecLabel(codecPreference)} 编码，已自动切换到可用线路`;
-        effectivePreference = 'auto';
-      }
-      const stream = pickVideoStream(streamIndex, source.quality, codec);
-      return {
-        id: `${source.quality}:${codec}:${source.url}`,
-        quality: source.quality,
-        qualityLabel: source.qualityLabel,
-        source,
-        codec,
-        codecLabel: getCodecLabel(codec),
-        isCompatible: true,
-        width: stream?.width ?? 0,
-        height: stream?.height ?? 0,
-      };
-    });
-
-  return { attempts, effectivePreference, warning };
+  return {
+    attempts: orderedStreams.map((stream) => ({
+      id: `${stream.quality}:${stream.codec}:${stream.url}`,
+      mode: 'dash',
+      quality: stream.quality,
+      qualityLabel,
+      codec: stream.codec,
+      codecLabel: getCodecLabel(stream.codec),
+      codecNote: audioStream
+        ? `使用 ${getCodecLabel(stream.codec)} 视频轨与 ${formatAudioCodecLabel(audioStream.codecs)} 音频轨生成 DASH 清单。`
+        : '当前只拿到视频轨，播放器可能无法正常输出声音。',
+      isCompatible: false,
+      width: stream.width,
+      height: stream.height,
+      candidateUrls: [stream.url, ...stream.backupUrls],
+      source: null,
+      videoStream: stream,
+      audioStream,
+    })),
+    effectivePreference,
+    warning,
+  };
 }
 
-function buildQualityFallbackOrder(qualities: PlayQualityOption[], currentQuality: number) {
-  const available = new Set(qualities.map((item) => item.qn));
-  const preferred = QUALITY_FALLBACK_ORDER.filter((item) => item <= currentQuality && available.has(item));
-  if (preferred.length > 0) {
-    return preferred;
+function buildCompatibleAttempts(
+  playSource: PlaySource,
+  codecPreference: VideoCodecPreference,
+  capability: PlayerCodecCapability,
+): {
+  attempts: PlaybackAttempt[];
+  effectivePreference: VideoCodecPreference;
+  warning: string | null;
+} {
+  const source = playSource.compatibleSources.find((item) => item.quality === playSource.currentQuality)
+    ?? playSource.compatibleSources[0]
+    ?? null;
+
+  if (!source) {
+    return {
+      attempts: [],
+      effectivePreference: codecPreference,
+      warning: null,
+    };
   }
-  return [...available].sort((left, right) => right - left);
+
+  const effectivePreference = codecPreference === 'auto' || codecPreference === 'avc'
+    ? codecPreference
+    : 'avc';
+  const warning = effectivePreference !== codecPreference
+    ? `当前只有兼容流，无法强制 ${getCodecLabel(codecPreference)}，已按 AVC 兼容流处理。`
+    : null;
+  const codec = capability.support.avc ? 'avc' : 'unknown';
+
+  return {
+    attempts: [{
+      id: `${source.quality}:${source.url}`,
+      mode: 'compatible',
+      quality: source.quality,
+      qualityLabel: source.qualityLabel,
+      codec,
+      codecLabel: getCodecLabel(codec),
+      codecNote: '当前内容未提供可直接用于 DASH 的轨道信息，回退为兼容流直连。',
+      isCompatible: true,
+      width: 0,
+      height: 0,
+      candidateUrls: source.candidateUrls,
+      source,
+      videoStream: null,
+      audioStream: null,
+    }],
+    effectivePreference,
+    warning,
+  };
 }
 
-function pickCodecForQuality(
-  quality: PlayQualityOption | undefined,
-  preferredCodecs: ParsedVideoCodec[],
-  support: PlayerCodecSupport,
-) {
-  const codecs = (quality?.codecs ?? []).filter((item) => item !== 'unknown');
-  const orderedPreferred = preferredCodecs
-    .filter((codec): codec is 'avc' | 'hevc' | 'av1' => codec !== 'unknown')
-    .sort((left, right) => {
-    return Number(support[right as keyof PlayerCodecSupport]) - Number(support[left as keyof PlayerCodecSupport]);
+function pickBestStreamPerCodec(streams: PlayVideoStream[]): PlayVideoStream[] {
+  const byCodec = new Map<ParsedVideoCodec, PlayVideoStream>();
+  const ordered = [...streams].sort((left, right) => {
+    if (right.bandwidth !== left.bandwidth) {
+      return right.bandwidth - left.bandwidth;
+    }
+    if (right.width !== left.width) {
+      return right.width - left.width;
+    }
+    return right.height - left.height;
   });
-  for (const codec of orderedPreferred) {
-    if (codecs.includes(codec)) {
-      return codec;
+
+  for (const stream of ordered) {
+    if (!byCodec.has(stream.codec)) {
+      byCodec.set(stream.codec, stream);
     }
   }
-  return codecs[0] ?? 'unknown';
+
+  return Array.from(byCodec.values());
 }
 
-function indexVideoStreams(videoStreams: PlayVideoStream[]) {
-  const index = new Map<number, Map<ParsedVideoCodec, PlayVideoStream>>();
-  for (const stream of videoStreams) {
-    const byCodec = index.get(stream.quality) ?? new Map<ParsedVideoCodec, PlayVideoStream>();
-    byCodec.set(stream.codec, stream);
-    index.set(stream.quality, byCodec);
+function orderStreamsByCodec(
+  streams: PlayVideoStream[],
+  preferredCodecs: ParsedVideoCodec[],
+): PlayVideoStream[] {
+  const ordered: PlayVideoStream[] = [];
+  const seen = new Set<string>();
+
+  for (const codec of preferredCodecs) {
+    const stream = streams.find((item) => item.codec === codec);
+    if (stream) {
+      ordered.push(stream);
+      seen.add(stream.url);
+    }
   }
-  return index;
+
+  for (const stream of streams) {
+    if (!seen.has(stream.url)) {
+      ordered.push(stream);
+    }
+  }
+
+  return ordered;
 }
 
-function pickVideoStream(
-  index: Map<number, Map<ParsedVideoCodec, PlayVideoStream>>,
-  quality: number,
-  codec: ParsedVideoCodec,
-) {
-  return index.get(quality)?.get(codec) ?? index.get(quality)?.values().next().value;
+function pickPreferredAudioStream(audioStreams: PlayAudioStream[]): PlayAudioStream | null {
+  if (audioStreams.length === 0) {
+    return null;
+  }
+
+  const preferred = [...audioStreams].sort((left, right) => {
+    const rightScore = getAudioStreamScore(right);
+    const leftScore = getAudioStreamScore(left);
+    if (rightScore !== leftScore) {
+      return rightScore - leftScore;
+    }
+    return right.bandwidth - left.bandwidth;
+  });
+
+  return preferred[0] ?? null;
 }
 
-export function getAvailableCodecsForQuality(playSource: PlaySource, quality: number) {
+function getAudioStreamScore(stream: PlayAudioStream): number {
+  const codecs = stream.codecs.toLowerCase();
+  if (codecs.includes('mp4a')) {
+    return 3;
+  }
+  if (codecs.includes('ec-3') || codecs.includes('eac3')) {
+    return 2;
+  }
+  if (codecs.includes('flac')) {
+    return 1;
+  }
+  return 0;
+}
+
+function formatAudioCodecLabel(codecs: string): string {
+  const normalized = codecs.toLowerCase();
+  if (normalized.includes('mp4a')) {
+    return 'AAC';
+  }
+  if (normalized.includes('ec-3') || normalized.includes('eac3')) {
+    return 'E-AC3';
+  }
+  if (normalized.includes('flac')) {
+    return 'FLAC';
+  }
+  return codecs || '未知音频';
+}
+
+export function getAvailableCodecsForQuality(playSource: PlaySource, quality: number): ParsedVideoCodec[] {
   const qualityMeta = playSource.qualities.find((item) => item.qn === quality);
-  return qualityMeta?.codecs ?? [];
+  if (qualityMeta?.codecs.length) {
+    return qualityMeta.codecs;
+  }
+
+  return Array.from(new Set(
+    playSource.videoStreams
+      .filter((stream) => stream.quality === quality)
+      .map((stream) => stream.codec)
+      .filter((codec) => codec !== 'unknown'),
+  ));
 }
 
-export function formatAttemptResolution(attempt: PlaybackAttempt) {
+export function formatAttemptResolution(attempt: PlaybackAttempt): string {
   if (!attempt.width || !attempt.height) {
     return '分辨率待确认';
   }
