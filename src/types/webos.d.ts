@@ -2,6 +2,7 @@ export {};
 
 declare global {
   interface Window {
+    launchParams?: string;
     PalmSystem?: {
       platformBack?: () => void;
     };

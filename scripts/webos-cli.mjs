@@ -60,6 +60,7 @@ const getConfigValue = (name) => {
 const device = getArg('--device', 'tv');
 const simulatorVersion = getArg('--simulator-version', process.env.WEBOS_SIMULATOR_VERSION ?? getConfigValue('SIMULATOR_VERSION') ?? '25');
 const simulatorPath = getArg('--simulator-path', process.env.WEBOS_SIMULATOR_PATH ?? getConfigValue('SIMULATOR_PATH') ?? '');
+const simulatorParams = getArg('--params', '{}');
 
 const run = (command, args, options = {}) => {
   const result = runProcess(command, args, {
@@ -201,11 +202,12 @@ switch (action) {
     }
 
     const simulatorExecutable = resolveSimulatorExecutable(simulatorPath, simulatorVersion);
-    runDetached(simulatorExecutable, [buildDir, '{}'], {
+    runDetached(simulatorExecutable, [buildDir, simulatorParams], {
       cwd: simulatorPath,
     });
     console.log(`已启动 Simulator ${simulatorVersion}: ${simulatorExecutable}`);
     console.log(`应用目录: ${buildDir}`);
+    console.log(`启动参数: ${simulatorParams}`);
     break;
   }
   default: {

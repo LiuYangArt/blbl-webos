@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { AppShell } from './components/AppShell';
 import { AppStoreProvider, useAppStore } from './app/AppStore';
+import { resolveInitialRoute } from './app/launchParams';
 import { PageBackHandlerProvider } from './app/PageBackHandler';
 import { type AppRoute, getActiveNav } from './app/routes';
 import { usePageStack } from './app/usePageStack';
@@ -33,7 +34,8 @@ function markBootMounted() {
 
 function AppContent() {
   const { auth, refreshAuth } = useAppStore();
-  const pageStack = usePageStack<AppRoute>({ name: 'home' });
+  const initialRoute = useMemo<AppRoute>(() => resolveInitialRoute(), []);
+  const pageStack = usePageStack<AppRoute>(initialRoute);
   const { current: currentPage, pop, push, replace } = pageStack;
   const backHandlerRef = useRef<(() => boolean) | null>(null);
 
