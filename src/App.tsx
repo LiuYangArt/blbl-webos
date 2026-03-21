@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { AppShell } from './components/AppShell';
 import { HomePage } from './features/home/HomePage';
 import { PlayerPage } from './features/player/PlayerPage';
 import { focusFirst } from './platform/focus';
@@ -41,21 +42,14 @@ export default function App() {
   );
 
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
-        <p className="app-sidebar__label">Project Bootstrap</p>
-        <strong>Bilibili WebOS</strong>
-        <span>{statusText}</span>
-        <span>页面深度：{depth}</span>
-      </aside>
-
-      <div className="app-content">
+    <AppShell activeNav={currentPage.name === 'home' ? 'home' : null} statusText={`${statusText} · 页面深度 ${depth}`}>
+      <div className="app-page">
         {currentPage.name === 'home' ? (
           <HomePage onOpenPlayer={(title) => push({ name: 'player', title })} />
         ) : (
           <PlayerPage title={currentPage.title} onBack={() => pop()} />
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }

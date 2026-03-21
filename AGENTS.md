@@ -12,6 +12,10 @@
 ## UI参考
 @ui_ref/
 
+## UI规范文档
+- 统一视觉与交互规范：`docs/ui-spec.md`
+- UI 重构计划与阶段约束：`docs/plans/2026-03-21-tv-ui-refactor-plan.md`
+
 ## 参考项目源码
 F:\CodeProjects\bilibili_tv_android\PiliPlus
 
@@ -45,6 +49,10 @@ F:\CodeProjects\bilibili_tv_android\PiliPlus
 - 默认优先支持方向键、确认键、返回键
 - 播放页必须优先保证暂停、继续、返回、快进快退相关交互稳定
 - 返回键行为统一遵循：`弹窗 > 面板 > 页面 > 退出应用`
+- 所有 hover 设计必须先翻译为 D-pad 焦点设计，再考虑 Pointer 补充
+- 所有新增页面和功能必须遵循 `docs/ui-spec.md`，不能自行发明一套新的按钮、卡片、导航风格
+- 所有 UI 改动优先复用现有 token 与通用组件，不允许在页面里散落定义一套局部视觉体系
+- 首页、播放器、搜索、登录、历史、个人中心必须保持同一套表面层级、焦点态和内容密度
 
 ### 性能规则
 
@@ -65,6 +73,8 @@ F:\CodeProjects\bilibili_tv_android\PiliPlus
 - 改动前优先复用现有模式，不随意引入新库
 - 如果引入新库，先确认项目里确实需要且收益明显
 - 修改交互时，同时检查焦点流与返回链路
+- 做 UI 相关需求前，先对照 `ui_ref/` 和 `docs/ui-spec.md` 判断是复用现有组件、扩展组件，还是新增通用组件
+- 如果现有组件不够用，优先先抽象到 `src/components/*`，再接入页面，不要直接在业务页面里堆一次性样式
 
 ## 验证规则
 

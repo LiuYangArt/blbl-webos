@@ -4,13 +4,27 @@ type FocusButtonProps = {
   row: number;
   col: number;
   children: ReactNode;
+  variant?: 'primary' | 'secondary' | 'glass' | 'card';
+  size?: 'md' | 'hero' | 'icon' | 'icon-lg';
 } & ButtonHTMLAttributes<HTMLButtonElement>;
 
-export function FocusButton({ row, col, children, className, ...props }: FocusButtonProps) {
+export function FocusButton({
+  row,
+  col,
+  children,
+  className,
+  variant = 'secondary',
+  size = 'md',
+  type = 'button',
+  ...props
+}: FocusButtonProps) {
   return (
     <button
       {...props}
-      className={['focus-button', className].filter(Boolean).join(' ')}
+      type={type}
+      className={['focus-button', `focus-button--${variant}`, `focus-button--${size}`, className]
+        .filter(Boolean)
+        .join(' ')}
       data-focus-row={row}
       data-focus-col={col}
     >
