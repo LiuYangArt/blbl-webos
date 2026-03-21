@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
 const BILI_MEDIA_PREFIX = '/__bili_media/';
+const WEBOS_LEGACY_BUILD_TARGET = 'chrome79';
 const SKIPPED_UPSTREAM_HEADERS = new Set([
   'access-control-allow-credentials',
   'access-control-allow-origin',
@@ -116,5 +117,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    target: WEBOS_LEGACY_BUILD_TARGET,
+    cssTarget: WEBOS_LEGACY_BUILD_TARGET,
   },
 });
