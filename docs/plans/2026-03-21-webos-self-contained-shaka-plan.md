@@ -318,11 +318,115 @@ B 站 playurl
 如果这条 `Shaka + 前端 MPD` 主链路在真机上成立，下一步建议按下面顺序继续：
 
 1. 真机实测确认 `AVC` 为最稳基线
-2. 再逐步验证 `HEVC / AV1`
-3. 若有个别内容仍失败，再基于失败样本分析：
+2. 再决定是否继续投入 DASH 主链路的稳定性优化，而不是把 Simulator 的局部成功误判成整条路线已经完成
+3. 再逐步验证 `HEVC / AV1`
+4. 若有个别内容仍失败，再基于失败样本分析：
    - 是否缺少可用 `segment_base`
    - 是否音频轨选择不对
    - 是否个别 codec 对当前设备不稳定
+
+## 9. 2026-03-21 深夜状态同步
+
+这份方案文档需要补一条非常重要的现实状态，避免后续阅读的人把“当前方向”和“当前已验证结果”混为一谈。
+
+### 9.1 当前方向没有回退到旧代理
+
+仓库里那套：
+
+- 外部 `media-gateway`
+- 本地电脑常驻服务
+- 电视端播放器依赖外部机器补媒体地址
+
+相关代码和脚本已经删除，不再作为产品方向保留。
+
+也就是说：
+
+- **旧代理路线已经结束**
+- 当前仓库仍然是“电视 App 自包含”的方向
+
+### 9.2 Simulator 当前不是继续硬扛 DASH，而是优先走兼容 MP4
+
+在后续联调里，已经补充确认：
+
+1. `webOS 6.0 Simulator` 返回的设备信息并不是直观的 `simulator`
+   - `modelName = browser-dev`
+   - `sdkVersion = dev`
+   - `userAgent` 中带 `Web0S` 与 `WebAppManager`
+
+2. 如果只按原来的 `modelName.includes('simulator')` 判断，Simulator 分支根本不会命中
+
+3. 在当前环境里，Simulator 继续优先走 DASH 时，仍会大量命中：
+   - `upos-*.bilivideo` 分片 `403`
+   - 播放器停在“切换备选线路”
+
+4. 但同一批样本里，`platform=html5` 拿到的兼容 MP4 在 Simulator 里可以真正起播并推进到 `progress`
+
+因此当前仓库已经做出的现实策略是：
+
+- **真机方向**：
+  - 仍然以自包含播放器能力为主线
+  - DASH / codec 选择 / 轨道能力相关代码继续保留
+- **Simulator 方向**：
+  - 明确识别 `browser-dev + Web0S/WebAppManager UA`
+  - 视作 `webos-simulator`
+  - 优先走兼容 MP4，先保证 Simulator 的播放闭环成立
+
+这个例外是一个**有证据支撑的环境特化策略**，不是回到旧代理。
+
+### 9.3 当前已经补上的验证与观测能力
+
+为了避免后面再陷入“看起来像播了，其实没播”的误判，仓库里已经补上：
+
+1. 播放器 telemetry
+   - `environment`
+   - `attempt-switch`
+   - `loadedmetadata`
+   - `play`
+   - `progress`
+
+2. 环境观测信息
+   - `deviceClass`
+   - `deviceLabel`
+   - 原始 `deviceInfo`
+   - `navigator.userAgent`
+   - 当前兼容流 host
+   - 当前 DASH host
+   - 当前 attempt 列表
+
+3. 自动验证脚本
+   - `npm run verify:simulator-playback`
+
+当前对“Simulator 已能播放”的判定标准，已经不是 `play` 事件，而是：
+
+- 收到 `progress`
+- `currentTime >= 2`
+- `decodedVideoFrames` 有增长
+
+### 9.4 这份方案现在应该如何理解
+
+截至当前，这份文档更准确的理解方式应该是：
+
+1. **它描述的是“自包含播放路线为什么值得做”**
+2. **不是在宣称“Shaka + 前端 MPD 已经在 Simulator/真机上全面验证完成”**
+3. **Simulator 当前可播，是靠“识别 Simulator 后优先兼容 MP4”先建立闭环**
+4. **真机是否继续沿 DASH 主链路投入，还要以后续 TB/电视实测结论为准**
+
+### 9.5 新增经验：打包重写必须保证入口只启动一次
+
+后续在清理启动链路时，又额外确认了一个和这份方案强相关的问题：
+
+- `build/webos/index.html` 如果重复注入 legacy 脚本
+- 会同时启动两套前端入口
+- 最终表现为：
+  - 两个 React App
+  - 两个播放器实例
+  - 两路声音同时播放
+
+因此现在的打包约束新增为：
+
+- `prepare-webos` 对 legacy 入口的重写必须是**幂等**的
+- 不仅要验证“能启动”
+- 还要验证“只启动一次”
 
 如果这条路线依然失败，那么下一层结论会非常明确：
 
