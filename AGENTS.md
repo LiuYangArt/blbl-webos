@@ -17,12 +17,15 @@
 - UI 重构计划与阶段约束：`docs/plans/2026-03-21-tv-ui-refactor-plan.md`
 
 ## 参考项目源码
+bilibili安卓客户端
 F:\CodeProjects\bilibili_tv_android\PiliPlus
+webos播放器示例
+F:\CodeProjects\bilibili_tv_android\MediaPlayback
 
 ## 技术基线
 
 - 前端栈：`React + TypeScript + Vite`
-- 运行平台：`LG webOS TV`
+- 运行平台：`LG webOS TV` LG C1 电视
 - 分辨率目标：默认按 `1920x1080` 设计
 - 输入模型：遥控器优先，Pointer 只是补充
 
