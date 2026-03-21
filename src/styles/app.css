@@ -97,6 +97,27 @@ button {
     "opsz" 48;
 }
 
+.tv-icon-button__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tv-icon-button__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.tv-icon-button__label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .tv-app-shell {
   display: grid;
   grid-template-columns: var(--tv-nav-collapsed-width) minmax(0, 1fr);
@@ -202,8 +223,7 @@ button {
 }
 
 .side-nav-rail__logo,
-.side-nav-rail__avatar,
-.side-nav-item__icon {
+.side-nav-rail__avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -233,10 +253,7 @@ button {
 }
 
 .side-nav-item {
-  display: flex;
-  align-items: center;
   justify-content: flex-start;
-  gap: 16px;
   width: 100%;
   min-height: 76px;
   padding: 0 18px;
@@ -246,7 +263,12 @@ button {
   transform-origin: left center;
 }
 
-.side-nav-item__icon {
+.side-nav-item .tv-icon-button__content {
+  width: 100%;
+  gap: 16px;
+}
+
+.side-nav-item .tv-icon-button__icon {
   background: rgba(255, 255, 255, 0.04);
   color: inherit;
   width: 52px;
@@ -254,15 +276,11 @@ button {
   border-radius: 18px;
 }
 
-.side-nav-item__label {
-  min-width: 0;
+.side-nav-item .tv-icon-button__label {
   flex: 1 1 auto;
-  overflow: hidden;
   font-size: 19px;
   font-weight: 700;
   line-height: 1;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .side-nav-item--active {
@@ -286,7 +304,7 @@ button {
 
 .side-nav-rail__brand-copy,
 .side-nav-rail__footer-copy,
-.side-nav-item__label {
+.side-nav-item .tv-icon-button__label {
   opacity: 0;
   transform: translateX(12px);
   transition:
@@ -296,7 +314,7 @@ button {
 
 .side-nav-rail:focus-within .side-nav-rail__brand-copy,
 .side-nav-rail:focus-within .side-nav-rail__footer-copy,
-.side-nav-rail:focus-within .side-nav-item__label {
+.side-nav-rail:focus-within .side-nav-item .tv-icon-button__label {
   opacity: 1;
   transform: translateX(0);
 }
@@ -307,7 +325,7 @@ button {
   color: var(--tv-text);
 }
 
-.side-nav-item:focus-visible .side-nav-item__icon {
+.side-nav-item:focus-visible .tv-icon-button__icon {
   background: rgba(0, 161, 214, 0.18);
   color: var(--tv-secondary-soft);
 }
@@ -822,14 +840,8 @@ button {
   padding-inline: 22px;
 }
 
-.player-control-bar__action-content {
-  display: inline-flex;
-  align-items: center;
+.player-control-bar__action .tv-icon-button__content {
   gap: 10px;
-}
-
-.player-control-bar__action-text {
-  white-space: nowrap;
 }
 
 .player-control-bar__action--primary {
@@ -840,7 +852,7 @@ button {
   font-size: 24px;
 }
 
-.player-control-bar__action--primary .player-control-bar__action-content {
+.player-control-bar__action--primary .tv-icon-button__content {
   gap: 12px;
 }
 

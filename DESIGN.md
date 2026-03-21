@@ -45,6 +45,7 @@
 - 应用内图标名统一登记到 `src/app/iconRegistry.ts`；业务组件、页面组件和路由配置不直接散落书写原始图标字符串。
 - 默认态图标以未填充态为基线；当前页、焦点态和主操作允许切到填充态并适度加重字重。
 - 侧边导航、播放器控制项、搜索和筛选等关键操作优先使用“图标 + 文本”组合，不能只靠图标让用户猜语义。
+- 复用的“图标 + 文本”按钮统一通过 `src/components/TvIconButton.tsx` 承载，避免在多个页面重复拼装相同结构。
 - 禁止使用字母缩写、临时占位字符或截图占位替代正式图标进入可交付界面。
 
 ### 3.5 App 图标
@@ -71,6 +72,7 @@
 - `AppShell`
 - `SideNavRail`
 - `FocusButton`
+- `TvIconButton`
 - `HeroBanner`
 - `SectionHeader`
 - `MediaCard`
