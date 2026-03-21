@@ -19,8 +19,13 @@ type PlayerPageProps = {
 
 export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: PlayerPageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastPersistedProgressRef = useRef(-1);
+  const resumeProgressRef = useRef(0);
+  const savedProgressRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progressView, setProgressView] = useState({ current: 0, duration: 0 });
+  const [activeSourceIndex, setActiveSourceIndex] = useState(0);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const { setWatchProgress, watchProgress } = useAppStore();
 
   const playerData = useAsyncData(async () => {
@@ -33,61 +38,114 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
 
   const progressKey = `${bvid}:${cid}`;
   const savedProgress = watchProgress[progressKey];
+  const play = playerData.status === 'success' ? playerData.data.play : null;
+  const related = playerData.status === 'success' ? playerData.data.related : [];
 
   useEffect(() => {
-    if (playerData.status !== 'success') {
+    savedProgressRef.current = savedProgress?.progress ?? 0;
+  }, [savedProgress?.progress]);
+
+  useEffect(() => {
+    const initialProgress = savedProgressRef.current;
+    resumeProgressRef.current = initialProgress;
+    lastPersistedProgressRef.current = initialProgress > 0 ? initialProgress : -1;
+    setActiveSourceIndex(0);
+    setPlaybackError(null);
+    setProgressView({ current: 0, duration: 0 });
+  }, [bvid, cid]);
+
+  useEffect(() => {
+    if (!play) {
       return;
     }
     const video = videoRef.current;
     if (!video) {
       return;
     }
+    const sourceUrl = play.candidateUrls[activeSourceIndex] ?? play.url;
+    if (!sourceUrl) {
+      setPlaybackError('当前没有可用播放地址');
+      return;
+    }
 
-    video.src = playerData.data.play.url;
+    let cancelled = false;
+    setPlaybackError(null);
+    video.pause();
+    video.setAttribute('referrerpolicy', 'no-referrer');
+    video.src = sourceUrl;
     video.load();
 
     const handleLoaded = () => {
-      const resumePoint = savedProgress?.progress ?? 0;
+      const resumePoint = resumeProgressRef.current;
       if (resumePoint > 0) {
         video.currentTime = Math.min(resumePoint, video.duration || resumePoint);
       }
       setProgressView({
         current: video.currentTime,
-        duration: video.duration || playerData.data.play.durationMs / 1000,
+        duration: video.duration || play.durationMs / 1000,
       });
-      void video.play().catch(() => {
+      void video.play().catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : '自动播放失败';
+        if (!message.includes('interrupted by a new load request')) {
+          setPlaybackError(message);
+        }
         setIsPlaying(false);
       });
     };
 
     const handleTimeUpdate = () => {
       const current = Math.floor(video.currentTime);
-      const duration = Math.floor(video.duration || playerData.data.play.durationMs / 1000);
-      setProgressView({ current, duration });
-      setWatchProgress({
-        bvid,
-        cid,
-        title,
-        progress: current,
-        duration,
-      });
+      const duration = getDurationSeconds(video, play.durationMs);
+      setProgressView((previous) => (
+        previous.current === current && previous.duration === duration
+          ? previous
+          : { current, duration }
+      ));
+      if (lastPersistedProgressRef.current !== current) {
+        lastPersistedProgressRef.current = current;
+        setWatchProgress({
+          bvid,
+          cid,
+          title,
+          progress: current,
+          duration,
+        });
+      }
     };
 
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
+    const handleError = () => {
+      if (cancelled) {
+        return;
+      }
+      const nextIndex = activeSourceIndex + 1;
+      if (nextIndex < play.candidateUrls.length) {
+        setActiveSourceIndex(nextIndex);
+        return;
+      }
+      const mediaError = video.error;
+      setPlaybackError(mediaError?.message || '当前线路播放失败，已尝试所有备选地址。');
+    };
 
     video.addEventListener('loadedmetadata', handleLoaded);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
+    video.addEventListener('error', handleError);
 
     return () => {
+      cancelled = true;
       video.removeEventListener('loadedmetadata', handleLoaded);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
+      video.removeEventListener('error', handleError);
     };
-  }, [bvid, cid, playerData, savedProgress?.progress, setWatchProgress, title]);
+  }, [activeSourceIndex, bvid, cid, play, setWatchProgress, title]);
 
   if (playerData.status !== 'success') {
     if (playerData.status === 'error') {
@@ -103,21 +161,28 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     return <PageStatus title="正在准备播放源" description="加载真实视频地址和相关推荐。" />;
   }
 
-  const { play, related } = playerData.data;
+  const playSource = playerData.data.play;
   const progressPercent = progressView.duration ? Math.min(100, (progressView.current / progressView.duration) * 100) : 0;
 
   return (
     <main className="page-shell">
       <section className="player-hero">
         <div className="player-hero__video">
-          <video ref={videoRef} className="player-video" controls={false} playsInline />
+          <video
+            ref={videoRef}
+            className="player-video"
+            controls={false}
+            playsInline
+            crossOrigin="anonymous"
+          />
         </div>
 
         <div className="player-hero__top">
           <div className="player-hero__title-group">
             <span className="player-hero__badge">正在播放</span>
             <h1>{title}</h1>
-            <p>{part ? `${part} · ` : ''}{play.qualityLabel}</p>
+            <p>{part ? `${part} · ` : ''}{playSource.qualityLabel}</p>
+            {playbackError ? <small>{playbackError}</small> : null}
           </div>
         </div>
 
@@ -157,6 +222,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       </section>
     </main>
   );
+}
+
+function getDurationSeconds(video: HTMLVideoElement, durationMs: number) {
+  return Math.floor(video.duration || durationMs / 1000);
 }
 
 function togglePlay(video: HTMLVideoElement | null) {

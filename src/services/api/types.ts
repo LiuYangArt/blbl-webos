@@ -72,6 +72,7 @@ export type HotKeyword = {
 
 export type PlaySource = {
   url: string;
+  candidateUrls: string[];
   qualityLabel: string;
   durationMs: number;
 };

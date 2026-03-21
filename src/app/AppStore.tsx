@@ -1,6 +1,7 @@
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -64,6 +65,15 @@ const initialState: AppState = {
   watchProgress: readJsonStorage<Record<string, WatchProgressEntry>>(STORAGE_KEYS.watchProgress, {}),
 };
 
+function isSameWatchProgressEntry(current: WatchProgressEntry | undefined, next: WatchProgressEntry) {
+  return Boolean(
+    current
+    && current.title === next.title
+    && current.progress === next.progress
+    && current.duration === next.duration,
+  );
+}
+
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'remember-search': {
@@ -81,6 +91,10 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case 'set-progress': {
       const key = `${action.entry.bvid}:${action.entry.cid}`;
+      const current = state.watchProgress[key];
+      if (isSameWatchProgressEntry(current, action.entry)) {
+        return state;
+      }
       return {
         ...state,
         watchProgress: {
@@ -137,47 +151,57 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     writeJsonStorage(STORAGE_KEYS.watchProgress, state.watchProgress);
   }, [state.watchProgress]);
 
+  const rememberSearch = useCallback((keyword: string) => {
+    dispatch({ type: 'remember-search', keyword });
+  }, []);
+
+  const removeSearchHistory = useCallback((keyword: string) => {
+    dispatch({ type: 'remove-search', keyword });
+  }, []);
+
+  const setWatchProgress = useCallback((entry: Omit<WatchProgressEntry, 'updatedAt'>) => {
+    dispatch({
+      type: 'set-progress',
+      entry: {
+        ...entry,
+        updatedAt: Date.now(),
+      },
+    });
+  }, []);
+
+  const setAuthGuest = useCallback(() => {
+    dispatch({ type: 'auth-guest' });
+  }, []);
+
+  const refreshAuth = useCallback(async () => {
+    if (authInFlight.current) {
+      return authInFlight.current;
+    }
+    const task = (async () => {
+      dispatch({ type: 'auth-loading' });
+      try {
+        const profile = await fetchCurrentUserProfile();
+        dispatch({ type: 'auth-success', profile });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '无法恢复登录态';
+        dispatch({ type: 'auth-guest', error: message });
+      } finally {
+        authInFlight.current = null;
+      }
+    })();
+    authInFlight.current = task;
+    return task;
+  }, []);
+
   const value = useMemo<AppStoreValue>(() => ({
     ...state,
     hasAuthCookies: hasBilibiliCookies(),
-    rememberSearch: (keyword) => {
-      dispatch({ type: 'remember-search', keyword });
-    },
-    removeSearchHistory: (keyword) => {
-      dispatch({ type: 'remove-search', keyword });
-    },
-    setWatchProgress: (entry) => {
-      dispatch({
-        type: 'set-progress',
-        entry: {
-          ...entry,
-          updatedAt: Date.now(),
-        },
-      });
-    },
-    setAuthGuest: () => {
-      dispatch({ type: 'auth-guest' });
-    },
-    refreshAuth: async () => {
-      if (authInFlight.current) {
-        return authInFlight.current;
-      }
-      const task = (async () => {
-        dispatch({ type: 'auth-loading' });
-        try {
-          const profile = await fetchCurrentUserProfile();
-          dispatch({ type: 'auth-success', profile });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : '无法恢复登录态';
-          dispatch({ type: 'auth-guest', error: message });
-        } finally {
-          authInFlight.current = null;
-        }
-      })();
-      authInFlight.current = task;
-      return task;
-    },
-  }), [state]);
+    rememberSearch,
+    removeSearchHistory,
+    setWatchProgress,
+    setAuthGuest,
+    refreshAuth,
+  }), [refreshAuth, rememberSearch, removeSearchHistory, setAuthGuest, setWatchProgress, state]);
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;
 }

@@ -1,6 +1,7 @@
 import {
   fetchJson,
   getBiliApiUrl,
+  getBiliMediaUrl,
   getBiliPassportUrl,
   getBiliSearchUrl,
   unwrapData,
@@ -196,6 +197,23 @@ function normalizeCover(url: string) {
   return url.startsWith('//') ? `https:${url}` : url;
 }
 
+function normalizeMediaUrl(url: string) {
+  if (!url) {
+    return '';
+  }
+  return url.startsWith('http://') ? `https://${url.slice('http://'.length)}` : url;
+}
+
+function getPlayCandidateUrls(segment: RawPlaySegment | undefined) {
+  const rawCandidates = [
+    segment?.url,
+    ...(segment?.backup_url ?? []),
+  ]
+    .filter((item): item is string => Boolean(item))
+    .map(normalizeMediaUrl);
+  return Array.from(new Set(rawCandidates.map(getBiliMediaUrl)));
+}
+
 function parseDuration(value: string | number | undefined) {
   if (typeof value === 'number') {
     return value;
@@ -369,14 +387,15 @@ export async function fetchPlaySource(bvid: string, cid: number, quality = 80): 
     getBiliApiUrl(`/x/player/playurl?bvid=${encodeURIComponent(bvid)}&cid=${cid}&qn=${quality}&fnval=0&otype=json`),
   );
   const data = unwrapData(payload);
-  const firstUrl = data.durl?.[0]?.url ?? data.durl?.[0]?.backup_url?.[0];
-  if (!firstUrl) {
+  const candidateUrls = getPlayCandidateUrls(data.durl?.[0]);
+  if (!candidateUrls.length) {
     throw new Error('当前视频没有可用播放地址');
   }
   const qualityIndex = data.accept_quality?.findIndex((item) => item === data.quality) ?? -1;
   const qualityLabel = qualityIndex >= 0 ? data.accept_description?.[qualityIndex] : undefined;
   return {
-    url: String(firstUrl),
+    url: candidateUrls[0],
+    candidateUrls,
     qualityLabel: String(qualityLabel ?? data.format ?? '可播流'),
     durationMs: Number(data.timelength ?? 0),
   };
