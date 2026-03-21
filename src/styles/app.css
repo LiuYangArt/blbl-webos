@@ -544,6 +544,18 @@ button {
   box-shadow: var(--tv-focus-shadow);
 }
 
+.focus-button:disabled,
+.focus-button--disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.focus-button:disabled:focus-visible,
+.focus-button--disabled:focus-visible {
+  transform: none;
+  box-shadow: none;
+}
+
 .focus-button:focus-visible .tv-icon,
 .side-nav-item--active .tv-icon {
   font-variation-settings:

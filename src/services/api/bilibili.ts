@@ -254,7 +254,7 @@ function getPlayCandidateUrls(segment: RawPlaySegment | undefined) {
   ]
     .filter((item): item is string => Boolean(item))
     .map(normalizeMediaUrl);
-  return Array.from(new Set(rawCandidates));
+  return sortMediaCandidateUrls(Array.from(new Set(rawCandidates)));
 }
 
 function getDashCandidateUrls(stream: RawDashStream | undefined) {
@@ -266,7 +266,36 @@ function getDashCandidateUrls(stream: RawDashStream | undefined) {
   ]
     .filter((item): item is string => Boolean(item))
     .map(normalizeMediaUrl);
-  return Array.from(new Set(rawCandidates));
+  return sortMediaCandidateUrls(Array.from(new Set(rawCandidates)));
+}
+
+function sortMediaCandidateUrls(urls: string[]) {
+  return [...urls].sort((left, right) => getMediaCandidateScore(right) - getMediaCandidateScore(left));
+}
+
+function getMediaCandidateScore(url: string) {
+  try {
+    const host = new URL(url).host.toLowerCase();
+    let score = 0;
+    if (host.includes('.bilivideo.com') || host.includes('.bilivideo.cn')) {
+      score += 20;
+    }
+    if (host.includes('upos-')) {
+      score += 8;
+    }
+    if (host.startsWith('cn-')) {
+      score += 6;
+    }
+    if (host.includes('mcdn')) {
+      score -= 20;
+    }
+    if (host.includes(':8082')) {
+      score -= 4;
+    }
+    return score;
+  } catch {
+    return 0;
+  }
 }
 
 function parseVideoCodec(codecs: string | undefined): ParsedVideoCodec {

@@ -32,10 +32,16 @@ export type PlaybackAttempt = {
   isCompatible: boolean;
   width: number;
   height: number;
-  candidateUrls: string[];
+  candidates: PlaybackSourceCandidate[];
   source: PlayCompatibleSource | null;
   videoStream: PlayVideoStream | null;
   audioStream: PlayAudioStream | null;
+};
+
+export type PlaybackSourceCandidate = {
+  id: string;
+  videoUrl: string;
+  audioUrl: string | null;
 };
 
 const AUTO_CODEC_PRIORITY: ParsedVideoCodec[] = ['avc', 'hevc', 'av1'];
@@ -172,8 +178,7 @@ function buildDashAttempts(
   effectivePreference: VideoCodecPreference;
   warning: string | null;
 } {
-  const streamsAtCurrentQuality = playSource.videoStreams.filter((stream) => stream.quality === playSource.currentQuality);
-  const targetStreams = streamsAtCurrentQuality.length > 0 ? streamsAtCurrentQuality : playSource.videoStreams;
+  const targetStreams = getResolvedDashStreams(playSource);
   const quality = targetStreams[0]?.quality ?? playSource.currentQuality;
   const qualityLabel = targetStreams[0]?.qualityLabel
     ?? playSource.qualities.find((item) => item.qn === quality)?.label
@@ -196,9 +201,13 @@ function buildDashAttempts(
   const exactStream = codecPreference === 'auto'
     ? null
     : orderedStreams.find((stream) => stream.codec === codecPreference);
-  const warning = codecPreference !== 'auto' && !exactStream
-    ? `当前清晰度没有 ${getCodecLabel(codecPreference)} 编码，已切换到当前清晰度可用编码。`
-    : null;
+  const warningMessages: string[] = [];
+  if (quality !== playSource.currentQuality) {
+    warningMessages.push(`当前接口未返回 ${playSource.qualityLabel} 的实际 DASH 分轨，本次按 ${qualityLabel} 分轨播放。`);
+  }
+  if (codecPreference !== 'auto' && !exactStream) {
+    warningMessages.push(`当前分轨没有 ${getCodecLabel(codecPreference)} 编码，已切换到本次实际返回的可用编码。`);
+  }
   const effectivePreference = exactStream ? codecPreference : 'auto';
 
   return {
@@ -215,13 +224,13 @@ function buildDashAttempts(
       isCompatible: false,
       width: stream.width,
       height: stream.height,
-      candidateUrls: [stream.url, ...stream.backupUrls],
+      candidates: buildDashCandidates(stream, audioStream),
       source: null,
       videoStream: stream,
       audioStream,
     })),
     effectivePreference,
-    warning,
+    warning: warningMessages.length > 0 ? warningMessages.join(' ') : null,
   };
 }
 
@@ -266,7 +275,11 @@ function buildCompatibleAttempts(
       isCompatible: true,
       width: 0,
       height: 0,
-      candidateUrls: source.candidateUrls,
+      candidates: source.candidateUrls.map((url, index) => ({
+        id: `compatible:${source.quality}:${index}`,
+        videoUrl: url,
+        audioUrl: null,
+      })),
       source,
       videoStream: null,
       audioStream: null,
@@ -295,6 +308,95 @@ function pickBestStreamPerCodec(streams: PlayVideoStream[]): PlayVideoStream[] {
   }
 
   return Array.from(byCodec.values());
+}
+
+function getResolvedDashStreams(playSource: PlaySource): PlayVideoStream[] {
+  const streamsAtCurrentQuality = playSource.videoStreams.filter((stream) => stream.quality === playSource.currentQuality);
+  if (streamsAtCurrentQuality.length > 0) {
+    return streamsAtCurrentQuality;
+  }
+
+  const highestAvailableQuality = [...playSource.videoStreams]
+    .map((stream) => stream.quality)
+    .sort((left, right) => right - left)[0];
+
+  if (!highestAvailableQuality) {
+    return [];
+  }
+
+  return playSource.videoStreams.filter((stream) => stream.quality === highestAvailableQuality);
+}
+
+function buildDashCandidates(
+  videoStream: PlayVideoStream,
+  audioStream: PlayAudioStream | null,
+): PlaybackSourceCandidate[] {
+  const rankedVideoUrls = rankCandidateUrls([videoStream.url, ...videoStream.backupUrls]);
+  if (!audioStream) {
+    return rankedVideoUrls.map((candidate, index) => ({
+      id: `dash-video:${videoStream.id}:${index}`,
+      videoUrl: candidate.url,
+      audioUrl: null,
+    }));
+  }
+
+  const rankedAudioUrls = rankCandidateUrls([audioStream.url, ...audioStream.backupUrls]);
+  const pairs: Array<PlaybackSourceCandidate & { score: number }> = [];
+
+  for (const videoCandidate of rankedVideoUrls) {
+    for (const audioCandidate of rankedAudioUrls) {
+      pairs.push({
+        id: `dash-pair:${videoStream.id}:${audioStream.id}:${videoCandidate.index}:${audioCandidate.index}`,
+        videoUrl: videoCandidate.url,
+        audioUrl: audioCandidate.url,
+        score: videoCandidate.score + audioCandidate.score,
+      });
+    }
+  }
+
+  return pairs
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 12)
+    .map(({ id, videoUrl, audioUrl }) => ({
+      id,
+      videoUrl,
+      audioUrl,
+    }));
+}
+
+function rankCandidateUrls(urls: string[]) {
+  return urls
+    .map((url, index) => ({
+      url,
+      index,
+      score: getCandidateScore(url) - index,
+    }))
+    .sort((left, right) => right.score - left.score);
+}
+
+function getCandidateScore(url: string) {
+  try {
+    const host = new URL(url).host.toLowerCase();
+    let score = 0;
+    if (host.includes('.bilivideo.com') || host.includes('.bilivideo.cn')) {
+      score += 20;
+    }
+    if (host.includes('upos-')) {
+      score += 8;
+    }
+    if (host.startsWith('cn-')) {
+      score += 6;
+    }
+    if (host.includes('mcdn')) {
+      score -= 20;
+    }
+    if (host.includes(':8082')) {
+      score -= 4;
+    }
+    return score;
+  } catch {
+    return 0;
+  }
 }
 
 function orderStreamsByCodec(
@@ -372,6 +474,15 @@ export function getAvailableCodecsForQuality(playSource: PlaySource, quality: nu
     return qualityMeta.codecs;
   }
 
+  return Array.from(new Set(
+    playSource.videoStreams
+      .filter((stream) => stream.quality === quality)
+      .map((stream) => stream.codec)
+      .filter((codec) => codec !== 'unknown'),
+  ));
+}
+
+export function getReturnedCodecsForQuality(playSource: PlaySource, quality: number): ParsedVideoCodec[] {
   return Array.from(new Set(
     playSource.videoStreams
       .filter((stream) => stream.quality === quality)

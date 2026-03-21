@@ -22,7 +22,7 @@ export async function createShakaPlayer(
     throw new Error('当前设备不支持 Shaka 所需的 DASH/MSE 播放能力。');
   }
 
-  const player = new shaka.Player(video);
+  const player = new shaka.Player();
   const listener = (event: Event) => {
     const detail = (event as CustomEvent<{ detail?: unknown }>).detail ?? null;
     onError(formatShakaError(detail));
@@ -44,6 +44,7 @@ export async function createShakaPlayer(
 
   return {
     load: async (manifestUrl: string) => {
+      await player.attach(video);
       await player.load(manifestUrl);
     },
     destroy: async () => {

@@ -17,6 +17,7 @@ import {
   formatAttemptResolution,
   getAvailableCodecsForQuality,
   getCodecLabel,
+  getReturnedCodecsForQuality,
 } from './playerCodec';
 import { createDashManifestSource } from './playerDashManifest';
 import { reportPlayerDebugEvent } from './playerDebug';
@@ -49,7 +50,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progressView, setProgressView] = useState({ current: 0, duration: 0 });
-  const [activeCandidateUrlIndex, setActiveCandidateUrlIndex] = useState(0);
+  const [activeCandidateIndex, setActiveCandidateIndex] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [playbackNotice, setPlaybackNotice] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -92,8 +93,28 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   }, [capability, codecMemory, codecPreference, play]);
 
   const currentAttempt = playbackPlan.attempts[0] ?? null;
-  const currentSourceUrl = currentAttempt?.candidateUrls[activeCandidateUrlIndex] ?? '';
-  const availableCodecs = play && currentAttempt ? getAvailableCodecsForQuality(play, currentAttempt.quality) : [];
+  const currentCandidate = currentAttempt?.candidates[activeCandidateIndex] ?? null;
+  const currentSourceUrl = currentCandidate?.videoUrl ?? '';
+  const declaredCodecs = useMemo(() => (
+    play && currentAttempt ? getAvailableCodecsForQuality(play, currentAttempt.quality) : []
+  ), [currentAttempt, play]);
+  const returnedCodecs = useMemo(() => (
+    play && currentAttempt ? getReturnedCodecsForQuality(play, currentAttempt.quality) : []
+  ), [currentAttempt, play]);
+  const selectableCodecs = useMemo(() => {
+    const codecs = new Set<VideoCodecPreference>(['auto']);
+    if (currentAttempt?.mode === 'compatible') {
+      codecs.add('avc');
+      return codecs;
+    }
+
+    for (const codec of returnedCodecs) {
+      if (codec !== 'unknown') {
+        codecs.add(codec);
+      }
+    }
+    return codecs;
+  }, [currentAttempt?.mode, returnedCodecs]);
   const isWebOS = isWebOSAvailable();
   const engineLabel = currentAttempt?.mode === 'dash' ? 'Shaka Player + MSE' : 'HTML5 Video';
   const playbackModeLabel = currentAttempt?.mode === 'dash' ? 'App 内生成 DASH 清单' : '兼容流直连';
@@ -117,7 +138,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     resumeProgressRef.current = initialProgress;
     lastPersistedProgressRef.current = initialProgress > 0 ? initialProgress : -1;
     recordedAttemptIdRef.current = '';
-    setActiveCandidateUrlIndex(0);
+    setActiveCandidateIndex(0);
     setPlaybackError(null);
     setPlaybackNotice(playbackPlan.warning);
     setProgressView({ current: 0, duration: 0 });
@@ -132,7 +153,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   }, [isSettingsOpen]);
 
   useEffect(() => {
-    if (!play || !currentAttempt || !currentSourceUrl || !capability) {
+    if (!play || !currentAttempt || !currentCandidate || !currentSourceUrl || !capability) {
       return;
     }
 
@@ -153,7 +174,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       videoHeight: video.videoHeight,
       decodedVideoFrames: readDecodedVideoFrames(video),
       attemptId: currentAttempt.id,
-      candidateUrlIndex: activeCandidateUrlIndex,
+      candidateUrlIndex: activeCandidateIndex,
     });
 
     const markAttemptSuccess = () => {
@@ -176,10 +197,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       const nextResumePoint = Math.floor(video.currentTime || resumeProgressRef.current);
       resumeProgressRef.current = nextResumePoint;
 
-      const nextUrlIndex = activeCandidateUrlIndex + 1;
-      if (nextUrlIndex < currentAttempt.candidateUrls.length) {
-        setPlaybackNotice(`当前地址不可用，正在切换备选线路 #${nextUrlIndex + 1}`);
-        setActiveCandidateUrlIndex(nextUrlIndex);
+      const nextCandidateIndex = activeCandidateIndex + 1;
+      if (nextCandidateIndex < currentAttempt.candidates.length) {
+        setPlaybackNotice(`当前地址不可用，正在切换备选线路 #${nextCandidateIndex + 1}`);
+        setActiveCandidateIndex(nextCandidateIndex);
         failed = false;
         return;
       }
@@ -307,8 +328,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
           durationMs: play.durationMs,
           videoStream: currentAttempt.videoStream,
           audioStream: currentAttempt.audioStream,
-          videoUrl: currentSourceUrl,
-          audioUrl: currentAttempt.audioStream?.url,
+          videoUrl: currentCandidate.videoUrl,
+          audioUrl: currentCandidate.audioUrl ?? undefined,
         });
         manifestRevoke = manifestSource.revoke;
 
@@ -320,7 +341,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
         return;
       }
 
-      loadDirectVideoSource(video, currentSourceUrl);
+      loadDirectVideoSource(video, currentCandidate.videoUrl);
     };
 
     void bootPlayer().catch((error) => {
@@ -342,7 +363,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       manifestRevoke?.();
     };
   }, [
-    activeCandidateUrlIndex,
+    activeCandidateIndex,
+    currentCandidate,
     bvid,
     capability,
     cid,
@@ -435,7 +457,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
               const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
               resumeProgressRef.current = currentTime;
               setPlaybackNotice('正在按当前策略重新加载播放器');
-              setActiveCandidateUrlIndex(0);
+              setActiveCandidateIndex(0);
               setReloadNonce((previous) => previous + 1);
             }}
             onOpenSettings={() => setIsSettingsOpen((previous) => !previous)}
@@ -458,6 +480,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                     key={option}
                     row={2}
                     col={20 + index}
+                    className={!selectableCodecs.has(option) ? 'focus-button--disabled' : undefined}
+                    disabled={!selectableCodecs.has(option)}
                     variant={codecPreference === option ? 'primary' : 'ghost'}
                     size="sm"
                     onClick={() => {
@@ -472,7 +496,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                         previewPlan?.warning
                           ?? `已切换到 ${getCodecLabel(effectivePreference)} 策略，正在重载播放器`,
                       );
-                      setActiveCandidateUrlIndex(0);
+                      setActiveCandidateIndex(0);
                       setIsSettingsOpen(false);
                       setReloadNonce((previous) => previous + 1);
                     }}
@@ -524,11 +548,15 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                 </div>
                 <div className="player-settings-drawer__info-row">
                   <span>可切换地址</span>
-                  <strong>{currentAttempt.candidateUrls.length}</strong>
+                  <strong>{currentAttempt.candidates.length}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
-                  <span>接口可选编码</span>
-                  <strong>{availableCodecs.length ? availableCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回'}</strong>
+                  <span>实际返回编码</span>
+                  <strong>{returnedCodecs.length ? returnedCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回'}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>接口宣称编码</span>
+                  <strong>{declaredCodecs.length ? declaredCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回'}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
                   <span>运行环境</span>
@@ -552,7 +580,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                     const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
                     resumeProgressRef.current = currentTime;
                     setPlaybackNotice('正在按当前策略重新加载');
-                    setActiveCandidateUrlIndex(0);
+                    setActiveCandidateIndex(0);
                     setReloadNonce((previous) => previous + 1);
                   }}
                 >
@@ -568,7 +596,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                     resumeProgressRef.current = currentTime;
                     setCodecPreference('auto');
                     setPlaybackNotice('已恢复自动策略，正在重新尝试');
-                    setActiveCandidateUrlIndex(0);
+                    setActiveCandidateIndex(0);
                     setIsSettingsOpen(false);
                     setReloadNonce((previous) => previous + 1);
                   }}
