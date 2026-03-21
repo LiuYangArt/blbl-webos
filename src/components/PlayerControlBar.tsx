@@ -18,31 +18,30 @@ export function PlayerControlBar({
   onForward,
   onRefresh,
 }: PlayerControlBarProps) {
+  const secondaryActions = [
+    { col: 10, symbol: TV_ICONS.playerBack, label: '返回', onClick: onBack },
+    { col: 11, symbol: TV_ICONS.playerReplay10, label: '-10 秒', onClick: onReplay },
+    { col: 13, symbol: TV_ICONS.playerForward10, label: '+10 秒', onClick: onForward },
+    { col: 14, symbol: TV_ICONS.playerRefresh, label: '重载播放源', onClick: onRefresh },
+  ] as const;
+
   return (
     <div className="player-control-bar">
       <div className="player-control-bar__row">
-        <TvIconButton
-          row={0}
-          col={10}
-          symbol={TV_ICONS.playerBack}
-          label="返回"
-          iconSize="md"
-          variant="glass"
-          size="md"
-          className="player-control-bar__action"
-          onClick={onBack}
-        />
-        <TvIconButton
-          row={0}
-          col={11}
-          symbol={TV_ICONS.playerReplay10}
-          label="-10 秒"
-          iconSize="md"
-          variant="glass"
-          size="md"
-          className="player-control-bar__action"
-          onClick={onReplay}
-        />
+        {secondaryActions.slice(0, 2).map((action) => (
+          <TvIconButton
+            key={action.col}
+            row={0}
+            col={action.col}
+            symbol={action.symbol}
+            label={action.label}
+            iconSize="md"
+            variant="glass"
+            size="md"
+            className="player-control-bar__action"
+            onClick={action.onClick}
+          />
+        ))}
         <TvIconButton
           row={0}
           col={12}
@@ -55,28 +54,20 @@ export function PlayerControlBar({
           defaultFocus
           onClick={onTogglePlay}
         />
-        <TvIconButton
-          row={0}
-          col={13}
-          symbol={TV_ICONS.playerForward10}
-          label="+10 秒"
-          iconSize="md"
-          variant="glass"
-          size="md"
-          className="player-control-bar__action"
-          onClick={onForward}
-        />
-        <TvIconButton
-          row={0}
-          col={14}
-          symbol={TV_ICONS.playerRefresh}
-          label="重载播放源"
-          iconSize="md"
-          variant="glass"
-          size="md"
-          className="player-control-bar__action"
-          onClick={onRefresh}
-        />
+        {secondaryActions.slice(2).map((action) => (
+          <TvIconButton
+            key={action.col}
+            row={0}
+            col={action.col}
+            symbol={action.symbol}
+            label={action.label}
+            iconSize="md"
+            variant="glass"
+            size="md"
+            className="player-control-bar__action"
+            onClick={action.onClick}
+          />
+        ))}
       </div>
     </div>
   );

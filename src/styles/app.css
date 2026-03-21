@@ -149,14 +149,9 @@ button {
   min-height: 48px;
   padding: 0 18px;
   border-radius: var(--tv-radius-pill);
-  background: rgba(28, 27, 28, 0.72);
-  color: var(--tv-text-soft);
-  backdrop-filter: var(--tv-blur);
-}
-
-.tv-topbar__profile {
   background: rgba(251, 114, 153, 0.14);
   color: #ffc6d5;
+  backdrop-filter: var(--tv-blur);
 }
 
 .tv-page-content {

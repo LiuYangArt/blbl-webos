@@ -17,5 +17,4 @@ export const TV_ICONS = {
   playerRefresh: 'refresh',
 } as const satisfies Record<string, MaterialSymbol>;
 
-export type TvIconKey = keyof typeof TV_ICONS;
 export type TvIconName = (typeof TV_ICONS)[keyof typeof TV_ICONS];

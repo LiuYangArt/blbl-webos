@@ -15,6 +15,10 @@ type TvIconButtonProps = {
   labelClassName?: string;
 } & Omit<FocusButtonProps, 'children'>;
 
+function joinClassNames(...classNames: Array<string | undefined>): string {
+  return classNames.filter(Boolean).join(' ');
+}
+
 export function TvIconButton({
   symbol,
   label,
@@ -28,11 +32,11 @@ export function TvIconButton({
 }: TvIconButtonProps) {
   return (
     <FocusButton {...props} className={className}>
-      <span className={['tv-icon-button__content', contentClassName].filter(Boolean).join(' ')}>
-        <span className={['tv-icon-button__icon', iconClassName].filter(Boolean).join(' ')}>
+      <span className={joinClassNames('tv-icon-button__content', contentClassName)}>
+        <span className={joinClassNames('tv-icon-button__icon', iconClassName)}>
           <TvIcon symbol={symbol} size={iconSize} filled={iconFilled} />
         </span>
-        <span className={['tv-icon-button__label', labelClassName].filter(Boolean).join(' ')}>
+        <span className={joinClassNames('tv-icon-button__label', labelClassName)}>
           {label}
         </span>
       </span>
