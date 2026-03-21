@@ -35,7 +35,7 @@ export function ProfilePage({
     <main className="page-shell">
       <section className="content-section profile-hero">
         <div className="profile-hero__avatar">
-          <img src={auth.profile.face} alt="" />
+          <img src={auth.profile.face} alt="" referrerPolicy="no-referrer" />
         </div>
         <div className="profile-hero__content">
           <span className="detail-hero__tag">个人中心</span>

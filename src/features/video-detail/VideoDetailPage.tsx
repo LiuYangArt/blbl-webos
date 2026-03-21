@@ -55,7 +55,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
     <main className="page-shell">
       <section className="detail-hero">
         <div className="detail-hero__cover">
-          <img src={video.cover} alt="" />
+          <img src={video.cover} alt="" referrerPolicy="no-referrer" />
         </div>
         <div className="detail-hero__content">
           <span className="detail-hero__tag">{video.typeName || '视频详情'}</span>

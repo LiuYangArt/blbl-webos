@@ -53,7 +53,7 @@ export function HistoryPage({ onLogin, onOpenDetail, onOpenPlayer }: HistoryPage
                   part: item.part,
                 })}
               >
-                <img src={item.cover} alt="" className="history-card__cover" />
+                <img src={item.cover} alt="" className="history-card__cover" referrerPolicy="no-referrer" />
                 <div className="history-card__body">
                   <strong>{item.title}</strong>
                   <span>{item.author}</span>

@@ -18,7 +18,7 @@ export function MediaCard({ row, col, item, onClick }: MediaCardProps) {
       onClick={onClick}
     >
       <div className="media-card__poster" aria-hidden="true">
-        {item.cover ? <img src={item.cover} alt="" /> : null}
+        {item.cover ? <img src={item.cover} alt="" referrerPolicy="no-referrer" /> : null}
         <span className="media-card__duration">{formatDuration(item.duration)}</span>
         {item.reason ? <span className="media-card__reason">{item.reason}</span> : null}
       </div>

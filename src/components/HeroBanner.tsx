@@ -23,7 +23,7 @@ export function HeroBanner({
       <div className="hero-banner__backdrop" aria-hidden="true">
         <div className="hero-banner__orb hero-banner__orb--pink" />
         <div className="hero-banner__orb hero-banner__orb--blue" />
-        <img className="hero-banner__cover" src={item.cover} alt="" />
+        <img className="hero-banner__cover" src={item.cover} alt="" referrerPolicy="no-referrer" />
       </div>
 
       <div className="hero-banner__content">

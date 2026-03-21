@@ -190,6 +190,9 @@ function normalizeCover(url: string) {
   if (!url) {
     return '';
   }
+  if (url.startsWith('http://')) {
+    return `https://${url.slice('http://'.length)}`;
+  }
   return url.startsWith('//') ? `https:${url}` : url;
 }
 

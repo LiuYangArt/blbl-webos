@@ -65,7 +65,7 @@ export function LibraryPage(props: LibraryPageProps) {
                   defaultFocus={index === 0}
                   onClick={() => props.onOpenDetail({ bvid: item.bvid, title: item.title })}
                 >
-                  <img src={item.cover} alt="" className="history-card__cover" />
+                  <img src={item.cover} alt="" className="history-card__cover" referrerPolicy="no-referrer" />
                   <div className="history-card__body">
                     <strong>{item.title}</strong>
                     <span>{item.author}</span>
