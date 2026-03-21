@@ -5,7 +5,15 @@ const root = resolve(import.meta.dirname, '..');
 const distDir = resolve(root, 'dist');
 const outputDir = resolve(root, 'build', 'webos');
 
-const rewriteWebOsIndexToLegacy = (dir) => {
+function findLegacyAssetName(assetNames, pattern) {
+  return assetNames.find((name) => pattern.test(name)) ?? null;
+}
+
+function ensureLegacyScript(html, marker, scriptTag) {
+  return html.includes(marker) ? html : scriptTag(html);
+}
+
+function rewriteWebOsIndexToLegacy(dir) {
   const assetsDir = resolve(dir, 'assets');
   const indexFile = resolve(dir, 'index.html');
 
@@ -14,8 +22,8 @@ const rewriteWebOsIndexToLegacy = (dir) => {
   }
 
   const assetNames = readdirSync(assetsDir);
-  const legacyPolyfills = assetNames.find((name) => /^polyfills-legacy-.*\.js$/u.test(name));
-  const legacyEntry = assetNames.find((name) => /^index-legacy-.*\.js$/u.test(name));
+  const legacyPolyfills = findLegacyAssetName(assetNames, /^polyfills-legacy-.*\.js$/u);
+  const legacyEntry = findLegacyAssetName(assetNames, /^index-legacy-.*\.js$/u);
 
   if (!legacyPolyfills || !legacyEntry) {
     return;
@@ -24,13 +32,27 @@ const rewriteWebOsIndexToLegacy = (dir) => {
   let html = readFileSync(indexFile, 'utf8');
   html = html.replace(/<script type="module"[^>]*src="\.\/assets\/[^"]+"[^>]*><\/script>\s*/u, '');
   html = html.replace(/<link rel="modulepreload"[^>]*>\s*/gu, '');
-  html = html.replace(
-    '<script src="./webOSTV.js"></script>',
-    `<script src="./webOSTV.js"></script>\n    <script crossorigin src="./assets/${legacyPolyfills}"></script>\n    <script crossorigin src="./assets/${legacyEntry}"></script>`,
+  html = html.replace(/<script crossorigin src="\.\/assets\/(?:polyfills|index)-legacy-[^"]+\.js"><\/script>\s*/gu, '');
+
+  html = ensureLegacyScript(
+    html,
+    'id="vite-legacy-polyfill"',
+    (currentHtml) => currentHtml.replace(
+      '<script src="./webOSTV.js"></script>',
+      `<script src="./webOSTV.js"></script>\n    <script crossorigin id="vite-legacy-polyfill" src="./assets/${legacyPolyfills}"></script>`,
+    ),
+  );
+  html = ensureLegacyScript(
+    html,
+    'id="vite-legacy-entry"',
+    (currentHtml) => currentHtml.replace(
+      '</body>',
+      `    <script crossorigin id="vite-legacy-entry" data-src="./assets/${legacyEntry}">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>\n  </body>`,
+    ),
   );
 
   writeFileSync(indexFile, html);
-};
+}
 
 if (!existsSync(distDir)) {
   throw new Error('dist 目录不存在，请先运行 npm run build');

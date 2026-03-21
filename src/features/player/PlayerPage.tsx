@@ -9,7 +9,7 @@ import { PlayerControlBar } from '../../components/PlayerControlBar';
 import { SectionHeader } from '../../components/SectionHeader';
 import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
 import { fetchPlaySource, fetchRelatedVideos } from '../../services/api/bilibili';
-import type { PlayAudioStream, VideoCodecPreference } from '../../services/api/types';
+import type { PlayAudioStream, PlaySource, VideoCodecPreference } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
 import {
   buildPlaybackAttempts,
@@ -19,6 +19,7 @@ import {
   getCodecLabel,
   getReturnedCodecsForQuality,
 } from './playerCodec';
+import type { PlaybackAttempt, PlayerCodecCapability } from './playerCodec';
 import { createDashManifestSource } from './playerDashManifest';
 import { reportPlayerDebugEvent } from './playerDebug';
 import {
@@ -161,14 +162,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       return;
     }
 
-    const reportKey = [
+    const reportKey = buildEnvironmentReportKey({
       bvid,
       cid,
-      capability.deviceKey,
-      capability.deviceClass,
-      play.videoStreams.length,
-      play.compatibleSources.length,
-    ].join(':');
+      capability,
+      play,
+    });
     if (reportedEnvironmentKeyRef.current === reportKey) {
       return;
     }
@@ -182,22 +181,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       quality: play.qualityLabel,
       codec: playbackPlan.attempts[0]?.codecLabel ?? getCodecLabel(codecPreference),
       sourceTypeLabel: playbackPlan.attempts[0]?.mode === 'dash' ? 'Shaka Player + MSE' : 'HTML5 Video',
-      details: {
-        capability,
-        deviceInfo,
-        userAgent: navigator.userAgent,
-        playMode: play.mode,
-        currentQuality: play.currentQuality,
-        videoStreamCount: play.videoStreams.length,
-        audioStreamCount: play.audioStreams.length,
-        compatibleSourceCount: play.compatibleSources.length,
-        compatibleSourceHosts: play.compatibleSources.map((source) => getUrlHost(source.url)),
-        compatibleCandidateHosts: play.compatibleSources.flatMap((source) => source.candidateUrls.map(getUrlHost)),
-        dashVideoHosts: play.videoStreams.flatMap((stream) => [stream.url, ...stream.backupUrls].map(getUrlHost)),
-        playbackAttemptModes: playbackPlan.attempts.map((attempt) => attempt.mode),
-        playbackAttemptIds: playbackPlan.attempts.map((attempt) => attempt.id),
-        playbackWarning: playbackPlan.warning,
-      },
+      details: buildEnvironmentDetails(capability, deviceInfo, play, playbackPlan.attempts, playbackPlan.warning),
     });
   }, [bvid, capability, cid, codecPreference, deviceInfo, play, playbackPlan]);
 
@@ -825,4 +809,45 @@ function getUrlHost(url: string): string {
   } catch {
     return '未知';
   }
+}
+
+function buildEnvironmentReportKey(input: {
+  bvid: string;
+  cid: number;
+  capability: PlayerCodecCapability;
+  play: PlaySource;
+}): string {
+  return [
+    input.bvid,
+    input.cid,
+    input.capability.deviceKey,
+    input.capability.deviceClass,
+    input.play.videoStreams.length,
+    input.play.compatibleSources.length,
+  ].join(':');
+}
+
+function buildEnvironmentDetails(
+  capability: PlayerCodecCapability,
+  deviceInfo: Record<string, unknown> | null,
+  play: PlaySource,
+  attempts: PlaybackAttempt[],
+  warning: string | null,
+) {
+  return {
+    capability,
+    deviceInfo,
+    userAgent: navigator.userAgent,
+    playMode: play.mode,
+    currentQuality: play.currentQuality,
+    videoStreamCount: play.videoStreams.length,
+    audioStreamCount: play.audioStreams.length,
+    compatibleSourceCount: play.compatibleSources.length,
+    compatibleSourceHosts: play.compatibleSources.map((source) => getUrlHost(source.url)),
+    compatibleCandidateHosts: play.compatibleSources.flatMap((source) => source.candidateUrls.map(getUrlHost)),
+    dashVideoHosts: play.videoStreams.flatMap((stream) => [stream.url, ...stream.backupUrls].map(getUrlHost)),
+    playbackAttemptModes: attempts.map((attempt) => attempt.mode),
+    playbackAttemptIds: attempts.map((attempt) => attempt.id),
+    playbackWarning: warning,
+  };
 }

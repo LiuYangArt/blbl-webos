@@ -92,22 +92,22 @@ function canPlay(video: HTMLVideoElement, mimeType: string): boolean {
 export function buildPlayerCodecCapability(deviceInfo: Record<string, unknown> | null): PlayerCodecCapability {
   const modelName = String(deviceInfo?.modelName ?? deviceInfo?.model_name ?? 'unknown');
   const platformVersion = String(deviceInfo?.platformVersion ?? deviceInfo?.platform_version ?? deviceInfo?.sdkVersion ?? 'unknown');
-  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
   return {
     deviceKey: `${modelName}:${platformVersion}`,
     deviceLabel: modelName,
-    deviceClass: resolveDeviceClass(modelName, platformVersion, userAgent),
+    deviceClass: resolveDeviceClass(modelName, platformVersion, readNavigatorUserAgent()),
     support: probePlayerCodecSupport(),
   };
 }
 
+function readNavigatorUserAgent(): string {
+  return typeof navigator === 'undefined' ? '' : navigator.userAgent;
+}
+
 function resolveDeviceClass(modelName: string, platformVersion: string, userAgent: string): string {
   const normalizedModel = modelName.toLowerCase();
-  const normalizedUserAgent = userAgent.toLowerCase();
-  const looksLikeWebOsSimulator = normalizedUserAgent.includes('web0s')
-    && normalizedUserAgent.includes('webappmanager');
 
-  if (normalizedModel.includes('browser-dev') && looksLikeWebOsSimulator) {
+  if (normalizedModel.includes('browser-dev') && isWebOsSimulatorUserAgent(userAgent)) {
     return 'webos-simulator';
   }
   if (normalizedModel.includes('browser-dev')) {
@@ -123,6 +123,11 @@ function resolveDeviceClass(modelName: string, platformVersion: string, userAgen
     return 'webos-6';
   }
   return 'webos-generic';
+}
+
+function isWebOsSimulatorUserAgent(userAgent: string): boolean {
+  const normalizedUserAgent = userAgent.toLowerCase();
+  return normalizedUserAgent.includes('web0s') && normalizedUserAgent.includes('webappmanager');
 }
 
 export function getAutoCodecPriority(
