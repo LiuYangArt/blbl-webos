@@ -13,6 +13,10 @@ export function usePageStack<T>(initialPage: T) {
     setStack((currentStack) => [...currentStack.slice(0, -1), page]);
   }, []);
 
+  const reset = useCallback((page: T) => {
+    setStack([page]);
+  }, []);
+
   const pop = useCallback(() => {
     let didPop = false;
     setStack((currentStack) => {
@@ -26,7 +30,7 @@ export function usePageStack<T>(initialPage: T) {
   }, []);
 
   return useMemo(
-    () => ({ current, push, replace, pop, depth: stack.length }),
-    [current, pop, push, replace, stack.length],
+    () => ({ current, stack, push, replace, reset, pop, depth: stack.length }),
+    [current, pop, push, replace, reset, stack],
   );
 }

@@ -1,50 +1,51 @@
-type NavKey = 'home' | 'categories' | 'search' | 'history' | 'profile' | null;
+import type { AppRoute, RootNavKey } from '../app/routes';
+import { ROOT_NAV_ITEMS } from '../app/routes';
+import { FocusButton } from './FocusButton';
 
 type SideNavRailProps = {
-  activeNav: NavKey;
+  activeNav: RootNavKey | null;
+  isLoggedIn: boolean;
+  onNavigate: (route: AppRoute) => void;
 };
 
-const navItems = [
-  { key: 'home', shortLabel: 'HM', label: '首页' },
-  { key: 'categories', shortLabel: 'CT', label: '分区' },
-  { key: 'search', shortLabel: 'SR', label: '搜索' },
-  { key: 'history', shortLabel: 'HS', label: '历史' },
-  { key: 'profile', shortLabel: 'ME', label: '我的' },
-] as const;
+export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailProps) {
+  const items = ROOT_NAV_ITEMS.filter((item) => (item.key === 'login' ? !isLoggedIn : true));
 
-export function SideNavRail({ activeNav }: SideNavRailProps) {
   return (
     <aside className="side-nav-rail" aria-label="全局导航">
       <div className="side-nav-rail__brand">
         <span className="side-nav-rail__logo">bi</span>
         <div>
           <strong>Bilibili</strong>
-          <p>TV Edition</p>
+          <p>webOS 客厅版</p>
         </div>
       </div>
 
-      <nav className="side-nav-rail__list" aria-hidden="true">
-        {navItems.map((item) => {
+      <nav className="side-nav-rail__list">
+        {items.map((item, index) => {
           const isActive = item.key === activeNav;
           return (
-            <div
+            <FocusButton
               key={item.key}
-              className={['side-nav-item', isActive ? 'side-nav-item--active' : '']
-                .filter(Boolean)
-                .join(' ')}
+              row={index}
+              col={0}
+              variant="nav"
+              size="md"
+              className={['side-nav-item', isActive ? 'side-nav-item--active' : ''].filter(Boolean).join(' ')}
+              onClick={() => onNavigate(item.route)}
             >
               <span className="side-nav-item__icon">{item.shortLabel}</span>
               <span className="side-nav-item__label">{item.label}</span>
-            </div>
+            </FocusButton>
           );
         })}
       </nav>
 
       <div className="side-nav-rail__footer" aria-hidden="true">
-        <div className="side-nav-rail__avatar">UP</div>
+        <div className="side-nav-rail__avatar">{isLoggedIn ? 'UP' : 'TV'}</div>
         <div>
-          <strong>大会员</strong>
-          <p>客厅模式</p>
+          <strong>{isLoggedIn ? '账号内容已接入' : '游客模式'}</strong>
+          <p>{isLoggedIn ? '历史 / 收藏 / 稍后再看' : '扫码后同步你的内容'}</p>
         </div>
       </div>
     </aside>

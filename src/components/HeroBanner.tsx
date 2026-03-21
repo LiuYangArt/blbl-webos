@@ -1,52 +1,56 @@
+import type { VideoCardItem } from '../services/api/types';
 import { FocusButton } from './FocusButton';
 
 type HeroBannerProps = {
-  title: string;
+  item: VideoCardItem;
   description: string;
-  meta: string[];
-  onPlay: () => void;
+  onPrimaryAction: () => void;
   onSecondaryAction: () => void;
+  primaryLabel: string;
+  secondaryLabel: string;
 };
 
 export function HeroBanner({
-  title,
+  item,
   description,
-  meta,
-  onPlay,
+  onPrimaryAction,
   onSecondaryAction,
+  primaryLabel,
+  secondaryLabel,
 }: HeroBannerProps) {
   return (
     <section className="hero-banner">
       <div className="hero-banner__backdrop" aria-hidden="true">
         <div className="hero-banner__orb hero-banner__orb--pink" />
         <div className="hero-banner__orb hero-banner__orb--blue" />
-        <div className="hero-banner__portrait" />
+        <img className="hero-banner__cover" src={item.cover} alt="" />
       </div>
 
       <div className="hero-banner__content">
-        <span className="hero-banner__tag">本周精选</span>
-        <h1>{title}</h1>
+        <span className="hero-banner__tag">今日推荐</span>
+        <h1>{item.title}</h1>
         <div className="hero-banner__meta" aria-label="视频信息">
-          {meta.map((item) => (
-            <span key={item}>{item}</span>
-          ))}
+          <span>{item.typeName || '推荐视频'}</span>
+          <span>{item.ownerName}</span>
+          <span>{formatPlayCount(item.playCount)} 播放</span>
         </div>
         <p className="hero-banner__description">{description}</p>
         <div className="hero-banner__actions">
-          <FocusButton row={0} col={0} variant="primary" size="hero" onClick={onPlay}>
-            立即观看
+          <FocusButton row={0} col={10} variant="primary" size="hero" defaultFocus onClick={onPrimaryAction}>
+            {primaryLabel}
           </FocusButton>
-          <FocusButton row={0} col={1} variant="secondary" size="hero" onClick={onSecondaryAction}>
-            加入稍后再看
+          <FocusButton row={0} col={11} variant="secondary" size="hero" onClick={onSecondaryAction}>
+            {secondaryLabel}
           </FocusButton>
         </div>
       </div>
-
-      <div className="hero-banner__pagination" aria-hidden="true">
-        <span className="hero-banner__dot hero-banner__dot--active" />
-        <span className="hero-banner__dot" />
-        <span className="hero-banner__dot" />
-      </div>
     </section>
   );
+}
+
+function formatPlayCount(value: number) {
+  if (value >= 10000) {
+    return `${(value / 10000).toFixed(1)} 万`;
+  }
+  return `${value}`;
 }
