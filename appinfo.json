@@ -1,0 +1,19 @@
+{
+  "id": "com.liuyang.app.bilibiliwebos",
+  "version": "0.1.0",
+  "vendor": "LiuYang",
+  "type": "web",
+  "main": "index.html",
+  "title": "Bilibili WebOS",
+  "icon": "icon.png",
+  "largeIcon": "largeicon.png",
+  "appDescription": "A remote-first Bilibili client for LG webOS TV.",
+  "resolution": "1920x1080",
+  "requiredMemory": 64,
+  "disableBackHistoryAPI": true,
+  "handlesRelaunch": false,
+  "supportTouchMode": "virtual",
+  "accessibility": {
+    "supportsAudioGuidance": true
+  }
+}
