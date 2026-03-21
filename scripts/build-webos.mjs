@@ -38,7 +38,6 @@ function run(command, args, env = process.env) {
 }
 
 const debugTelemetryUrl = getConfigValue('VITE_DEBUG_TELEMETRY_URL') ?? getConfigValue('DEBUG_TELEMETRY_URL');
-const mediaProxyBase = getConfigValue('VITE_BILI_MEDIA_PROXY_BASE') ?? getConfigValue('MEDIA_PROXY_BASE');
 
 const buildEnv = {
   ...process.env,
@@ -48,11 +47,7 @@ if (debugTelemetryUrl) {
   buildEnv.VITE_DEBUG_TELEMETRY_URL = debugTelemetryUrl;
 }
 
-if (mediaProxyBase) {
-  console.log(`build:webos 已忽略旧媒体网关配置: ${mediaProxyBase}`);
-} else {
-  console.log('build:webos 当前不注入任何外部媒体网关配置。');
-}
+console.log('build:webos 当前不注入任何外部媒体网关配置。');
 
 if (buildEnv.VITE_DEBUG_TELEMETRY_URL) {
   console.log(`build:webos 使用 telemetry: ${buildEnv.VITE_DEBUG_TELEMETRY_URL}`);

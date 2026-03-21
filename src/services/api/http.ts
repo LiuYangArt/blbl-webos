@@ -5,7 +5,6 @@ type JsonRecord = Record<string, unknown>;
 const BILI_API_ORIGIN = import.meta.env.DEV ? '/__bili_api' : 'https://api.bilibili.com';
 const BILI_PASSPORT_ORIGIN = import.meta.env.DEV ? '/__bili_passport' : 'https://passport.bilibili.com';
 const BILI_SEARCH_ORIGIN = import.meta.env.DEV ? '/__bili_search' : 'https://s.search.bilibili.com';
-const BILI_MEDIA_ORIGIN = '/__bili_media';
 
 export class BiliApiError extends Error {
   constructor(
@@ -28,13 +27,6 @@ export function getBiliPassportUrl(pathWithQuery: string) {
 
 export function getBiliSearchUrl(pathWithQuery: string) {
   return `${BILI_SEARCH_ORIGIN}${pathWithQuery}`;
-}
-
-export function getBiliMediaUrl(rawUrl: string) {
-  if (!import.meta.env.DEV) {
-    return rawUrl;
-  }
-  return `${BILI_MEDIA_ORIGIN}/${encodeURIComponent(rawUrl)}`;
 }
 
 export async function fetchJson<T extends JsonRecord | ApiEnvelope<unknown>>(url: string, init?: RequestInit) {

@@ -575,9 +575,30 @@ async function requestPlaySource(
   cid: number,
   quality: number,
   fnval: number,
+  options?: {
+    platform?: 'html5';
+    highQuality?: boolean;
+  },
 ) {
+  const params = new URLSearchParams({
+    bvid,
+    cid: String(cid),
+    qn: String(quality),
+    fnval: String(fnval),
+    fnver: '0',
+    fourk: '1',
+    otype: 'json',
+  });
+
+  if (options?.platform) {
+    params.set('platform', options.platform);
+  }
+  if (options?.highQuality) {
+    params.set('high_quality', '1');
+  }
+
   const payload = await fetchJson<ApiEnvelope<RawPlaySource>>(
-    getBiliApiUrl(`/x/player/playurl?bvid=${encodeURIComponent(bvid)}&cid=${cid}&qn=${quality}&fnval=${fnval}&fnver=0&fourk=1&otype=json`),
+    getBiliApiUrl(`/x/player/playurl?${params.toString()}`),
   );
   return unwrapData(payload);
 }
@@ -610,35 +631,70 @@ async function fetchCompatibleSources(
   qualities: PlayQualityOption[],
   fallbackQuality: number,
 ) {
-  const visited = new Set<number>();
   const preferredQualities = [fallbackQuality, ...qualities.map((item) => item.qn), 32, 16]
     .filter((item, index, list) => list.indexOf(item) === index)
     .sort((left, right) => right - left);
 
-  const compatibleSources: PlayCompatibleSource[] = [];
+  const sourceByQuality = new Map<number, PlayCompatibleSource>();
 
   for (const quality of preferredQualities) {
-    try {
-      const data = await requestPlaySource(bvid, cid, quality, 0);
-      const candidateUrls = getPlayCandidateUrls(data.durl?.[0]);
-      const actualQuality = Number(data.quality ?? quality);
-      if (!candidateUrls.length || visited.has(actualQuality)) {
-        continue;
+    const variants: Array<{
+      fnval: number;
+      platform?: 'html5';
+      highQuality?: boolean;
+    }> = [
+      {
+        fnval: 0,
+        platform: 'html5',
+        highQuality: true,
+      },
+      {
+        fnval: 0,
+      },
+    ];
+
+    for (const variant of variants) {
+      try {
+        const data = await requestPlaySource(bvid, cid, quality, variant.fnval, {
+          platform: variant.platform,
+          highQuality: variant.highQuality,
+        });
+        const candidateUrls = getPlayCandidateUrls(data.durl?.[0]);
+        const actualQuality = Number(data.quality ?? quality);
+        if (!candidateUrls.length) {
+          continue;
+        }
+
+        const existing = sourceByQuality.get(actualQuality);
+        if (!existing) {
+          sourceByQuality.set(actualQuality, {
+            quality: actualQuality,
+            qualityLabel: pickQualityLabel(qualities, actualQuality, data.format),
+            format: String(data.format ?? 'mp4'),
+            url: candidateUrls[0],
+            candidateUrls,
+          });
+          continue;
+        }
+
+        const mergedCandidateUrls = Array.from(new Set([
+          ...existing.candidateUrls,
+          ...candidateUrls,
+        ]));
+        sourceByQuality.set(actualQuality, {
+          ...existing,
+          url: mergedCandidateUrls[0] ?? existing.url,
+          candidateUrls: mergedCandidateUrls,
+        });
+      } catch {
+        // 兼容流按档位逐级尝试，单档失败不应中断整个播放计划。
       }
-      visited.add(actualQuality);
-      compatibleSources.push({
-        quality: actualQuality,
-        qualityLabel: pickQualityLabel(qualities, actualQuality, data.format),
-        format: String(data.format ?? 'mp4'),
-        url: candidateUrls[0],
-        candidateUrls,
-      });
-    } catch {
-      // 兼容流按档位逐级尝试，单档失败不应中断整个播放计划。
     }
   }
 
-  return compatibleSources;
+  return preferredQualities
+    .map((quality) => sourceByQuality.get(quality))
+    .filter((item): item is PlayCompatibleSource => Boolean(item));
 }
 
 export async function fetchPlaySource(bvid: string, cid: number, quality = 80): Promise<PlaySource> {

@@ -92,18 +92,29 @@ function canPlay(video: HTMLVideoElement, mimeType: string): boolean {
 export function buildPlayerCodecCapability(deviceInfo: Record<string, unknown> | null): PlayerCodecCapability {
   const modelName = String(deviceInfo?.modelName ?? deviceInfo?.model_name ?? 'unknown');
   const platformVersion = String(deviceInfo?.platformVersion ?? deviceInfo?.platform_version ?? deviceInfo?.sdkVersion ?? 'unknown');
+  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
   return {
     deviceKey: `${modelName}:${platformVersion}`,
     deviceLabel: modelName,
-    deviceClass: resolveDeviceClass(modelName, platformVersion),
+    deviceClass: resolveDeviceClass(modelName, platformVersion, userAgent),
     support: probePlayerCodecSupport(),
   };
 }
 
-function resolveDeviceClass(modelName: string, platformVersion: string): string {
+function resolveDeviceClass(modelName: string, platformVersion: string, userAgent: string): string {
   const normalizedModel = modelName.toLowerCase();
+  const normalizedUserAgent = userAgent.toLowerCase();
+  const looksLikeWebOsSimulator = normalizedUserAgent.includes('web0s')
+    && normalizedUserAgent.includes('webappmanager');
+
+  if (normalizedModel.includes('browser-dev') && looksLikeWebOsSimulator) {
+    return 'webos-simulator';
+  }
   if (normalizedModel.includes('browser-dev')) {
     return 'browser-dev';
+  }
+  if (normalizedModel.includes('simulator')) {
+    return 'webos-simulator';
   }
   if (normalizedModel.includes('c1') || /^oled\d{0,2}c1/u.test(normalizedModel)) {
     return 'webos-2021';
@@ -160,6 +171,23 @@ export function buildPlaybackAttempts(
   effectivePreference: VideoCodecPreference;
   warning: string | null;
 } {
+  if (capability.deviceClass === 'webos-simulator') {
+    const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
+    if (compatibleResolution.attempts.length > 0) {
+      const warningMessages = [
+        'Simulator 当前优先使用兼容 MP4 线路，避免 DASH 分片在当前运行环境下触发大面积 403。',
+      ];
+      if (compatibleResolution.warning) {
+        warningMessages.push(compatibleResolution.warning);
+      }
+      return {
+        attempts: compatibleResolution.attempts,
+        effectivePreference: compatibleResolution.effectivePreference,
+        warning: warningMessages.join(' '),
+      };
+    }
+  }
+
   const dashResolution = buildDashAttempts(playSource, codecPreference, capability, memory);
   if (dashResolution.attempts.length > 0) {
     return dashResolution;

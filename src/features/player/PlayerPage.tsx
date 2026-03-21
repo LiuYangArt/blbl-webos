@@ -46,6 +46,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   const resumeProgressRef = useRef(0);
   const savedProgressRef = useRef(0);
   const recordedAttemptIdRef = useRef('');
+  const reportedEnvironmentKeyRef = useRef('');
   const [codecPreference, setCodecPreference] = useState<VideoCodecPreference>(() => readPlayerSettings().codecPreference);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -65,6 +66,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     return {
       play,
       related,
+      deviceInfo,
       capability: buildPlayerCodecCapability(deviceInfo),
     };
   }, [bvid, cid]);
@@ -73,6 +75,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   const savedProgress = watchProgress[progressKey];
   const play = playerData.status === 'success' ? playerData.data.play : null;
   const related = playerData.status === 'success' ? playerData.data.related : [];
+  const deviceInfo = playerData.status === 'success' ? playerData.data.deviceInfo : null;
   const capability = playerData.status === 'success' ? playerData.data.capability : null;
   const codecMemory = useMemo(() => (
     capability ? readPlayerCodecMemory(capability.deviceKey) : {
@@ -95,6 +98,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   const currentAttempt = playbackPlan.attempts[0] ?? null;
   const currentCandidate = currentAttempt?.candidates[activeCandidateIndex] ?? null;
   const currentSourceUrl = currentCandidate?.videoUrl ?? '';
+  const currentCandidateHost = getUrlHost(currentSourceUrl);
   const declaredCodecs = useMemo(() => (
     play && currentAttempt ? getAvailableCodecsForQuality(play, currentAttempt.quality) : []
   ), [currentAttempt, play]);
@@ -153,6 +157,51 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   }, [isSettingsOpen]);
 
   useEffect(() => {
+    if (!play || !capability) {
+      return;
+    }
+
+    const reportKey = [
+      bvid,
+      cid,
+      capability.deviceKey,
+      capability.deviceClass,
+      play.videoStreams.length,
+      play.compatibleSources.length,
+    ].join(':');
+    if (reportedEnvironmentKeyRef.current === reportKey) {
+      return;
+    }
+    reportedEnvironmentKeyRef.current = reportKey;
+
+    reportPlayerDebugEvent({
+      type: 'environment',
+      bvid,
+      cid,
+      sourceUrl: '',
+      quality: play.qualityLabel,
+      codec: playbackPlan.attempts[0]?.codecLabel ?? getCodecLabel(codecPreference),
+      sourceTypeLabel: playbackPlan.attempts[0]?.mode === 'dash' ? 'Shaka Player + MSE' : 'HTML5 Video',
+      details: {
+        capability,
+        deviceInfo,
+        userAgent: navigator.userAgent,
+        playMode: play.mode,
+        currentQuality: play.currentQuality,
+        videoStreamCount: play.videoStreams.length,
+        audioStreamCount: play.audioStreams.length,
+        compatibleSourceCount: play.compatibleSources.length,
+        compatibleSourceHosts: play.compatibleSources.map((source) => getUrlHost(source.url)),
+        compatibleCandidateHosts: play.compatibleSources.flatMap((source) => source.candidateUrls.map(getUrlHost)),
+        dashVideoHosts: play.videoStreams.flatMap((stream) => [stream.url, ...stream.backupUrls].map(getUrlHost)),
+        playbackAttemptModes: playbackPlan.attempts.map((attempt) => attempt.mode),
+        playbackAttemptIds: playbackPlan.attempts.map((attempt) => attempt.id),
+        playbackWarning: playbackPlan.warning,
+      },
+    });
+  }, [bvid, capability, cid, codecPreference, deviceInfo, play, playbackPlan]);
+
+  useEffect(() => {
     if (!play || !currentAttempt || !currentCandidate || !currentSourceUrl || !capability) {
       return;
     }
@@ -166,6 +215,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     let failed = false;
     let manifestRevoke: (() => void) | null = null;
     let destroyPlayer: (() => Promise<void>) | null = null;
+    let progressReported = false;
     setPlaybackError(null);
 
     const getDebugSnapshot = () => ({
@@ -284,6 +334,21 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
           duration,
         });
       }
+
+      if (!progressReported && current >= 2) {
+        progressReported = true;
+        reportPlayerDebugEvent({
+          type: 'progress',
+          bvid,
+          cid,
+          sourceUrl: currentSourceUrl,
+          quality: currentAttempt.qualityLabel,
+          codec: currentAttempt.codecLabel,
+          mimeType: currentMimeType,
+          sourceTypeLabel: engineLabel,
+          ...getDebugSnapshot(),
+        });
+      }
     };
 
     const handlePlay = () => {
@@ -314,6 +379,19 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('error', handleVideoError);
+
+    reportPlayerDebugEvent({
+      type: 'attempt-switch',
+      bvid,
+      cid,
+      sourceUrl: currentSourceUrl,
+      quality: currentAttempt.qualityLabel,
+      codec: currentAttempt.codecLabel,
+      mimeType: currentMimeType,
+      sourceTypeLabel: engineLabel,
+      message: `准备加载 ${currentAttempt.mode === 'dash' ? 'DASH' : '兼容流'} 候选 #${activeCandidateIndex + 1}`,
+      ...getDebugSnapshot(),
+    });
 
     const bootPlayer = async () => {
       resetVideoElement(video);
@@ -511,6 +589,14 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
               <span className="player-settings-drawer__label">当前线路信息</span>
               <div className="player-settings-drawer__info">
                 <div className="player-settings-drawer__info-row">
+                  <span>BV 号</span>
+                  <strong>{bvid}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>CID</span>
+                  <strong>{cid}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
                   <span>当前画质</span>
                   <strong>{currentAttempt.qualityLabel}</strong>
                 </div>
@@ -549,6 +635,14 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                 <div className="player-settings-drawer__info-row">
                   <span>可切换地址</span>
                   <strong>{currentAttempt.candidates.length}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>当前候选</span>
+                  <strong>{activeCandidateIndex + 1} / {currentAttempt.candidates.length}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>当前 Host</span>
+                  <strong>{currentCandidateHost}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
                   <span>实际返回编码</span>
@@ -723,4 +817,12 @@ function formatAudioStreamLabel(audioStream: PlayAudioStream | null): string {
     return 'FLAC';
   }
   return audioStream.codecs || '未知音频';
+}
+
+function getUrlHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '未知';
+  }
 }

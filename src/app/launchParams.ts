@@ -6,7 +6,6 @@ export type AppLaunchParams = {
   cid?: number | string;
   title?: string;
   part?: string;
-  mediaProxyBase?: string;
   debugTelemetryUrl?: string;
 };
 
@@ -66,10 +65,6 @@ export function resolveInitialRoute(): AppRoute {
     title,
     part,
   };
-}
-
-export function readMediaProxyBase() {
-  return normalizeString(readLaunchParams()?.mediaProxyBase ?? import.meta.env.VITE_BILI_MEDIA_PROXY_BASE);
 }
 
 export function readDebugTelemetryUrl() {
