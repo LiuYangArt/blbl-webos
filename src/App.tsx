@@ -17,12 +17,12 @@ import { SearchResultsPage } from './features/search/SearchResultsPage';
 import { VideoDetailPage } from './features/video-detail/VideoDetailPage';
 import { focusFirst } from './platform/focus';
 import { attachRemoteControl } from './platform/remote';
-import { isWebOSAvailable, platformBack } from './platform/webos';
+import { platformBack } from './platform/webos';
 
 function AppContent() {
-  const { auth, refreshAuth, hasAuthCookies } = useAppStore();
+  const { auth, refreshAuth } = useAppStore();
   const pageStack = usePageStack<AppRoute>({ name: 'home' });
-  const { current: currentPage, depth, pop, push, replace } = pageStack;
+  const { current: currentPage, pop, push, replace } = pageStack;
   const backHandlerRef = useRef<(() => boolean) | null>(null);
 
   const focusKey = useMemo(() => {
@@ -65,17 +65,6 @@ function AppContent() {
     },
   }), [pop]);
 
-  const statusText = useMemo(() => {
-    const envText = isWebOSAvailable() ? 'webOS TV' : '浏览器开发模式';
-    const authText = auth.status === 'authenticated'
-      ? auth.profile?.name ?? '已登录'
-      : hasAuthCookies
-        ? '尝试恢复登录态中'
-        : '未登录';
-
-    return `${envText} · ${authText} · 页面深度 ${depth}`;
-  }, [auth.profile?.name, auth.status, depth, hasAuthCookies]);
-
   const activeNav = getActiveNav(currentPage, auth.status === 'authenticated');
 
   return (
@@ -86,7 +75,6 @@ function AppContent() {
     >
       <AppShell
         activeNav={activeNav}
-        statusText={statusText}
         profileName={auth.profile?.name}
         isLoggedIn={auth.status === 'authenticated'}
         onNavigate={(route) => replace(route)}

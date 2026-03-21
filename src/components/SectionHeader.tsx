@@ -1,6 +1,6 @@
 type SectionHeaderProps = {
   title: string;
-  description: string;
+  description?: string;
   actionLabel?: string;
 };
 
@@ -9,7 +9,7 @@ export function SectionHeader({ title, description, actionLabel }: SectionHeader
     <div className="section-header">
       <div>
         <h2>{title}</h2>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
       </div>
       {actionLabel ? <span className="section-header__action">{actionLabel}</span> : null}
     </div>

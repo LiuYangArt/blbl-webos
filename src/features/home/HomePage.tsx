@@ -44,7 +44,6 @@ export function HomePage({ onOpenDetail, onOpenSearch, onOpenHot }: HomePageProp
       {hero ? (
         <HeroBanner
           item={hero}
-          description={hero.description || '把 PiliPlus 的主路径先落在 TV 上，从首页直接进入详情与真实播放。'}
           primaryLabel="查看详情"
           secondaryLabel="去搜索"
           onPrimaryAction={() => onOpenDetail(hero)}
@@ -53,11 +52,7 @@ export function HomePage({ onOpenDetail, onOpenSearch, onOpenHot }: HomePageProp
       ) : null}
 
       <section className="content-section">
-        <SectionHeader
-          title="首页推荐"
-          description="这组数据已经接到真实推荐接口，卡片点击统一先进入详情页。"
-          actionLabel="真实数据"
-        />
+        <SectionHeader title="首页推荐" />
         <div className="media-grid">
           {recommendItems.map((item, index) => (
             <MediaCard key={item.bvid} row={1 + Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />
@@ -66,11 +61,7 @@ export function HomePage({ onOpenDetail, onOpenSearch, onOpenHot }: HomePageProp
       </section>
 
       <section className="content-section">
-        <SectionHeader
-          title="热门速看"
-          description="推荐流之外，再补一组稳定可用的热门内容入口。"
-          actionLabel="打开热门页"
-        />
+        <SectionHeader title="热门速看" />
         <div className="media-grid">
           {popular.slice(0, 6).map((item, index) => (
             <MediaCard key={item.bvid} row={3 + Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />

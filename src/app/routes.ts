@@ -1,3 +1,5 @@
+import { TV_ICONS } from './iconRegistry';
+import type { TvIconName } from './iconRegistry';
 import type { FavoriteFolder, VideoCardItem } from '../services/api/types';
 
 export type AppRoute =
@@ -26,18 +28,18 @@ export type RootNavKey =
 
 export const ROOT_NAV_ITEMS: Array<{
   key: RootNavKey;
-  shortLabel: string;
+  icon: TvIconName;
   label: string;
   route: AppRoute;
 }> = [
-  { key: 'home', shortLabel: 'HM', label: '首页', route: { name: 'home' } },
-  { key: 'hot', shortLabel: 'HT', label: '热门', route: { name: 'hot' } },
-  { key: 'search', shortLabel: 'SR', label: '搜索', route: { name: 'search' } },
-  { key: 'history', shortLabel: 'HS', label: '历史', route: { name: 'history' } },
-  { key: 'later', shortLabel: 'LT', label: '稍后', route: { name: 'later' } },
-  { key: 'favorites', shortLabel: 'FV', label: '收藏', route: { name: 'favorites' } },
-  { key: 'profile', shortLabel: 'ME', label: '我的', route: { name: 'profile' } },
-  { key: 'login', shortLabel: 'LG', label: '登录', route: { name: 'login' } },
+  { key: 'home', icon: TV_ICONS.navHome, label: '首页', route: { name: 'home' } },
+  { key: 'hot', icon: TV_ICONS.navHot, label: '热门', route: { name: 'hot' } },
+  { key: 'search', icon: TV_ICONS.navSearch, label: '搜索', route: { name: 'search' } },
+  { key: 'history', icon: TV_ICONS.navHistory, label: '历史', route: { name: 'history' } },
+  { key: 'later', icon: TV_ICONS.navLater, label: '稍后', route: { name: 'later' } },
+  { key: 'favorites', icon: TV_ICONS.navFavorites, label: '收藏', route: { name: 'favorites' } },
+  { key: 'profile', icon: TV_ICONS.navProfile, label: '我的', route: { name: 'profile' } },
+  { key: 'login', icon: TV_ICONS.navLogin, label: '登录', route: { name: 'login' } },
 ];
 
 export function getActiveNav(route: AppRoute, isLoggedIn: boolean): RootNavKey | null {

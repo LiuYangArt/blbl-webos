@@ -3,7 +3,6 @@ import { FocusButton } from './FocusButton';
 
 type HeroBannerProps = {
   item: VideoCardItem;
-  description: string;
   onPrimaryAction: () => void;
   onSecondaryAction: () => void;
   primaryLabel: string;
@@ -12,7 +11,6 @@ type HeroBannerProps = {
 
 export function HeroBanner({
   item,
-  description,
   onPrimaryAction,
   onSecondaryAction,
   primaryLabel,
@@ -34,7 +32,6 @@ export function HeroBanner({
           <span>{item.ownerName}</span>
           <span>{formatPlayCount(item.playCount)} 播放</span>
         </div>
-        <p className="hero-banner__description">{description}</p>
         <div className="hero-banner__actions">
           <FocusButton row={0} col={10} variant="primary" size="hero" defaultFocus onClick={onPrimaryAction}>
             {primaryLabel}

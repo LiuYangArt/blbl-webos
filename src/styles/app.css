@@ -17,6 +17,8 @@
   --tv-blur: blur(22px);
   --tv-safe-x: 56px;
   --tv-safe-y: 36px;
+  --tv-nav-collapsed-width: 104px;
+  --tv-nav-expanded-width: 284px;
   --tv-radius-lg: 28px;
   --tv-radius-md: 22px;
   --tv-radius-pill: 999px;
@@ -56,46 +58,61 @@ button {
   cursor: pointer;
 }
 
+.tv-icon {
+  flex: 0 0 auto;
+  color: currentColor;
+  user-select: none;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 48;
+  transition:
+    font-variation-settings 140ms ease,
+    transform 140ms ease,
+    color 140ms ease;
+}
+
+.tv-icon--sm {
+  font-size: 18px;
+}
+
+.tv-icon--md {
+  font-size: 22px;
+}
+
+.tv-icon--lg {
+  font-size: 26px;
+}
+
+.tv-icon--xl {
+  font-size: 30px;
+}
+
+.tv-icon--filled {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 600,
+    "GRAD" 0,
+    "opsz" 48;
+}
+
 .tv-app-shell {
   display: grid;
-  grid-template-columns: 152px minmax(0, 1fr);
+  grid-template-columns: var(--tv-nav-collapsed-width) minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .tv-app-main {
   min-width: 0;
-  padding: var(--tv-safe-y) var(--tv-safe-x) 48px 24px;
+  padding: var(--tv-safe-y) var(--tv-safe-x) 48px 20px;
 }
 
 .tv-topbar {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 24px;
   margin-bottom: 24px;
-}
-
-.tv-topbar__eyebrow {
-  margin: 0 0 6px;
-  color: var(--tv-primary);
-  font-size: 14px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.tv-topbar__title {
-  display: block;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-}
-
-.tv-topbar__subtitle {
-  margin: 10px 0 0;
-  max-width: 640px;
-  color: var(--tv-text-muted);
-  font-size: 17px;
-  line-height: 1.5;
 }
 
 .tv-topbar__status-group {
@@ -105,8 +122,7 @@ button {
   gap: 10px;
 }
 
-.tv-topbar__profile,
-.tv-topbar__status {
+.tv-topbar__profile {
   display: inline-flex;
   align-items: center;
   min-height: 48px;
@@ -130,18 +146,43 @@ button {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 32px 18px 24px;
+  width: var(--tv-nav-collapsed-width);
+  min-height: 100vh;
+  padding: 32px 14px 24px;
+  overflow: hidden;
+  position: sticky;
+  top: 0;
+  z-index: 20;
   background:
     linear-gradient(180deg, rgba(28, 27, 28, 0.96), rgba(19, 19, 20, 0.94)),
     linear-gradient(90deg, rgba(251, 114, 153, 0.08), transparent 60%);
   box-shadow: 32px 0 64px rgba(0, 0, 0, 0.24);
+  transition:
+    width 220ms ease,
+    box-shadow 220ms ease,
+    background 220ms ease;
+}
+
+.side-nav-rail:focus-within {
+  width: var(--tv-nav-expanded-width);
+  box-shadow: 40px 0 72px rgba(0, 0, 0, 0.34);
 }
 
 .side-nav-rail__brand,
 .side-nav-rail__footer {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+}
+
+.side-nav-rail__brand {
+  min-height: 64px;
+  padding: 0 10px;
+}
+
+.side-nav-rail__brand-copy,
+.side-nav-rail__footer-copy {
+  min-width: 0;
 }
 
 .side-nav-rail__brand strong,
@@ -149,6 +190,7 @@ button {
   display: block;
   font-size: 18px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .side-nav-rail__brand p,
@@ -156,6 +198,7 @@ button {
   margin: 4px 0 0;
   color: var(--tv-text-muted);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .side-nav-rail__logo,
@@ -186,32 +229,40 @@ button {
 .side-nav-rail__list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .side-nav-item {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
-  min-height: 58px;
-  padding: 10px 12px;
-  border-radius: 20px;
+  min-height: 76px;
+  padding: 0 18px;
+  border-radius: var(--tv-radius-pill);
   color: var(--tv-text-muted);
+  text-align: left;
+  transform-origin: left center;
 }
 
 .side-nav-item__icon {
   background: rgba(255, 255, 255, 0.04);
   color: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
 }
 
 .side-nav-item__label {
-  font-size: 16px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 19px;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .side-nav-item--active {
@@ -227,9 +278,38 @@ button {
 
 .side-nav-rail__footer {
   margin-top: auto;
-  padding: 14px 12px;
-  border-radius: 20px;
+  min-height: 76px;
+  padding: 14px 10px;
+  border-radius: 24px;
   background: rgba(255, 255, 255, 0.03);
+}
+
+.side-nav-rail__brand-copy,
+.side-nav-rail__footer-copy,
+.side-nav-item__label {
+  opacity: 0;
+  transform: translateX(12px);
+  transition:
+    opacity 160ms ease,
+    transform 220ms ease;
+}
+
+.side-nav-rail:focus-within .side-nav-rail__brand-copy,
+.side-nav-rail:focus-within .side-nav-rail__footer-copy,
+.side-nav-rail:focus-within .side-nav-item__label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.side-nav-item:focus-visible {
+  transform: translateX(4px) scale(1.02);
+  background: rgba(53, 52, 54, 0.96);
+  color: var(--tv-text);
+}
+
+.side-nav-item:focus-visible .side-nav-item__icon {
+  background: rgba(0, 161, 214, 0.18);
+  color: var(--tv-secondary-soft);
 }
 
 .page-shell {
@@ -449,6 +529,15 @@ button {
   outline: none;
   transform: scale(1.05);
   box-shadow: var(--tv-focus-shadow);
+}
+
+.focus-button:focus-visible .tv-icon,
+.side-nav-item--active .tv-icon {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 600,
+    "GRAD" 0,
+    "opsz" 48;
 }
 
 .focus-button--sm,
@@ -726,6 +815,33 @@ button {
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.player-control-bar__action {
+  justify-content: flex-start;
+  padding-inline: 22px;
+}
+
+.player-control-bar__action-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-control-bar__action-text {
+  white-space: nowrap;
+}
+
+.player-control-bar__action--primary {
+  min-width: 142px;
+  min-height: 92px;
+  padding-inline: 28px;
+  border-radius: 28px;
+  font-size: 24px;
+}
+
+.player-control-bar__action--primary .player-control-bar__action-content {
+  gap: 12px;
 }
 
 .search-composer {

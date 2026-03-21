@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './generated/material-symbols-rounded-subset.css';
 import App from './App';
 import './styles/app.css';
 
