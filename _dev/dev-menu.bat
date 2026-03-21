@@ -5,10 +5,16 @@ set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..") do set "ROOT_DIR=%%~fI"
 set "CONFIG_FILE=%SCRIPT_DIR%dev-menu.config.bat"
 set "DEFAULT_DEVICE=tv"
+set "DEFAULT_SIMULATOR_VERSION=25"
+set "DEFAULT_SIMULATOR_PATH="
 
 set "DEVICE=%DEFAULT_DEVICE%"
+set "SIMULATOR_VERSION=%DEFAULT_SIMULATOR_VERSION%"
+set "SIMULATOR_PATH=%DEFAULT_SIMULATOR_PATH%"
 if exist "%CONFIG_FILE%" call "%CONFIG_FILE%"
 if not defined DEVICE set "DEVICE=%DEFAULT_DEVICE%"
+if not defined SIMULATOR_VERSION set "SIMULATOR_VERSION=%DEFAULT_SIMULATOR_VERSION%"
+if not defined SIMULATOR_PATH set "SIMULATOR_PATH=%DEFAULT_SIMULATOR_PATH%"
 if not exist "%CONFIG_FILE%" call :save_config >nul
 
 :menu
@@ -19,6 +25,8 @@ echo        Bilibili webOS Dev Menu
 echo ==========================================
 echo Root   : %ROOT_DIR%
 echo Device : %DEVICE%
+echo SimVer : %SIMULATOR_VERSION%
+echo SimDir : %SIMULATOR_PATH%
 echo Config : %CONFIG_FILE%
 echo.
 echo [1] Start PC Preview
@@ -33,7 +41,8 @@ echo [9] List Installed Apps on TV
 echo [10] Remove App from TV
 echo [11] Full TV Deploy + Verify
 echo [12] webOS Doctor
-echo [13] Set TV Device Name
+echo [13] Launch on Simulator
+echo [14] Set TV Device Name
 echo [0] Exit
 echo.
 set /p "CHOICE=Select an option: "
@@ -50,7 +59,8 @@ if "%CHOICE%"=="9" goto list_tv
 if "%CHOICE%"=="10" goto remove_tv
 if "%CHOICE%"=="11" goto full_deploy_verify
 if "%CHOICE%"=="12" goto doctor
-if "%CHOICE%"=="13" goto set_device
+if "%CHOICE%"=="13" goto launch_simulator
+if "%CHOICE%"=="14" goto set_device
 if "%CHOICE%"=="0" goto end
 
 echo.
@@ -132,6 +142,9 @@ goto menu
 :doctor
 call :run_in_root npm run webos:doctor
 
+:launch_simulator
+call :run_in_root npm run webos:simulator
+
 :set_device
 echo.
 set /p "NEW_DEVICE=Enter TV device name: "
@@ -151,6 +164,8 @@ goto menu
 (
     echo @echo off
     echo set "DEVICE=!DEVICE!"
+    echo set "SIMULATOR_VERSION=!SIMULATOR_VERSION!"
+    echo set "SIMULATOR_PATH=!SIMULATOR_PATH!"
 ) > "%CONFIG_FILE%"
 exit /b 0
 

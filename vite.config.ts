@@ -105,6 +105,7 @@ const biliMediaPlugin: Plugin = {
 };
 
 export default defineConfig({
+  base: './',
   plugins: [react(), biliMediaPlugin],
   server: {
     proxy,

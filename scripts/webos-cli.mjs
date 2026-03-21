@@ -1,9 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const buildDir = resolve(root, 'build', 'webos');
+const devMenuConfigFile = resolve(root, '_dev', 'dev-menu.config.bat');
 const appInfo = JSON.parse(readFileSync(resolve(root, 'appinfo.json'), 'utf8'));
 const appId = appInfo.id;
 const packageFile = resolve(root, `${appInfo.id}_${appInfo.version}_all.ipk`);
@@ -41,7 +42,24 @@ const getArg = (name, fallback) => {
   return fallback;
 };
 
+const getConfigValue = (name) => {
+  if (!existsSync(devMenuConfigFile)) {
+    return undefined;
+  }
+
+  const content = readFileSync(devMenuConfigFile, 'utf8');
+  const quotedMatch = content.match(new RegExp(`set\\s+"${name}=([^"\\r\\n]*)"`, 'i'));
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+
+  const plainMatch = content.match(new RegExp(`set\\s+${name}=([^\\r\\n]*)`, 'i'));
+  return plainMatch?.[1]?.trim();
+};
+
 const device = getArg('--device', 'tv');
+const simulatorVersion = getArg('--simulator-version', process.env.WEBOS_SIMULATOR_VERSION ?? getConfigValue('SIMULATOR_VERSION') ?? '25');
+const simulatorPath = getArg('--simulator-path', process.env.WEBOS_SIMULATOR_PATH ?? getConfigValue('SIMULATOR_PATH') ?? '');
 
 const run = (command, args, options = {}) => {
   const result = runProcess(command, args, {
@@ -57,6 +75,17 @@ const run = (command, args, options = {}) => {
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+};
+
+const runDetached = (command, args, options = {}) => {
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: 'ignore',
+    shell: false,
+    ...options,
+  });
+
+  child.unref();
 };
 
 const capture = (command, args) => {
@@ -84,6 +113,27 @@ const cliPackageDir = resolve(globalNpmRoot, '@webos-tools', 'cli');
 const cliBinDir = resolve(cliPackageDir, 'bin');
 
 const resolveCliBin = (name) => resolve(cliBinDir, `${name}.js`);
+
+const resolveSimulatorExecutable = (path, version) => {
+  if (!path) {
+    throw new Error('未设置 Simulator 路径。请通过 --simulator-path 传入，或设置环境变量 WEBOS_SIMULATOR_PATH');
+  }
+
+  const entries = readdirSync(path, { withFileTypes: true });
+  const preferredPrefix = `webOS_TV_${version}_Simulator_`;
+  const executable = entries.find(
+    (entry) =>
+      entry.isFile() &&
+      entry.name.startsWith(preferredPrefix) &&
+      entry.name.endsWith(isWindows ? '.exe' : ''),
+  ) ?? entries.find((entry) => entry.isFile() && entry.name.includes('Simulator') && (!isWindows || entry.name.endsWith('.exe')));
+
+  if (!executable) {
+    throw new Error(`在 ${path} 中未找到 Simulator 可执行文件`);
+  }
+
+  return resolve(path, executable.name);
+};
 
 const ensureCliInstalled = () => {
   if (!existsSync(cliPackageDir)) {
@@ -145,7 +195,20 @@ switch (action) {
     runCliWithNode16('ares-launch', ['-H', buildDir, '-d', device]);
     break;
   }
+  case 'simulator': {
+    if (!existsSync(buildDir)) {
+      throw new Error('未找到 build/webos，请先运行 npm run build:webos');
+    }
+
+    const simulatorExecutable = resolveSimulatorExecutable(simulatorPath, simulatorVersion);
+    runDetached(simulatorExecutable, [buildDir, '{}'], {
+      cwd: simulatorPath,
+    });
+    console.log(`已启动 Simulator ${simulatorVersion}: ${simulatorExecutable}`);
+    console.log(`应用目录: ${buildDir}`);
+    break;
+  }
   default: {
-    console.log('Usage: node ./scripts/webos-cli.mjs <doctor|package|install|launch|list|remove|hosted> [--device tv]');
+    console.log('Usage: node ./scripts/webos-cli.mjs <doctor|package|install|launch|list|remove|hosted|simulator> [--device tv] [--simulator-version 25] [--simulator-path <path>]');
   }
 }

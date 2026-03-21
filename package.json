@@ -17,7 +17,8 @@
     "webos:launch": "node ./scripts/webos-cli.mjs launch",
     "webos:list": "node ./scripts/webos-cli.mjs list",
     "webos:remove": "node ./scripts/webos-cli.mjs remove",
-    "webos:hosted": "npm run build:webos && node ./scripts/webos-cli.mjs hosted"
+    "webos:hosted": "npm run build:webos && node ./scripts/webos-cli.mjs hosted",
+    "webos:simulator": "npm run build:webos && node ./scripts/webos-cli.mjs simulator"
   },
   "dependencies": {
     "js-md5": "^0.8.3",
