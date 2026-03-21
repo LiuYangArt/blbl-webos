@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Be+Vietnam+Pro:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary": "#2f3131",
+              "surface": "#131314",
+              "error-container": "#93000a",
+              "on-error-container": "#ffdad6",
+              "on-tertiary-fixed": "#1a1c1c",
+              "surface-container": "#201f20",
+              "secondary": "#78d1ff",
+              "surface-tint": "#ffb1c2",
+              "outline": "#a48a8f",
+              "surface-container-lowest": "#0e0e0f",
+              "tertiary": "#c6c6c7",
+              "surface-container-low": "#1c1b1c",
+              "on-error": "#690005",
+              "tertiary-container": "#9fa0a0",
+              "on-primary": "#66002c",
+              "surface-container-high": "#2a2a2b",
+              "inverse-primary": "#a83159",
+              "surface-bright": "#3a393a",
+              "on-primary-container": "#710032",
+              "on-secondary-fixed": "#001e2c",
+              "background": "#131314",
+              "error": "#ffb4ab",
+              "primary": "#ffb1c2",
+              "surface-container-highest": "#353436",
+              "on-primary-fixed-variant": "#881741",
+              "tertiary-fixed": "#e2e2e2",
+              "outline-variant": "#564145",
+              "primary-fixed-dim": "#ffb1c2",
+              "on-primary-fixed": "#3f0019",
+              "secondary-fixed": "#c2e8ff",
+              "on-surface-variant": "#ddbfc4",
+              "inverse-surface": "#e5e2e3",
+              "on-secondary-container": "#003043",
+              "on-background": "#e5e2e3",
+              "on-secondary-fixed-variant": "#004d68",
+              "on-tertiary-fixed-variant": "#454747",
+              "surface-variant": "#353436",
+              "surface-dim": "#131314",
+              "primary-fixed": "#ffd9e0",
+              "secondary-fixed-dim": "#78d1ff",
+              "on-secondary": "#003549",
+              "on-surface": "#e5e2e3",
+              "on-tertiary-container": "#353737",
+              "tertiary-fixed-dim": "#c6c6c7",
+              "primary-container": "#fb7299",
+              "secondary-container": "#009ed3",
+              "inverse-on-surface": "#313031"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Be Vietnam Pro"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        line-height: 1;
+        text-transform: none;
+        letter-spacing: normal;
+        word-wrap: normal;
+        white-space: nowrap;
+        direction: ltr;
+      }
+      .glass-panel {
+        background: rgba(28, 27, 28, 0.7);
+        backdrop-filter: blur(40px);
+      }
+      .neon-glow {
+        box-shadow: 0 0 48px rgba(251, 114, 153, 0.15);
+      }
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar (Shared Component JSON Implementation) -->
+<nav class="h-screen w-20 hover:w-64 transition-all duration-300 fixed left-0 top-0 z-50 bg-[#1c1b1c] dark:bg-neutral-900 bg-gradient-to-r from-[#1c1b1c] to-transparent shadow-[48px_0_48px_rgba(251,114,153,0.08)] flex flex-col py-10 items-center overflow-hidden group">
+<!-- Brand Header -->
+<div class="mb-12 flex items-center gap-4 px-6 w-full">
+<div class="text-[#FB7299] font-black text-2xl tracking-tighter italic shrink-0">Bilibili TV</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex flex-col gap-8 w-full">
+<!-- Active: Home -->
+<a class="flex items-center gap-4 text-[#00A1D6] scale-110 transition-transform px-6 py-3 hover:bg-[#2a2a2b] hover:text-white rounded-r-full group/item" href="#">
+<span class="material-symbols-outlined shrink-0" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-plus-jakarta text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity">Home</span>
+</a>
+<!-- Inactive -->
+<a class="flex items-center gap-4 text-neutral-400 opacity-70 px-6 py-3 hover:bg-[#2a2a2b] hover:text-white rounded-r-full transition-all group/item" href="#">
+<span class="material-symbols-outlined shrink-0" data-icon="grid_view">grid_view</span>
+<span class="font-plus-jakarta text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity">Categories</span>
+</a>
+<a class="flex items-center gap-4 text-neutral-400 opacity-70 px-6 py-3 hover:bg-[#2a2a2b] hover:text-white rounded-r-full transition-all group/item" href="#">
+<span class="material-symbols-outlined shrink-0" data-icon="search">search</span>
+<span class="font-plus-jakarta text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity">Search</span>
+</a>
+<a class="flex items-center gap-4 text-neutral-400 opacity-70 px-6 py-3 hover:bg-[#2a2a2b] hover:text-white rounded-r-full transition-all group/item" href="#">
+<span class="material-symbols-outlined shrink-0" data-icon="history">history</span>
+<span class="font-plus-jakarta text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity">History</span>
+</a>
+<a class="flex items-center gap-4 text-neutral-400 opacity-70 px-6 py-3 hover:bg-[#2a2a2b] hover:text-white rounded-r-full transition-all group/item" href="#">
+<span class="material-symbols-outlined shrink-0" data-icon="person">person</span>
+<span class="font-plus-jakarta text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity">User Center</span>
+</a>
+</div>
+<!-- Footer Profile (Semantic Avatar) -->
+<div class="mt-auto px-6 w-full flex items-center gap-4 opacity-70 hover:opacity-100 transition-opacity">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border-2 border-primary/20">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Close up portrait of a male user" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFYVlGIN1bdypdau2rzkGHj--2EJF--g6A768szaCPY0Z3Kv6iU5KQtxa9f7v5SGg8bCNgp2dxiHV2_2T1rCHnlneJOKq2ADvNpw3l61lk23u9rWi3WUPf5DBVm6RT4JDxvI79kF9bCkltipNVCcJSboHDJLM9-MYrNJ1HEi5XwMtB1d9GzlFAjvhzoPNtUxw5JmFWshCtlBwSvmfmuorBUrgzVDIQUf0T8ZVXFjqHNRbtLGCju5dl_uj-athzDJr_H8LydMjYu3_j"/>
+</div>
+<div class="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="text-xs font-bold text-primary">Premium</span>
+<span class="text-sm font-medium whitespace-nowrap">BiliUser_2024</span>
+</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="ml-20 h-screen overflow-y-auto overflow-x-hidden hide-scrollbar">
+<!-- Hero Featured Carousel (Asymmetric Layout) -->
+<section class="relative w-full h-[819px] px-16 pt-12 flex items-center">
+<!-- Background Image with Cinematic Mask -->
+<div class="absolute inset-0 z-0">
+<img alt="Hero Background" class="w-full h-full object-cover opacity-60" data-alt="Abstract vibrant pink and blue cinematic landscape gradient" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7xwD0K8MXQcHuYXSwdmEiWvVQyUBZEFRqRPKNcF7ozns2KUXaySfuiddZ_ZKKHJdZjQRxfn3Yrx2ECpG89hI2RA45o63GigQJbkOvfbgMKeR02O0fgezFCgIm2qa5Q_JiOxNWxq_IoWbK3ZzkiME_NlyH6DTsQS-9sfUOJIpWoM7LNyxhFzjyZ2Q4dZ-twQ6Zjr33Z88UgHrkOPKFOTcFVk2duugTm0qMBpWjBo3UyVfeuXZKJKB_W0iuhVI1dYjU2rJ38nygOGbj"/>
+<div class="absolute inset-0 bg-gradient-to-r from-background via-background/60 to-transparent"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+</div>
+<!-- Content Overlay -->
+<div class="relative z-10 w-full max-w-4xl space-y-8">
+<div class="space-y-2">
+<span class="inline-block px-3 py-1 bg-primary-container/20 text-primary text-sm font-bold tracking-widest uppercase rounded-md border border-primary/30 backdrop-blur-md">
+                        Featured Now
+                    </span>
+<h1 class="font-headline text-7xl font-extrabold text-on-surface tracking-tight leading-tight">
+                        Sparking Youth:<br/>The Summer Festival
+                    </h1>
+</div>
+<div class="flex items-center gap-6 text-on-surface-variant text-lg">
+<span class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+                        9.8 Score
+                    </span>
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+<span>2.4M Views</span>
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+<span>Animation</span>
+</div>
+<p class="text-on-surface-variant text-xl max-w-2xl leading-relaxed">
+                    Experience the most anticipated musical event of the season. A journey of sound, light, and the unbreakable bonds of friendship under the fireworks.
+                </p>
+<!-- Action Pair -->
+<div class="flex items-center gap-4 pt-4">
+<button class="px-8 py-4 bg-primary-container text-on-primary font-bold rounded-full flex items-center gap-3 scale-105 neon-glow hover:bg-primary transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                        Watch Now
+                    </button>
+<button class="px-8 py-4 bg-surface-container-highest text-on-surface font-bold rounded-full flex items-center gap-3 hover:bg-surface-bright transition-all">
+<span class="material-symbols-outlined">add</span>
+                        Add to List
+                    </button>
+</div>
+</div>
+<!-- Carousel Pagination Indicator -->
+<div class="absolute bottom-20 right-20 flex gap-3">
+<div class="w-12 h-1.5 rounded-full bg-primary shadow-lg shadow-primary/20"></div>
+<div class="w-3 h-1.5 rounded-full bg-surface-container-highest"></div>
+<div class="w-3 h-1.5 rounded-full bg-surface-container-highest"></div>
+<div class="w-3 h-1.5 rounded-full bg-surface-container-highest"></div>
+</div>
+</section>
+<!-- Horizontal Swimlanes Container -->
+<div class="space-y-16 pb-24 -mt-20 relative z-20">
+<!-- Swimlane 1: Recommended (With Focused State) -->
+<section class="space-y-6">
+<div class="px-16 flex justify-between items-end">
+<h2 class="font-headline text-3xl font-bold tracking-tight text-on-surface">Recommended for You</h2>
+<a class="text-secondary font-medium flex items-center gap-2 hover:underline" href="#">
+                        Explore All <span class="material-symbols-outlined text-sm">arrow_forward_ios</span>
+</a>
+</div>
+<div class="flex gap-8 overflow-x-auto px-16 pb-8 hide-scrollbar">
+<!-- FOCUSED ITEM -->
+<div class="group/card flex-none w-[420px] space-y-4">
+<div class="relative aspect-video rounded-lg overflow-hidden ring-4 ring-primary scale-105 shadow-[0_0_48px_rgba(251,114,153,0.3)] transition-all bg-surface-container-high">
+<img alt="Video Thumb" class="w-full h-full object-cover" data-alt="Vibrant esports arena background with neon lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUoRvOoYvTwyv5qarWcAQVFOgOsLoaP90KovsGJLTetM-42rIdkET9EajNnqYoMaf1PeRNHxl_ri7rE-9SDZ9pYznSFTm5zdYN-f8J92x702kfRdKtBTgyCrc0up81mF4Rw1lcAlVPEFH2iWiAf1JtNww5OXznQboimSVrGtr9dGSa5W8Uj-34jgYaf5DgDbKcki_DN17YPQoy5PrMyfqyOdR72_7ASsPyBJmavK_kxZDETHB5kfchan-IuOMa4RetN6pyoa3fRN3z"/>
+<div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/80 rounded text-xs font-bold text-white">24:15</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity"></div>
+</div>
+<div class="space-y-1 pl-2">
+<h3 class="text-xl font-bold line-clamp-1 text-on-surface">Grand Finals: The Ultimate Showdown 2024</h3>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="text-sm font-medium">Bilibili Esports</span>
+<span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span class="mx-1 opacity-40">•</span>
+<span class="text-sm">856K views</span>
+</div>
+</div>
+</div>
+<!-- Regular Items -->
+<div class="group/card flex-none w-[420px] space-y-4 opacity-70 hover:opacity-100 transition-opacity">
+<div class="relative aspect-video rounded-lg overflow-hidden bg-surface-container-high transition-transform duration-300 group-hover/card:scale-105">
+<img alt="Video Thumb" class="w-full h-full object-cover" data-alt="Retro gaming hardware and nostalgic equipment setup" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4EaThVovAtTkWq4kQBBz0xffGgGdfD50P8UYu_gaQqjPL6Jf2R4gy53dTXIW6EPeg4r_EO5qCqSm4QK64EILRRVsQUQKSjjJzg4NDCVgHprV5nv8SMRmZ0r7iF3kmUa_b-yTte05-52P0zdwBUt1XcHKhVP8wgnfFpeQw_MNqHbeuXcOzh4JQh5-F1FS0hYCWSIYACLL4R229WKS_zJfodNhR5wHSOmuxLsW8YEY6-kfBY-SjFO9bDqeNBGoQ3ffMzfYDOv6hNb2S"/>
+<div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/80 rounded text-xs font-bold text-white">12:04</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-xl font-bold line-clamp-1">Retro Gaming: 10 Hidden Gems from the 90s</h3>
+<p class="text-on-surface-variant text-sm font-medium">Classic Gamer Pro • 1.2M views</p>
+</div>
+</div>
+<div class="group/card flex-none w-[420px] space-y-4 opacity-70 hover:opacity-100 transition-opacity">
+<div class="relative aspect-video rounded-lg overflow-hidden bg-surface-container-high transition-transform duration-300 group-hover/card:scale-105">
+<img alt="Video Thumb" class="w-full h-full object-cover" data-alt="Close up of a professional chef preparing sushi" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDydh24nAxoN72SiD_AO3qxipg1qyIgiz7xvLDNGxNoM__ARikt9RLU68SnL68cE_CMf4rDjpQWSXN7nHMJ9Zqwt6kIRha-UAy2zI6ba_dieg5TiHXP4289AhG8oohb6vloyIM7j5XjXVzXLj9ysVdsJFGxzkyps_AWI6W8-c97A4kdl-cOj77NRtaY0GAn1iRgYCx-X75vzC5T3wIS4w2qbmZBZW-4Eq1qhLRMykNvSb4Mwgev927q5hY1Y9yUgQ68EZliYJwtGjZO"/>
+<div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/80 rounded text-xs font-bold text-white">18:42</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-xl font-bold line-clamp-1">Mastering the Art of Homemade Sushi</h3>
+<p class="text-on-surface-variant text-sm font-medium">Taste of Tokyo • 450K views</p>
+</div>
+</div>
+<div class="group/card flex-none w-[420px] space-y-4 opacity-70 hover:opacity-100 transition-opacity">
+<div class="relative aspect-video rounded-lg overflow-hidden bg-surface-container-high transition-transform duration-300 group-hover/card:scale-105">
+<img alt="Video Thumb" class="w-full h-full object-cover" data-alt="Cyberpunk city street at night with neon signs" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2mPoYROF2tWP7LhSc5wGeQiHSF2Ls7rWzZ_audxgnQytm1N5huvtf1-icGDrLccFTQNBEscNNM1RVtaUkL2WmLsUnTIi9A9yH-iZJhXNnAIHFL5IRCEYmXWPjrXlOSOwxnY0zhd_pwxfB6apTGyaSh8BY4Y5KLQzJKKyjeoiCSJ9Cqlqbd4zBENJeOvwapi3sfn9DWXf8SbSUK7ORPdwe_e2uDbbaWElibBnCeLhlwh1D8hqoJr0A2tz_PStNOdA8XKeivJNyjeMp"/>
+<div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/80 rounded text-xs font-bold text-white">05:30</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-xl font-bold line-clamp-1">Neon Dreams: 4K Cyberpunk Cinematics</h3>
+<p class="text-on-surface-variant text-sm font-medium">Urban Explorer • 2.8M views</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Swimlane 2: Trending -->
+<section class="space-y-6">
+<div class="px-16 flex items-center gap-4">
+<h2 class="font-headline text-3xl font-bold tracking-tight text-on-surface">Trending Content</h2>
+<span class="px-2 py-0.5 bg-error-container text-on-error-container rounded-md text-xs font-bold uppercase">Hot</span>
+</div>
+<div class="flex gap-8 overflow-x-auto px-16 pb-8 hide-scrollbar">
+<div class="group/card flex-none w-[320px] space-y-4 opacity-80 hover:opacity-100 transition-opacity">
+<div class="relative aspect-[4/3] rounded-lg overflow-hidden bg-surface-container-high transition-transform group-hover/card:scale-105">
+<img alt="Trend Thumb" class="w-full h-full object-cover" data-alt="Musician performing on stage under stage lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJDQdLS5Gbcj0HSVZ6hxxJGTiddmYZQmhdp_TB6PMEXutZR-jbDikflvxBLgTBNXNkmwD3i32N9xVUpOwvtbyKO5I15KERX7tNW_0pkJGAR8KCJx4FD6_SRYpMP0vKl1S5La_S8CHyGim7wpXOOEP7KPaH-sk4KJ37ZJ7cb2LqcFi9EpqAEa1IJAOTveu11AqkNZPFH18KJVK3tWJzk2s1_gsKacNph9mirQl5jMtOG4bmEtJpJu0JGiesNvSMmit8v0P9BD7LHp7T"/>
+<div class="absolute top-0 left-0 bg-primary text-on-primary font-black px-4 py-2 text-2xl italic">1</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-lg font-bold line-clamp-2">New Single Release: Summer Vibes 2024 (Official MV)</h3>
+<p class="text-on-surface-variant text-sm font-medium">Vibe Records • 5.1M views</p>
+</div>
+</div>
+<div class="group/card flex-none w-[320px] space-y-4 opacity-80 hover:opacity-100 transition-opacity">
+<div class="relative aspect-[4/3] rounded-lg overflow-hidden bg-surface-container-high transition-transform group-hover/card:scale-105">
+<img alt="Trend Thumb" class="w-full h-full object-cover" data-alt="Modern gaming PC setup with internal RGB lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3I3f1N_42a-0Z8ZgqppC6ZTUc9kO8Jgd64iSSv-xiLkpi5Pei52xqZl-kCT64PQX2PQyJxYRVBfe-P3ngIaLI2FAuqVaZ8TbkM4NTOevM0uEkSL6b0QPulsa5NOBxSHSxEMP5jgxZZAvRFJP_12z_qrUoKT9o9oS5iUibYbGnS-nDRLwpE3iuxhQ53XBENd5PiwkueteNg2n_XhlJO5wdeO7p5GgUYk2YsN_XKs54dhdQlMWpCi-6tmyJzvRpgBUnV_bhzxH7F4Lz"/>
+<div class="absolute top-0 left-0 bg-surface-container-highest text-on-surface font-black px-4 py-2 text-2xl italic">2</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-lg font-bold line-clamp-2">Ultimate 8K Gaming PC Build: No Budget Limit</h3>
+<p class="text-on-surface-variant text-sm font-medium">Tech Enthusiast • 3.4M views</p>
+</div>
+</div>
+<div class="group/card flex-none w-[320px] space-y-4 opacity-80 hover:opacity-100 transition-opacity">
+<div class="relative aspect-[4/3] rounded-lg overflow-hidden bg-surface-container-high transition-transform group-hover/card:scale-105">
+<img alt="Trend Thumb" class="w-full h-full object-cover" data-alt="Photographer holding camera in scenic mountain landscape" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhNzkPVYM-sy-YtrG6bse7p_vEMWKdjoPa1NMGEFHXUWUb4A5qz1pnXnRNZWKv0wED0ZQ1N89lpXsSpnmuSWW7bXALFhGW71ArCvLDgtd7EcknBK0t3TYQ-l6Ub5t40F1opTXhDR7ZTQX99G_hrSW2oH5MBhPt4hdY7lkZTBlHd60P5DDP84r7A1Hn2FU8p9wM3NcIw7qqx1MYAZZf8uWFjduStHJ26btcDGfhnLoPn48lvm5KIoKsB1FakO4aplPGh7GgPgFDysq0"/>
+<div class="absolute top-0 left-0 bg-surface-container-highest text-on-surface font-black px-4 py-2 text-2xl italic">3</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-lg font-bold line-clamp-2">Landscape Photography Secrets Revealed</h3>
+<p class="text-on-surface-variant text-sm font-medium">Nature Lens • 2.1M views</p>
+</div>
+</div>
+<div class="group/card flex-none w-[320px] space-y-4 opacity-80 hover:opacity-100 transition-opacity">
+<div class="relative aspect-[4/3] rounded-lg overflow-hidden bg-surface-container-high transition-transform group-hover/card:scale-105">
+<img alt="Trend Thumb" class="w-full h-full object-cover" data-alt="Clean desk with modern aesthetic productivity tools" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGmivZRDV3idojlLjOVj8w8VAJDRgSS8r0lto7ZS3gRE7let1pAO61D2EPiJTiAUULhZ4O1AdBXmSQ_Ix1w7cG-bKPngZLJiXV_6KuhlzdFRs0p7qOjWT9BmhKRa6PtzxfwstzRp1kC-24RQjHkw4gjPw94OgGNTL_71nx4GIrThOYMQ3pc3TA3W3u0UQAo4pTYNKy5y7oyv-xCt7dNVl2HZUuP82N_6dV4pvZoSefuN8rtEzdBkz6CAcuAgGgd_Me7z7ZtN6IVOld"/>
+<div class="absolute top-0 left-0 bg-surface-container-highest text-on-surface font-black px-4 py-2 text-2xl italic">4</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-lg font-bold line-clamp-2">How I Redesigned My Life for Focus</h3>
+<p class="text-on-surface-variant text-sm font-medium">Mindful Living • 1.8M views</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Swimlane 3: Anime (Editorial Large Cards) -->
+<section class="space-y-6 pb-20">
+<div class="px-16 flex items-center gap-4">
+<h2 class="font-headline text-3xl font-bold tracking-tight text-on-surface">Anime Weekly Recap</h2>
+<span class="text-secondary-fixed text-sm font-medium border border-secondary/30 rounded px-2 py-0.5">Updated Today</span>
+</div>
+<div class="flex gap-10 overflow-x-auto px-16 pb-8 hide-scrollbar">
+<div class="group/anime flex-none w-[520px] relative rounded-xl overflow-hidden aspect-[16/7]">
+<img alt="Anime Poster" class="w-full h-full object-cover grayscale-[30%] group-hover/anime:grayscale-0 transition-all duration-500" data-alt="Atmospheric digital painting of a futuristic metropolis" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbVpY767mMjEgynpC1rf2f4bxUaftM1237eXP1jOMd9cW99uvXyRwySaTdk5c1nGbvXiM6VzKz-fyfvRNhond-QYhA3yjfip3DQkZt1JOAFb2z9NygA_Ac7V5UQQax0thgOhZp3wXQ_10DNuEYCy6Fd9nfKSoftOdr80IduANsq18k4jIxo8kFv1JvAX6hdbG-y6Sv1NiucQ4VVLYQLMCmAwwii7rmlaGj5mPaFx7Mo-5TRPSjxDNSK9Nc391vYQWNnplYU81rlXVR"/>
+<div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent p-8 flex flex-col justify-end">
+<h3 class="text-2xl font-bold text-white mb-1">Cyber Chronicle: Zero</h3>
+<p class="text-on-surface-variant text-sm line-clamp-2 max-w-xs">The final battle for the digital throne begins. Episode 24 now available.</p>
+</div>
+</div>
+<div class="group/anime flex-none w-[520px] relative rounded-xl overflow-hidden aspect-[16/7]">
+<img alt="Anime Poster" class="w-full h-full object-cover grayscale-[30%] group-hover/anime:grayscale-0 transition-all duration-500" data-alt="Fantasy landscape with floating islands and magic clouds" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWTHL7Vd_36RNF9MOdnADRxmlGvZtG8ZO7m8p1wBCmktqkNLmy9nRKaRQxMmoYasJPN-E9z7N47vd5DeAj28wFgxcVOSY4n4GERKXKRgjSIp4AqjtzgW04uzki3pk0CxGEtjFJcTKe6e35-V9xGTcR_Pk9W-cbwiAzcZSbgvBOlzUsFg_5pvpbgQuFfhg1p-e0OW0UpGTibvwHMHVN1wgqepcxeBpglxn6PIZYbpj7gnnGFv-jdqayfh7GTFT5qHAUk66IQfCfBGUN"/>
+<div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent p-8 flex flex-col justify-end">
+<h3 class="text-2xl font-bold text-white mb-1">Ethereal Realm: Part II</h3>
+<p class="text-on-surface-variant text-sm line-clamp-2 max-w-xs">Discover the secrets of the forgotten sky kingdom. Join the adventure.</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Floating Large Top Bar (Contextual) -->
+<header class="w-full h-24 sticky top-0 z-40 bg-transparent flex justify-between items-center px-20 w-full pointer-events-none">
+<div class="flex items-center gap-12 pointer-events-auto">
+<!-- Brand is handled by SideNav, but we can put a small indicator here if needed for webOS feel -->
+<div class="text-3xl font-black text-[#FB7299] italic opacity-0 md:opacity-100">Bilibili</div>
+</div>
+<div class="flex items-center gap-8 pointer-events-auto">
+<!-- Search Bar (Styled per JSON trailing search concept) -->
+<div class="flex items-center bg-surface-container-low/80 backdrop-blur-xl px-6 py-3 rounded-full border border-outline-variant/15 w-[400px]">
+<span class="material-symbols-outlined text-neutral-400 mr-3">search</span>
+<span class="text-neutral-400 font-medium">Search for videos, creators, or tags...</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-low/80 backdrop-blur-xl text-neutral-400 hover:text-[#FB7299] transition-all">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-low/80 backdrop-blur-xl text-neutral-400 hover:text-[#FB7299] transition-all">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</div>
+</header>
+</body></html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Be+Vietnam+Pro:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-variant": "#353436",
+              "inverse-on-surface": "#313031",
+              "on-secondary-fixed": "#001e2c",
+              "secondary-fixed": "#c2e8ff",
+              "primary": "#ffb1c2",
+              "surface-bright": "#3a393a",
+              "outline": "#a48a8f",
+              "inverse-surface": "#e5e2e3",
+              "secondary-fixed-dim": "#78d1ff",
+              "secondary": "#78d1ff",
+              "surface-tint": "#ffb1c2",
+              "on-background": "#e5e2e3",
+              "on-surface-variant": "#ddbfc4",
+              "on-surface": "#e5e2e3",
+              "on-primary-fixed": "#3f0019",
+              "on-error-container": "#ffdad6",
+              "on-error": "#690005",
+              "on-primary-container": "#710032",
+              "surface-container-highest": "#353436",
+              "primary-container": "#fb7299",
+              "on-primary-fixed-variant": "#881741",
+              "primary-fixed": "#ffd9e0",
+              "background": "#131314",
+              "surface-dim": "#131314",
+              "on-secondary-container": "#003043",
+              "on-tertiary-container": "#353737",
+              "tertiary-fixed": "#e2e2e2",
+              "outline-variant": "#564145",
+              "surface-container-lowest": "#0e0e0f",
+              "surface-container-low": "#1c1b1c",
+              "on-tertiary-fixed": "#1a1c1c",
+              "tertiary-container": "#9fa0a0",
+              "tertiary": "#c6c6c7",
+              "on-tertiary-fixed-variant": "#454747",
+              "on-tertiary": "#2f3131",
+              "surface-container": "#201f20",
+              "on-secondary-fixed-variant": "#004d68",
+              "error": "#ffb4ab",
+              "tertiary-fixed-dim": "#c6c6c7",
+              "secondary-container": "#009ed3",
+              "error-container": "#93000a",
+              "on-secondary": "#003549",
+              "inverse-primary": "#a83159",
+              "on-primary": "#66002c",
+              "surface-container-high": "#2a2a2b",
+              "surface": "#131314",
+              "primary-fixed-dim": "#ffb1c2"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Be Vietnam Pro"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neon-glow {
+            box-shadow: 0 0 48px rgba(251, 114, 153, 0.15);
+        }
+        .qr-border {
+            border: 2px solid rgba(251, 114, 153, 0.3);
+            background: linear-gradient(135deg, rgba(251, 114, 153, 0.05) 0%, rgba(0, 161, 214, 0.05) 100%);
+        }
+        .bg-mesh {
+            background-color: #131314;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(251, 114, 153, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(0, 161, 214, 0.1) 0px, transparent 50%);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-hidden bg-mesh min-h-screen">
+<!-- TopNavBar Suppression Check: Login screen hides global nav elements usually, 
+         but prompt requested integration of SideNavBar and TopNavBar as anchors. 
+         However, the UX mandate says suppress on Transactional/Login. 
+         I will include them as specified in the "Shared Components" instruction but keep them subtle. -->
+<!-- Side Navigation Rail -->
+<aside class="h-full w-20 hover:w-64 transition-all duration-300 fixed left-0 top-0 z-50 bg-[#1c1b1c] dark:bg-[#1c1b1c] no-border shadow-2xl backdrop-blur-xl flex flex-col py-8 px-4 h-screen group">
+<div class="mb-12 flex items-center gap-4 overflow-hidden">
+<div class="min-w-[40px] h-[40px] bg-primary-container rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="tv">tv</span>
+</div>
+<div class="opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+<h1 class="text-2xl font-bold text-[#FB7299] font-headline">Bilibili TV</h1>
+<p class="text-xs text-on-surface-variant">The Neon Curator</p>
+</div>
+</div>
+<nav class="flex flex-col gap-6">
+<!-- Settings Active logic: Mapping Login to Settings/Account profile area -->
+<div class="flex items-center gap-4 text-[#e5e2e3]/60 hover:bg-[#2a2a2b] hover:text-[#FB7299] transition-all p-2 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="opacity-0 group-hover:opacity-100 transition-opacity font-label">Home</span>
+</div>
+<div class="flex items-center gap-4 text-[#e5e2e3]/60 hover:bg-[#2a2a2b] hover:text-[#FB7299] transition-all p-2 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined" data-icon="trending_up">trending_up</span>
+<span class="opacity-0 group-hover:opacity-100 transition-opacity font-label">Trending</span>
+</div>
+<div class="flex items-center gap-4 text-[#e5e2e3]/60 hover:bg-[#2a2a2b] hover:text-[#FB7299] transition-all p-2 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined" data-icon="live_tv">live_tv</span>
+<span class="opacity-0 group-hover:opacity-100 transition-opacity font-label">Live</span>
+</div>
+<div class="flex items-center gap-4 text-[#e5e2e3]/60 hover:bg-[#2a2a2b] hover:text-[#FB7299] transition-all p-2 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="opacity-0 group-hover:opacity-100 transition-opacity font-label">My Space</span>
+</div>
+<div class="flex items-center gap-4 text-[#00A1D6] scale-105 transition-transform bg-[#2a2a2b] p-2 rounded-xl cursor-pointer">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="opacity-0 group-hover:opacity-100 transition-opacity font-label">Settings</span>
+</div>
+</nav>
+</aside>
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 right-0 w-[calc(100%-5rem)] z-40 bg-transparent flex justify-between items-center px-12 py-8 w-full">
+<div class="flex items-center gap-8">
+<span class="text-3xl font-black text-[#FB7299] font-headline tracking-tight">Bilibili</span>
+<nav class="hidden md:flex gap-6">
+<span class="text-[#e5e2e3] opacity-70 hover:opacity-100 hover:scale-105 transition-all cursor-pointer font-bold">Explore</span>
+<span class="text-[#e5e2e3] opacity-70 hover:opacity-100 hover:scale-105 transition-all cursor-pointer font-bold">Anime</span>
+<span class="text-[#e5e2e3] opacity-70 hover:opacity-100 hover:scale-105 transition-all cursor-pointer font-bold">Music</span>
+<span class="text-[#e5e2e3] opacity-70 hover:opacity-100 hover:scale-105 transition-all cursor-pointer font-bold">Gaming</span>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<span class="material-symbols-outlined text-[#e5e2e3] opacity-70 cursor-pointer" data-icon="search">search</span>
+<span class="material-symbols-outlined text-[#e5e2e3] opacity-70 cursor-pointer" data-icon="history">history</span>
+<span class="material-symbols-outlined text-[#e5e2e3] opacity-70 cursor-pointer" data-icon="notifications">notifications</span>
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant/20">
+<img alt="Switch Account" class="w-full h-full object-cover" data-alt="Default user profile avatar placeholder" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJ4J4Yb82B24O1_f08iDYkruurkJeibusPNq9mPa5Zp9b_VuSfQ_nEL6U_FyclqrPx9ghlfCMWMutnHnGmUJ8pRqgbYxdihUjXcxsMWFSxhRUC3ldOTAMN1qFv4EBTELQ_3WUI2GS0fCpL-2ZctdXtw44QjZ9N7kuKk7YNVrzhH58Xvysi806hGvJekI-hf4eHk2P7VHnLyTVVyc_vH61ls-d-YnpMSE1UA0TM2MP_cmEEwUyXUrW2t4qW3aBC1z5sfd7WZbkzqcMu"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-20 pt-24 min-h-screen flex items-center justify-center px-24">
+<div class="grid grid-cols-12 gap-16 w-full max-w-7xl">
+<!-- Left Side: QR Login -->
+<div class="col-span-7 flex flex-col justify-center">
+<div class="mb-10">
+<h2 class="text-5xl font-extrabold font-headline mb-4 tracking-tight text-on-surface">Scan to Login</h2>
+<p class="text-xl text-on-surface-variant font-light max-w-md">Use the Bilibili Mobile App to scan and authorize access to your TV account.</p>
+</div>
+<div class="flex items-start gap-12">
+<!-- QR Code Container -->
+<div class="relative group">
+<div class="absolute -inset-4 bg-gradient-to-tr from-[#FB7299] to-[#00A1D6] rounded-xl blur-2xl opacity-10 group-hover:opacity-20 transition-opacity"></div>
+<div class="relative bg-white p-6 rounded-xl shadow-2xl qr-border flex flex-col items-center">
+<div class="w-64 h-64 bg-white p-2">
+<img alt="Login QR Code" class="w-full h-full" data-alt="Large clear QR code for mobile scanning" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDiuJ3YgLXgRFNk8AQU8dZbDmjMClBRKhDYbWBEvHo0owdfOAqtNU2vWtJJvqgmo3ZURt_5PaZqa3PmPUefSIBnvf5RMMkjIcm_bVtQC1sya6SVz_R0K-JZu3KM1GX7_7wRMcz_oFwUTMYhNtVi8enfxjmIe-wOYKrWwm3eBRyTDq2-WpOo_46tJ-J4vGMik6u63S0B_Qx2sygZLhtW_hmCs9TiJiBCblf15bAewMrlymtWVSVfD-PU-lDgI9Jy4mySPH3aaeE39nNe"/>
+</div>
+<div class="mt-4 flex items-center gap-2 text-background">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+<span class="text-xs font-bold uppercase tracking-wider">Expires in 01:54</span>
+</div>
+</div>
+</div>
+<!-- Steps -->
+<div class="flex flex-col gap-8 py-4">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-[#FB7299] font-bold border border-outline-variant/30">1</div>
+<p class="text-on-surface font-medium">Open Bilibili Mobile App</p>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-[#FB7299] font-bold border border-outline-variant/30">2</div>
+<p class="text-on-surface font-medium">Tap scan icon on top right</p>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-[#FB7299] font-bold border border-outline-variant/30">3</div>
+<p class="text-on-surface font-medium">Confirm login on your phone</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Side: Alternative Options -->
+<div class="col-span-5 flex flex-col justify-center gap-6">
+<div class="p-8 rounded-xl bg-surface-container-low backdrop-blur-md border border-outline-variant/10 shadow-xl">
+<h3 class="text-lg font-headline font-bold mb-6 text-on-surface-variant">Other Ways to Sign In</h3>
+<div class="flex flex-col gap-4">
+<!-- Option 1 -->
+<button class="group w-full flex items-center justify-between p-5 rounded-lg bg-surface-container-high hover:bg-primary transition-all duration-300 transform hover:scale-105 hover:shadow-[0_0_20px_rgba(251,114,153,0.3)] focus:ring-2 focus:ring-primary outline-none">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary group-hover:text-on-primary transition-colors" data-icon="keyboard">keyboard</span>
+<span class="font-bold text-on-surface group-hover:text-on-primary transition-colors">Login with TV Code</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-primary" data-icon="chevron_right">chevron_right</span>
+</button>
+<!-- Option 2 -->
+<button class="group w-full flex items-center justify-between p-5 rounded-lg bg-surface-container-high hover:bg-surface-bright transition-all duration-300 transform hover:scale-105 focus:ring-2 focus:ring-primary outline-none">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary" data-icon="switch_account">switch_account</span>
+<span class="font-bold text-on-surface">Switch to Account Selection</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="chevron_right">chevron_right</span>
+</button>
+<!-- Option 3 -->
+<button class="group w-full flex items-center justify-between p-5 rounded-lg bg-surface-container-high hover:bg-surface-bright transition-all duration-300 transform hover:scale-105 focus:ring-2 focus:ring-primary outline-none">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary" data-icon="help">help</span>
+<span class="font-bold text-on-surface">Login Issues?</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+<div class="mt-8 pt-8 border-t border-outline-variant/10">
+<p class="text-sm text-on-surface-variant leading-relaxed">
+                            Don't have an account yet? Visit <span class="text-secondary">bilibili.com/signup</span> on your computer to register.
+                        </p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Navigation Hints Footer -->
+<footer class="fixed bottom-0 left-20 right-0 h-20 px-12 flex items-center justify-between bg-gradient-to-t from-background to-transparent pointer-events-none">
+<div class="flex items-center gap-8 text-on-surface-variant font-label text-sm uppercase tracking-widest opacity-60">
+<div class="flex items-center gap-2">
+<kbd class="px-2 py-1 rounded bg-surface-container-highest border border-outline-variant/30 text-xs">D-PAD</kbd>
+<span>Navigate</span>
+</div>
+<div class="flex items-center gap-2">
+<kbd class="px-2 py-1 rounded bg-surface-container-highest border border-outline-variant/30 text-xs">OK</kbd>
+<span>Select</span>
+</div>
+<div class="flex items-center gap-2">
+<kbd class="px-2 py-1 rounded bg-surface-container-highest border border-outline-variant/30 text-xs">BACK</kbd>
+<span>Exit</span>
+</div>
+</div>
+<div class="text-on-surface-variant text-xs opacity-40">
+            v4.2.0-webos-lg
+        </div>
+</footer>
+<!-- Decorative Elements -->
+<div class="fixed bottom-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-[120px] -z-10 translate-x-1/2 translate-y-1/2"></div>
+<div class="fixed top-0 left-0 w-64 h-64 bg-secondary/5 rounded-full blur-[100px] -z-10 -translate-x-1/2 -translate-y-1/2"></div>
+</body></html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Be+Vietnam+Pro:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-tertiary": "#2f3131",
+                        "surface": "#131314",
+                        "error-container": "#93000a",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "surface-container": "#201f20",
+                        "secondary": "#00A1D6",
+                        "surface-tint": "#ffb1c2",
+                        "outline": "#a48a8f",
+                        "surface-container-lowest": "#0e0e0f",
+                        "tertiary": "#c6c6c7",
+                        "surface-container-low": "#1c1b1c",
+                        "on-error": "#690005",
+                        "tertiary-container": "#9fa0a0",
+                        "on-primary": "#66002c",
+                        "surface-container-high": "#2a2a2b",
+                        "inverse-primary": "#a83159",
+                        "surface-bright": "#3a393a",
+                        "on-primary-container": "#710032",
+                        "on-secondary-fixed": "#001e2c",
+                        "background": "#131314",
+                        "error": "#ffb4ab",
+                        "primary": "#FB7299",
+                        "surface-container-highest": "#353436",
+                        "on-primary-fixed-variant": "#881741",
+                        "tertiary-fixed": "#e2e2e2",
+                        "outline-variant": "#564145",
+                        "primary-fixed-dim": "#ffb1c2",
+                        "on-primary-fixed": "#3f0019",
+                        "secondary-fixed": "#c2e8ff",
+                        "on-surface-variant": "#ddbfc4",
+                        "inverse-surface": "#e5e2e3",
+                        "on-secondary-container": "#003043",
+                        "on-background": "#e5e2e3",
+                        "on-secondary-fixed-variant": "#004d68",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "surface-variant": "#353436",
+                        "surface-dim": "#131314",
+                        "primary-fixed": "#ffd9e0",
+                        "secondary-fixed-dim": "#78d1ff",
+                        "on-secondary": "#003549",
+                        "on-surface": "#e5e2e3",
+                        "on-tertiary-container": "#353737",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "primary-container": "#FB7299",
+                        "secondary-container": "#009ed3",
+                        "inverse-on-surface": "#313031"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Be Vietnam Pro"],
+                        "label": ["Plus Jakarta Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(28, 27, 28, 0.6);
+            backdrop-filter: blur(24px);
+        }
+        .neon-shadow-focus:focus {
+            box-shadow: 0 0 48px rgba(251, 114, 153, 0.3);
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-x-hidden selection:bg-primary selection:text-on-primary">
+<!-- Side Navigation Rail (Shared Component) -->
+<nav class="h-screen w-20 hover:w-64 transition-all duration-300 fixed left-0 top-0 z-50 flex flex-col py-10 items-center overflow-hidden bg-[#1c1b1c] bg-gradient-to-r from-[#1c1b1c] to-transparent shadow-[48px_0_48px_rgba(251,114,153,0.08)]">
+<div class="mb-12 text-[#FB7299] font-black text-2xl tracking-tighter">
+<span class="material-symbols-outlined scale-150" data-icon="tv">tv</span>
+</div>
+<div class="flex flex-col gap-10 w-full items-center">
+<button class="flex items-center gap-4 text-neutral-400 opacity-70 hover:bg-[#2a2a2b] hover:text-white rounded-r-full w-full py-3 px-6 transition-all">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-headline font-bold text-lg whitespace-nowrap">Home</span>
+</button>
+<button class="flex items-center gap-4 text-neutral-400 opacity-70 hover:bg-[#2a2a2b] hover:text-white rounded-r-full w-full py-3 px-6 transition-all">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+<span class="font-headline font-bold text-lg whitespace-nowrap">Categories</span>
+</button>
+<button class="flex items-center gap-4 text-neutral-400 opacity-70 hover:bg-[#2a2a2b] hover:text-white rounded-r-full w-full py-3 px-6 transition-all">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+<span class="font-headline font-bold text-lg whitespace-nowrap">Search</span>
+</button>
+<button class="flex items-center gap-4 text-[#00A1D6] scale-110 transition-transform bg-[#2a2a2b] rounded-r-full w-full py-3 px-6">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-headline font-bold text-lg whitespace-nowrap">History</span>
+</button>
+<button class="flex items-center gap-4 text-neutral-400 opacity-70 hover:bg-[#2a2a2b] hover:text-white rounded-r-full w-full py-3 px-6 transition-all mt-auto">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-headline font-bold text-lg whitespace-nowrap">User Center</span>
+</button>
+</div>
+</nav>
+<main class="ml-20 min-h-screen">
+<!-- Main Video Section -->
+<section class="relative h-screen w-full bg-black overflow-hidden group">
+<!-- Cinematic Video Placeholder -->
+<div class="absolute inset-0 w-full h-full">
+<img alt="Video Player Canvas" class="w-full h-full object-cover opacity-90" data-alt="Cinematic high contrast anime landscape with neon lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDa_f0ON4IJFHNa74ZncJ0esEiH1wO628-y99PDUweDSH7ccN1B9iRujTNswkIheJ0mnmc8M1heqwI7giRBeOLr1LgYaNOCMyuKSkUA_j4AzBNNFu7HyXfIfBATnoLMMpKxm0tVt0N7x-rCKO71JcYgJMQeTOA4aLJBq79zfJTDyR4fn2uRDU_Q1A7_ixUCiIe4D_80zSVJrFjEq1Xtq4j1OzeRfOhaI66GA2hhq_DR0Gm01csvebS9w2T5VeQC3l_zBcy-w-Uf8a7_"/>
+<!-- Ambient Darkening for controls -->
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/40 pointer-events-none"></div>
+</div>
+<!-- Top Overlay: Back & Title -->
+<div class="absolute top-0 left-0 right-0 p-12 flex justify-between items-start transition-opacity duration-500 opacity-100 group-hover:opacity-100">
+<div class="flex items-start gap-8">
+<button class="p-4 rounded-full glass-panel text-on-surface hover:scale-110 focus:scale-110 focus:ring-2 focus:ring-primary transition-all">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<div>
+<h1 class="font-headline text-4xl font-extrabold tracking-tight text-on-surface mb-2">Neon Nights: Tokyo Urban Exploration 2024</h1>
+<div class="flex items-center gap-4">
+<img alt="Uploader" class="w-8 h-8 rounded-full border border-primary/30" data-alt="User profile avatar close up circular" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrYQeq3eK8WpSNJvjgsTZIynisMrt5Vo3o3WSHazApSJpncN0mxekD6d9HC_3_hBsR1P1hWQUHxDs1fL1T1HJtZilvf7NrBzc0vDF-h-KLwK0WPAA98MmFXaTu8L5kVABmdikZr-8cy7My_E7UP3yOn6ncj4Kxo3nRSn9hrbM_aGoFWg3NlSrXSvvu-3GrSfLmmNutMabRkFYnOyPR-iuP9mpoCtempqTxarPOHxZFyQyW2HV6nq7p77c9oSLkZDJnMHaX08hoDqvQ"/>
+<span class="font-medium text-neutral-300">CyberExplorer_JP</span>
+<span class="px-2 py-0.5 rounded bg-primary/20 text-primary text-xs font-bold uppercase tracking-wider">UP</span>
+<span class="text-neutral-500 text-sm ml-4">1.2M Views • 2 hours ago</span>
+</div>
+</div>
+</div>
+<div class="flex gap-4">
+<button class="px-6 py-3 rounded-full glass-panel font-bold flex items-center gap-2 hover:bg-primary/20 focus:bg-primary text-sm transition-all neon-shadow-focus">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span> Subscribe
+                    </button>
+</div>
+</div>
+<!-- Bottom Control Overlay -->
+<div class="absolute bottom-0 left-0 right-0 p-12 transition-opacity duration-500 opacity-100 group-hover:opacity-100">
+<!-- Progress Bar Section -->
+<div class="mb-8 w-full">
+<div class="flex justify-between items-end mb-3 text-sm font-medium">
+<span class="text-secondary font-bold">12:45 <span class="text-neutral-500">/ 24:30</span></span>
+<span class="text-neutral-400">Next: Cyberpunk Architecture Deep Dive</span>
+</div>
+<div class="relative h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="absolute h-full w-1/2 bg-gradient-to-r from-secondary to-secondary-fixed rounded-full shadow-[0_0_12px_rgba(0,161,214,0.5)]"></div>
+<div class="absolute h-full w-2/3 bg-white/10 rounded-full"></div> <!-- Buffer -->
+</div>
+</div>
+<!-- Main Interaction Bar -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-6">
+<button class="p-5 rounded-full glass-panel text-on-surface hover:scale-110 focus:scale-110 focus:ring-2 focus:ring-primary transition-all">
+<span class="material-symbols-outlined text-3xl" data-icon="replay_10">replay_10</span>
+</button>
+<button class="p-8 rounded-full bg-primary text-on-primary hover:scale-110 focus:scale-110 focus:ring-4 focus:ring-primary/40 transition-all shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-4xl" data-icon="play_arrow" data-weight="fill">play_arrow</span>
+</button>
+<button class="p-5 rounded-full glass-panel text-on-surface hover:scale-110 focus:scale-110 focus:ring-2 focus:ring-primary transition-all">
+<span class="material-symbols-outlined text-3xl" data-icon="forward_10">forward_10</span>
+</button>
+</div>
+<div class="flex items-center gap-4">
+<!-- Danmaku Toggle -->
+<button class="px-6 h-14 rounded-xl glass-panel flex items-center gap-3 hover:bg-secondary/20 focus:ring-2 focus:ring-secondary transition-all">
+<span class="material-symbols-outlined text-secondary" data-icon="chat">chat</span>
+<span class="font-bold">Danmaku <span class="text-secondary ml-1">ON</span></span>
+</button>
+<!-- Quality -->
+<button class="px-6 h-14 rounded-xl glass-panel flex items-center gap-3 hover:bg-white/10 focus:ring-2 focus:ring-white transition-all">
+<span class="material-symbols-outlined" data-icon="high_quality">high_quality</span>
+<span class="font-bold">4K HDR</span>
+</button>
+<!-- Settings -->
+<button class="w-14 h-14 rounded-xl glass-panel flex items-center justify-center hover:bg-white/10 focus:ring-2 focus:ring-white transition-all">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Related Content Section -->
+<section class="px-20 py-24 bg-background relative z-10">
+<div class="flex justify-between items-end mb-12">
+<div>
+<h2 class="font-headline text-3xl font-bold text-on-surface mb-2">Related Videos</h2>
+<p class="text-neutral-500 font-medium">Curated based on your current watch</p>
+</div>
+<div class="flex gap-4">
+<button class="p-3 rounded-full glass-panel hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="p-3 rounded-full glass-panel hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Horizontal Scrolling List -->
+<div class="flex gap-8 overflow-x-auto pb-8 no-scrollbar">
+<!-- Card 1 -->
+<div class="flex-none w-96 group/card cursor-pointer">
+<div class="relative aspect-video rounded-xl overflow-hidden mb-4 transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-[0_0_32px_rgba(251,114,153,0.15)] ring-offset-4 ring-offset-background group-focus:ring-2 group-focus:ring-primary">
+<img alt="Video Thumbnail" class="w-full h-full object-cover" data-alt="Cinematic night city rainy street with neon signs" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPwhZcPJhdxc3lJpmm_DwgVHdYEeRkHSyghSv1-wLN_tTgsHhpmy8goe1mX4muLWWkOoNLtULBaXfmJtV2dkk0J3HT5iHVz5uqZ38REZkmqDzaXTXN82108vUxLR9uT7R-L29dzikbFAiY_mt2qbcZHtegSVLz1_JTxiWfdxsibpSXq8tGZvlVpsd9a8PWifhr1ghaWerCmPGZyQIHanF8GjOq7HORDNoX9jTp-GqDm2SgUa1VNjFDriUNirqCdApOIEccDVFpMv_m"/>
+<div class="absolute bottom-2 right-2 px-2 py-1 bg-black/80 text-xs font-bold rounded">15:34</div>
+<div class="absolute inset-0 bg-primary/10 opacity-0 group-hover/card:opacity-100 transition-opacity"></div>
+</div>
+<h3 class="font-headline font-bold text-lg text-on-surface line-clamp-1 mb-1">Cyberpunk 2077: Phantom Liberty Visuals</h3>
+<p class="text-neutral-500 text-sm font-medium">Digital Dreams • 890K Views</p>
+</div>
+<!-- Card 2 -->
+<div class="flex-none w-96 group/card cursor-pointer">
+<div class="relative aspect-video rounded-xl overflow-hidden mb-4 transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-[0_0_32px_rgba(251,114,153,0.15)] ring-offset-4 ring-offset-background group-focus:ring-2 group-focus:ring-primary">
+<img alt="Video Thumbnail" class="w-full h-full object-cover" data-alt="Beautiful mountain landscape sunset over lake" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCMcOIGH1pOH0Ctev_zDgCDAMc00SZnvbEaIDjGjPKUbCCsfS1d84akeNC3_Kqm0f-sFiFrS0O2xhS4E1kmTZmdIXJo0Kh7qyKechBfm4mtPwsGs4Eav1RoksCLZi9lOUqm30OurdKXyO9UrHXEiBBFftFNPzNoHnfWAPNM0QV0Om4WPGBoJg3WKForYQ9fRFifXKA4EGP-ykRqVzYWrLkQT8BFDZddzPcXREKXR7a5523SU7l-AvY5ViQmimoeP7rm5aVR_AZKVQwp"/>
+<div class="absolute bottom-2 right-2 px-2 py-1 bg-black/80 text-xs font-bold rounded">24:10</div>
+<div class="absolute inset-0 bg-primary/10 opacity-0 group-hover/card:opacity-100 transition-opacity"></div>
+</div>
+<h3 class="font-headline font-bold text-lg text-on-surface line-clamp-1 mb-1">Unreal Engine 5: The Future of Realism</h3>
+<p class="text-neutral-500 text-sm font-medium">TechReview HQ • 1.4M Views</p>
+</div>
+<!-- Card 3 -->
+<div class="flex-none w-96 group/card cursor-pointer">
+<div class="relative aspect-video rounded-xl overflow-hidden mb-4 transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-[0_0_32px_rgba(251,114,153,0.15)] ring-offset-4 ring-offset-background group-focus:ring-2 group-focus:ring-primary">
+<img alt="Video Thumbnail" class="w-full h-full object-cover" data-alt="Retro aesthetic electronic hardware tech desk" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAp0-9Ci7R5DYbKnFKuYGQ0sT27ucH8PDqOrD4XnLLXTcSRgH_-nnUmSJ_NYh6VmmrVVonQibLtrx86rAa7LU-vqM6IRuPMC7HESksiGs0X0C3I4tLF8nlF4iQL7_GlBvpHiWPOhz3C8WkPowsqWNfKg_mMSetXGl5NJXG00l2FF5LSa9POn4eKZnb_gPbPzm_ZezR5acv6G-4128C_w2ZctOX5fDMjFIVsXzDYts7P3cmii9PP4mE3ojh3bik4AtBaYRRuqyF1ijIv"/>
+<div class="absolute bottom-2 right-2 px-2 py-1 bg-black/80 text-xs font-bold rounded">42:05</div>
+<div class="absolute inset-0 bg-primary/10 opacity-0 group-hover/card:opacity-100 transition-opacity"></div>
+</div>
+<h3 class="font-headline font-bold text-lg text-on-surface line-clamp-1 mb-1">Synthwave Production: Tips &amp; Tricks</h3>
+<p class="text-neutral-500 text-sm font-medium">AudioMaster • 240K Views</p>
+</div>
+<!-- Card 4 -->
+<div class="flex-none w-96 group/card cursor-pointer">
+<div class="relative aspect-video rounded-xl overflow-hidden mb-4 transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-[0_0_32px_rgba(251,114,153,0.15)] ring-offset-4 ring-offset-background group-focus:ring-2 group-focus:ring-primary">
+<img alt="Video Thumbnail" class="w-full h-full object-cover" data-alt="Programming code screen neon aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfqJI5ZR0LOSk-AVfsqf9-1equ2nK0zd4LguuRImO9zM6bWdqjctdZoQpXe-URVmjU-6Q2gPKh0DP_bYU56SW2Z1VUhnRBsshE7Yemxs_Uyree4AvNVT7ZkS8YhgNFQ3S50LcURth6Sw3vM3Oh6n9DmYhG4wZ9DV579wtXnoi5P6Hr6fk1HxzKsH8UxhdlVe5SUDNzxNQiddnglixpHeKOmViyMTgCdsYB7fzCekTSDqQjhLyUfcU4cRIY8C942OhkCSd_0O4Lr58A"/>
+<div class="absolute bottom-2 right-2 px-2 py-1 bg-black/80 text-xs font-bold rounded">18:12</div>
+<div class="absolute inset-0 bg-primary/10 opacity-0 group-hover/card:opacity-100 transition-opacity"></div>
+</div>
+<h3 class="font-headline font-bold text-lg text-on-surface line-clamp-1 mb-1">Coding a Voxel Engine from Scratch</h3>
+<p class="text-neutral-500 text-sm font-medium">PixelWizard • 56K Views</p>
+</div>
+</div>
+</section>
+<!-- Video Description / Detail Section (Bento Grid Style) -->
+<section class="px-20 pb-32">
+<div class="grid grid-cols-12 gap-8">
+<!-- Description Box -->
+<div class="col-span-8 bg-surface-container-low rounded-xl p-10">
+<div class="flex items-center gap-6 mb-8">
+<button class="flex items-center gap-3 bg-surface-container-highest px-6 py-3 rounded-full hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined text-primary" data-icon="thumb_up" data-weight="fill">thumb_up</span>
+<span class="font-bold">256K</span>
+</button>
+<button class="flex items-center gap-3 bg-surface-container-highest px-6 py-3 rounded-full hover:bg-white/10 transition-all">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+<span class="font-bold">Share</span>
+</button>
+<button class="flex items-center gap-3 bg-surface-container-highest px-6 py-3 rounded-full hover:bg-white/10 transition-all">
+<span class="material-symbols-outlined" data-icon="playlist_add">playlist_add</span>
+<span class="font-bold">Collect</span>
+</button>
+</div>
+<div class="prose prose-invert max-w-none">
+<p class="text-neutral-400 leading-relaxed text-lg">
+                            Tonight we dive deep into the heart of Tokyo's neon-lit corridors. From the bustling streets of Shinjuku to the quiet, glowing alleyways of Shimokitazawa. Captured in full 4K HDR at 60fps for the ultimate cinematic experience. 
+                            <br/><br/>
+                            Gear Used:<br/>
+                            - Sony A7S III<br/>
+                            - 35mm f/1.4 G Master<br/>
+                            - Ronin RS3 Pro
+                        </p>
+</div>
+<button class="mt-8 font-bold text-primary flex items-center gap-2">
+                        Show More <span class="material-symbols-outlined">expand_more</span>
+</button>
+</div>
+<!-- Interaction/Stats Box -->
+<div class="col-span-4 flex flex-col gap-8">
+<div class="bg-surface-container-low rounded-xl p-8 flex-1 border-l-4 border-secondary">
+<h4 class="font-headline font-bold text-xl mb-6 flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" data-icon="forum">forum</span> 
+                            Comments (1.4K)
+                        </h4>
+<div class="space-y-6">
+<div class="flex gap-4">
+<div class="w-10 h-10 rounded-full bg-neutral-700 flex-none"></div>
+<div class="text-sm">
+<p class="font-bold text-on-surface">NeonDreamer <span class="text-neutral-500 font-normal ml-2">2h ago</span></p>
+<p class="text-neutral-400 mt-1 line-clamp-2">This color grading is absolutely insane. What LUT are you using?</p>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="w-10 h-10 rounded-full bg-neutral-700 flex-none"></div>
+<div class="text-sm">
+<p class="font-bold text-on-surface">TokyO_0 <span class="text-neutral-500 font-normal ml-2">5h ago</span></p>
+<p class="text-neutral-400 mt-1 line-clamp-2">The transition at 12:45 was so smooth. TV app looks great!</p>
+</div>
+</div>
+</div>
+<button class="w-full mt-6 py-4 bg-surface-container-highest rounded-xl font-bold hover:bg-white/10 transition-all">
+                            View All Comments
+                        </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Floating Toast/Action Notification -->
+<div class="fixed bottom-12 right-12 z-50">
+<div class="glass-panel px-6 py-4 rounded-xl flex items-center gap-4 shadow-2xl border-l-4 border-primary">
+<span class="material-symbols-outlined text-primary" data-icon="notifications_active">notifications_active</span>
+<div class="text-sm">
+<p class="font-bold">Subscribed!</p>
+<p class="text-neutral-400">You'll get notifications for new videos.</p>
+</div>
+</div>
+</div>
+</body></html>

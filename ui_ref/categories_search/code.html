@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bilibili TV - Search &amp; Categories</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Be+Vietnam+Pro:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary": "#2f3131",
+              "surface": "#131314",
+              "error-container": "#93000a",
+              "on-error-container": "#ffdad6",
+              "on-tertiary-fixed": "#1a1c1c",
+              "surface-container": "#201f20",
+              "secondary": "#78d1ff",
+              "surface-tint": "#ffb1c2",
+              "outline": "#a48a8f",
+              "surface-container-lowest": "#0e0e0f",
+              "tertiary": "#c6c6c7",
+              "surface-container-low": "#1c1b1c",
+              "on-error": "#690005",
+              "tertiary-container": "#9fa0a0",
+              "on-primary": "#66002c",
+              "surface-container-high": "#2a2a2b",
+              "inverse-primary": "#a83159",
+              "surface-bright": "#3a393a",
+              "on-primary-container": "#710032",
+              "on-secondary-fixed": "#001e2c",
+              "background": "#131314",
+              "error": "#ffb4ab",
+              "primary": "#ffb1c2",
+              "surface-container-highest": "#353436",
+              "on-primary-fixed-variant": "#881741",
+              "tertiary-fixed": "#e2e2e2",
+              "outline-variant": "#564145",
+              "primary-fixed-dim": "#ffb1c2",
+              "on-primary-fixed": "#3f0019",
+              "secondary-fixed": "#c2e8ff",
+              "on-surface-variant": "#ddbfc4",
+              "inverse-surface": "#e5e2e3",
+              "on-secondary-container": "#003043",
+              "on-background": "#e5e2e3",
+              "on-secondary-fixed-variant": "#004d68",
+              "on-tertiary-fixed-variant": "#454747",
+              "surface-variant": "#353436",
+              "surface-dim": "#131314",
+              "primary-fixed": "#ffd9e0",
+              "secondary-fixed-dim": "#78d1ff",
+              "on-secondary": "#003549",
+              "on-surface": "#e5e2e3",
+              "on-tertiary-container": "#353737",
+              "tertiary-fixed-dim": "#c6c6c7",
+              "primary-container": "#fb7299",
+              "secondary-container": "#009ed3",
+              "inverse-on-surface": "#313031"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Be Vietnam Pro"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neon-shadow-primary {
+            box-shadow: 0 0 48px rgba(251, 114, 153, 0.15);
+        }
+        .glass-panel {
+            backdrop-filter: blur(40px);
+            background: rgba(42, 42, 43, 0.6);
+        }
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-hidden">
+<!-- SideNavBar (The Anchor) -->
+<aside class="h-screen w-20 hover:w-64 transition-all duration-300 fixed left-0 top-0 z-50 bg-[#1c1b1c] dark:bg-neutral-900 flex flex-col py-10 items-center overflow-hidden bg-gradient-to-r from-[#1c1b1c] to-transparent shadow-[48px_0_48px_rgba(251,114,153,0.08)] group">
+<div class="mb-12 flex items-center gap-4 w-full px-6">
+<span class="text-[#FB7299] font-black text-2xl tracking-tighter italic shrink-0">Bili</span>
+<span class="font-plus-jakarta text-lg font-bold text-[#e5e2e3] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Premium Experience</span>
+</div>
+<nav class="flex flex-col gap-8 w-full">
+<!-- Home -->
+<a class="flex items-center gap-6 px-6 py-3 text-neutral-400 opacity-70 hover:bg-[#2a2a2b] hover:text-white rounded-r-full transition-all group/item" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="home">home</span>
+<span class="font-plus-jakarta font-bold text-lg opacity-0 group-hover:opacity-100 transition-opacity">Home</span>
+</a>
+<!-- Categories (Active State Logic: Close Match) -->
+<a class="flex items-center gap-6 px-6 py-3 text-[#FB7299] scale-110 bg-[#2a2a2b] rounded-r-full transition-transform group/item ring-2 ring-[#FB7299]" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="grid_view" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span class="font-plus-jakarta font-bold text-lg opacity-0 group-hover:opacity-100 transition-opacity">Categories</span>
+</a>
+<!-- Search -->
+<a class="flex items-center gap-6 px-6 py-3 text-neutral-400 opacity-70 hover:bg-[#2a2a2b] hover:text-white rounded-r-full transition-all group/item" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="search">search</span>
+<span class="font-plus-jakarta font-bold text-lg opacity-0 group-hover:opacity-100 transition-opacity">Search</span>
+</a>
+<!-- History -->
+<a class="flex items-center gap-6 px-6 py-3 text-neutral-400 opacity-70 hover:bg-[#2a2a2b] hover:text-white rounded-r-full transition-all group/item" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="history">history</span>
+<span class="font-plus-jakarta font-bold text-lg opacity-0 group-hover:opacity-100 transition-opacity">History</span>
+</a>
+<!-- User Center -->
+<a class="mt-auto flex items-center gap-6 px-6 py-3 text-neutral-400 opacity-70 hover:bg-[#2a2a2b] hover:text-white rounded-r-full transition-all group/item" href="#">
+<span class="material-symbols-outlined text-2xl" data-icon="person">person</span>
+<span class="font-plus-jakarta font-bold text-lg opacity-0 group-hover:opacity-100 transition-opacity">User Center</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-20 h-screen overflow-y-auto px-20 pt-12 pb-24">
+<!-- Top Search Bar Section (Editorial Style) -->
+<header class="w-full mb-16">
+<div class="flex flex-col gap-8 max-w-4xl">
+<h1 class="font-headline text-5xl font-extrabold tracking-tight text-on-surface">Explore <span class="text-primary-container">Content</span></h1>
+<!-- Large Focused Search Bar -->
+<div class="relative flex items-center group">
+<div class="absolute left-6 text-on-surface-variant group-focus-within:text-primary-container transition-colors">
+<span class="material-symbols-outlined text-3xl" data-icon="search">search</span>
+</div>
+<input class="w-full bg-surface-container-high h-20 pl-20 pr-8 rounded-xl border-none text-2xl font-medium focus:ring-4 focus:ring-primary-container/30 focus:bg-surface-bright transition-all placeholder:text-on-surface-variant/50 outline-none neon-shadow-primary" placeholder="Search for creators, anime, or gaming..." type="text"/>
+<div class="absolute right-6 flex items-center gap-4">
+<span class="bg-surface-container-highest px-3 py-1 rounded text-xs font-bold text-on-surface-variant uppercase tracking-widest">D-Pad to Type</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Dynamic Category Bento Grid -->
+<section class="space-y-10">
+<div class="flex items-end justify-between">
+<h2 class="font-headline text-3xl font-bold">Trending Categories</h2>
+<p class="text-on-surface-variant text-lg">Curated for your viewing habits</p>
+</div>
+<div class="category-grid">
+<!-- Gaming Tile (Hero Size Asymmetry) -->
+<div class="col-span-1 md:col-span-2 aspect-video relative rounded-xl overflow-hidden group cursor-pointer border-2 border-transparent hover:border-primary-container transition-all hover:scale-[1.02] shadow-2xl">
+<img class="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" data-alt="Cyberpunk style gaming setup with neon lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOiyce77F9bqgPt5e1sJ9ln7UKlOEhpzxjaWRlchRB5N72_pBiYryyj0IS9yt3T0Y59SNxJ2iqwLdy6rQum172tXj2aj5hn0tpD7x86UFKTvJeVSN1AWQXx_bLCL2IcOdZer8Kn9b1wlM1wi-bbJ5q0FCkujwpljzmCWByRuvFUpk8B9LWNIu6kLT-vGEq3ec7SAXcyvzaRc1edzBnHZ394yDJ0wh45UJIVeD_1KRxR6w7lUXyeeYuxQpc2c9Olg1C-RXQc_v2vUXH"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+<div class="absolute bottom-8 left-8 flex flex-col gap-2">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center mb-2 shadow-lg">
+<span class="material-symbols-outlined text-white" data-icon="sports_esports" style="font-variation-settings: 'FILL' 1;">sports_esports</span>
+</div>
+<h3 class="font-headline text-4xl font-black">Gaming</h3>
+<p class="text-secondary-fixed text-lg font-medium">12.4k streams live</p>
+</div>
+</div>
+<!-- Anime Tile -->
+<div class="aspect-square relative rounded-xl overflow-hidden group cursor-pointer border-2 border-transparent hover:border-primary-container transition-all hover:scale-[1.02]">
+<img class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity" data-alt="Japanese anime style illustration of a city" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAq7R-LIpOMoK_NWut9_GXA5IhqFpQcXN4oZ4dtoQ70gqVGUqNPKk3nivVqNOCtBcWEX_bb49MDBL_VHCFSB304R4719RCd7k0xav2COfgesefdRs0kbgoZq9HCLl6I4QGa5JMwAhcwfgQE1sk63Hsh2NzdRrGDS6EUD_UPJq1FTge4R2IOTH31XA1ddvtPJ5qk6lFvZ4PhNLx5lO_cd4FeiyPEqrd9veEpY8WlByUhsuUw69A1NyV_G9SSFDjW-x6jBOfMPr0ACulT"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute inset-0 flex flex-col items-center justify-center gap-4">
+<span class="material-symbols-outlined text-5xl text-secondary" data-icon="movie_filter">movie_filter</span>
+<h3 class="font-headline text-2xl font-bold">Anime</h3>
+</div>
+</div>
+<!-- Music Tile -->
+<div class="aspect-square relative rounded-xl overflow-hidden group cursor-pointer border-2 border-transparent hover:border-primary-container transition-all hover:scale-[1.02]">
+<img class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity" data-alt="Concert stage with colorful stage lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvydfj3txUPRf4hRsc6O5xcKTw1n8VjreovhpU94BxtoS7uqQr8R9dgABGWf50UHkDWr4gi5SpRYBsHnductxd5Vx1CmJVGnRh9zRjdwky6wknfUdvsMrm25nUO65p1WEkKeUXxyoREXRm3_S79EqkPe9nXd0NGh4V80a5k5kQNyBMrIGIwQAGUYYaihpm-beuVVaaKwqy0XylH8M9vy1g4O1-uU6AvUKkSU2w1KA64LfKvcCoOHlsJWZVE-JM42r669SUu7DKfOtX"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute inset-0 flex flex-col items-center justify-center gap-4">
+<span class="material-symbols-outlined text-5xl text-primary" data-icon="music_note">music_note</span>
+<h3 class="font-headline text-2xl font-bold">Music</h3>
+</div>
+</div>
+<!-- Lifestyle Tile -->
+<div class="aspect-square relative rounded-xl overflow-hidden group cursor-pointer border-2 border-transparent hover:border-primary-container transition-all hover:scale-[1.02]">
+<img class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity" data-alt="Healthy lifestyle food and coffee setup" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6vwZCFr9dZoquqASlff9J33CzK5brkz2YjcSwlHS032_xSJgvYeXdtwJB8Um9AJ_GQLEgWszUZTr00yNUPLzIHkdDHLer2kNasrDlSVEwGoy6WlARi9LlOZn1DfBz2Pz3oCHBmOXEmHVkoYWYwaRoKOKb8pS2GrS7UsX-t0ia4pTxTcJNWts6brQZihcgSrWswuabYRPW1QYaoWY7k-K9bUaln3TP2EfQqdHAhBbSqDCA2QCsTj7RWYd_1xMpt33aq2DP5f7vCNch"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute inset-0 flex flex-col items-center justify-center gap-4">
+<span class="material-symbols-outlined text-5xl text-on-tertiary-container" data-icon="vlog">vids</span>
+<h3 class="font-headline text-2xl font-bold">Lifestyle</h3>
+</div>
+</div>
+<!-- Tech Tile -->
+<div class="aspect-square relative rounded-xl overflow-hidden group cursor-pointer border-2 border-transparent hover:border-primary-container transition-all hover:scale-[1.02]">
+<img class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity" data-alt="Close up of a computer circuit board" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQAri1kaKutZko_0KYpYncrWUuGtMHDP6RY3wGb0fVZOPMne8XwmQp5KMT7RoiZM14PePEGzZlkcGpkY7F3-4Qa2ee9OUZ_hyVTnSg53G86T-WnFaTmh9lyn3DIA2LlqSlt2W4yCZ1lcOUKd-YZvkx2JQAIp8N2Vd9zp_0PT7evNAiEeoOFI2VVm6Bt5DKQ_PNVzeQuiIl8PLabTWTAxvA9FRw7Rd573pemq4N2wiAzkusOHVSvN-L4p66FjLzWSPUPH7m4f4Lmvyx"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute inset-0 flex flex-col items-center justify-center gap-4">
+<span class="material-symbols-outlined text-5xl text-secondary-container" data-icon="memory">memory</span>
+<h3 class="font-headline text-2xl font-bold">Tech</h3>
+</div>
+</div>
+<!-- Fashion Tile -->
+<div class="aspect-square relative rounded-xl overflow-hidden group cursor-pointer border-2 border-transparent hover:border-primary-container transition-all hover:scale-[1.02]">
+<img class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity" data-alt="Fashionable clothes and shopping bags" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCu66wFCHWYHjd3gsfwWjguytzA3rERVK09lpKWXNVjRAb2IlL60-laANFKoFbH-4DEpj_ryHwMM9g3WiyYbPOFK1JcyKCnz7XDj9U5Fx9-5ZAnbURhmfZVkITdnVWMOLLbBSyNJFf5tJYYX_jJ-zCLh0QstQRi77_tnkDeuUV1NGWgtq-XeUbwsRhvWP9uZ4_dQp8XBX5_WxiLGldHsqVRhamieeKxXm6ztfH8Ce7ytcLaJgkGIyfgaAVBdE7jgvgWkUCrKaxE0sDj"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute inset-0 flex flex-col items-center justify-center gap-4">
+<span class="material-symbols-outlined text-5xl text-primary-fixed-dim" data-icon="apparel">apparel</span>
+<h3 class="font-headline text-2xl font-bold">Fashion</h3>
+</div>
+</div>
+<!-- Virtual Art Tile -->
+<div class="aspect-square relative rounded-xl overflow-hidden group cursor-pointer border-2 border-transparent hover:border-primary-container transition-all hover:scale-[1.02]">
+<img class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity" data-alt="Abstract colorful digital paint swirls" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7I0xEUZyWkrVEVKaiUaS9kFS1yIKPw2EQKARLAXRlTsMuR8gd8djRzyhyRog6spUzfp9AmMf0NrfKpsuNpFJzVE3Nzznw9Rnc8QKSfKAvbPoXscAPf25ryTwcqPDtMoOUlr5OYUC01ZJhiepX5_cOas8tb3DI0qoQSB8EWKulCzX_NgS_VCSbSHV9nGs9NL6pS-R-64T8Jxbct-F_ZNaszh6C3LWifhJnt8Rr8EO27JFoC_1TQudUiDcAzdhRlar_0CnGprzBEcPC"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute inset-0 flex flex-col items-center justify-center gap-4">
+<span class="material-symbols-outlined text-5xl text-secondary-fixed" data-icon="palette">palette</span>
+<h3 class="font-headline text-2xl font-bold">Digital Art</h3>
+</div>
+</div>
+</div>
+</section>
+<!-- Quick Filters / Sub-Categories (Horizontal Scroll Logic) -->
+<section class="mt-20">
+<h2 class="font-headline text-xl font-semibold mb-6 text-on-surface-variant uppercase tracking-widest">Popular Sub-Tags</h2>
+<div class="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+<button class="px-8 py-3 bg-surface-container-high rounded-full font-bold text-lg hover:bg-primary-container hover:text-white transition-all whitespace-nowrap">Minecraft</button>
+<button class="px-8 py-3 bg-surface-container-high rounded-full font-bold text-lg hover:bg-primary-container hover:text-white transition-all whitespace-nowrap">J-Pop 2024</button>
+<button class="px-8 py-3 bg-surface-container-high rounded-full font-bold text-lg hover:bg-primary-container hover:text-white transition-all whitespace-nowrap">4K HDR Nature</button>
+<button class="px-8 py-3 bg-surface-container-high rounded-full font-bold text-lg hover:bg-primary-container hover:text-white transition-all whitespace-nowrap">Cooking Tips</button>
+<button class="px-8 py-3 bg-surface-container-high rounded-full font-bold text-lg hover:bg-primary-container hover:text-white transition-all whitespace-nowrap">RTX 5090 Reviews</button>
+<button class="px-8 py-3 bg-surface-container-high rounded-full font-bold text-lg hover:bg-primary-container hover:text-white transition-all whitespace-nowrap">ASMR Sleep</button>
+<button class="px-8 py-3 bg-surface-container-high rounded-full font-bold text-lg hover:bg-primary-container hover:text-white transition-all whitespace-nowrap">Cat Vlogs</button>
+</div>
+</section>
+</main>
+<!-- TV Focus Indicator (Simplified Overlay Mockup) -->
+<div class="fixed bottom-10 right-10 bg-surface-container-highest/80 glass-panel px-6 py-4 rounded-xl flex items-center gap-4 pointer-events-none border border-outline-variant/20 shadow-2xl">
+<div class="flex items-center gap-2">
+<span class="w-8 h-8 rounded bg-on-surface/10 flex items-center justify-center font-bold text-xs">OK</span>
+<span class="text-sm font-medium">Select</span>
+</div>
+<div class="w-px h-6 bg-outline-variant/30"></div>
+<div class="flex items-center gap-2">
+<span class="w-8 h-8 rounded bg-on-surface/10 flex items-center justify-center font-bold text-xs">BACK</span>
+<span class="text-sm font-medium">Exit</span>
+</div>
+</div>
+</body></html>

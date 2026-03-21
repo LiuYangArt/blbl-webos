@@ -9,6 +9,12 @@
 - 电视端大屏交互习惯可用
 - 真机 webOS 安装、调试、播放链路可验证
 
+## UI参考
+@ui_ref/
+
+## 参考项目源码
+F:\CodeProjects\bilibili_tv_android\PiliPlus
+
 ## 技术基线
 
 - 前端栈：`React + TypeScript + Vite`

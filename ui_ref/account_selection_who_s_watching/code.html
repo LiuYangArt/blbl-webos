@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bilibili TV - Who's Watching?</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Be+Vietnam+Pro:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-variant": "#353436",
+              "inverse-on-surface": "#313031",
+              "on-secondary-fixed": "#001e2c",
+              "secondary-fixed": "#c2e8ff",
+              "primary": "#ffb1c2",
+              "surface-bright": "#3a393a",
+              "outline": "#a48a8f",
+              "inverse-surface": "#e5e2e3",
+              "secondary-fixed-dim": "#78d1ff",
+              "secondary": "#78d1ff",
+              "surface-tint": "#ffb1c2",
+              "on-background": "#e5e2e3",
+              "on-surface-variant": "#ddbfc4",
+              "on-surface": "#e5e2e3",
+              "on-primary-fixed": "#3f0019",
+              "on-error-container": "#ffdad6",
+              "on-error": "#690005",
+              "on-primary-container": "#710032",
+              "surface-container-highest": "#353436",
+              "primary-container": "#fb7299",
+              "on-primary-fixed-variant": "#881741",
+              "primary-fixed": "#ffd9e0",
+              "background": "#131314",
+              "surface-dim": "#131314",
+              "on-secondary-container": "#003043",
+              "on-tertiary-container": "#353737",
+              "tertiary-fixed": "#e2e2e2",
+              "outline-variant": "#564145",
+              "surface-container-lowest": "#0e0e0f",
+              "surface-container-low": "#1c1b1c",
+              "on-tertiary-fixed": "#1a1c1c",
+              "tertiary-container": "#9fa0a0",
+              "tertiary": "#c6c6c7",
+              "on-tertiary-fixed-variant": "#454747",
+              "on-tertiary": "#2f3131",
+              "surface-container": "#201f20",
+              "on-secondary-fixed-variant": "#004d68",
+              "error": "#ffb4ab",
+              "tertiary-fixed-dim": "#c6c6c7",
+              "secondary-container": "#009ed3",
+              "error-container": "#93000a",
+              "on-secondary": "#003549",
+              "inverse-primary": "#a83159",
+              "on-primary": "#66002c",
+              "surface-container-high": "#2a2a2b",
+              "surface": "#131314",
+              "primary-fixed-dim": "#ffb1c2"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Be Vietnam Pro"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neon-glow {
+            box-shadow: 0 0 48px rgba(251, 114, 153, 0.15);
+        }
+        .profile-focus:focus-within {
+            transform: scale(1.1);
+            outline: 4px solid #FB7299;
+            box-shadow: 0 0 30px rgba(251, 114, 153, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+<!-- Cinematic Background Gradient -->
+<div class="fixed inset-0 z-0 opacity-40 pointer-events-none">
+<div class="absolute top-[-10%] right-[-10%] w-[60%] h-[70%] rounded-full bg-primary-container blur-[160px] opacity-20"></div>
+<div class="absolute bottom-[-10%] left-[-10%] w-[50%] h-[60%] rounded-full bg-secondary-container blur-[140px] opacity-10"></div>
+</div>
+<!-- SideNavBar (Suppressed/Secondary for Transactional Screen) -->
+<nav class="fixed left-0 top-0 z-50 h-screen w-20 hover:w-64 transition-all duration-300 bg-[#1c1b1c] shadow-2xl backdrop-blur-xl flex flex-col py-8 px-4 opacity-40 hover:opacity-100 group">
+<div class="mb-12 px-2 overflow-hidden whitespace-nowrap">
+<span class="text-2xl font-bold text-[#FB7299] font-headline">Bilibili TV</span>
+</div>
+<div class="flex flex-col gap-8">
+<!-- Home (Inactive) -->
+<div class="flex items-center gap-4 text-[#e5e2e3]/60 hover:bg-[#2a2a2b] hover:text-[#FB7299] transition-all p-2 rounded-lg cursor-pointer">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-headline opacity-0 group-hover:opacity-100 transition-opacity">Home</span>
+</div>
+<!-- Trending (Inactive) -->
+<div class="flex items-center gap-4 text-[#e5e2e3]/60 hover:bg-[#2a2a2b] hover:text-[#FB7299] transition-all p-2 rounded-lg cursor-pointer">
+<span class="material-symbols-outlined" data-icon="trending_up">trending_up</span>
+<span class="font-headline opacity-0 group-hover:opacity-100 transition-opacity">Trending</span>
+</div>
+<!-- Settings (Active for Account context) -->
+<div class="flex items-center gap-4 text-[#00A1D6] scale-105 transition-transform p-2 rounded-lg bg-[#2a2a2b]/40">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-headline opacity-0 group-hover:opacity-100 transition-opacity">Settings</span>
+</div>
+</div>
+</nav>
+<!-- TopNavBar (Secondary) -->
+<header class="fixed top-0 right-0 w-[calc(100%-5rem)] z-40 bg-transparent flex justify-between items-center px-12 py-8 opacity-60">
+<div class="flex items-center gap-8">
+<span class="text-3xl font-black text-[#FB7299] font-headline tracking-tight">Bilibili</span>
+<div class="hidden md:flex gap-6">
+<span class="text-[#e5e2e3] opacity-70 font-headline">Explore</span>
+<span class="text-[#e5e2e3] opacity-70 font-headline">Anime</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="material-symbols-outlined text-on-surface" data-icon="search">search</span>
+<span class="material-symbols-outlined text-on-surface" data-icon="history">history</span>
+<div class="w-10 h-10 rounded-full bg-surface-container-high border-2 border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-sm" data-icon="person">person</span>
+</div>
+</div>
+</header>
+<!-- Main Content: Account Selection Canvas -->
+<main class="relative z-10 flex flex-col items-center justify-center min-h-screen px-24">
+<!-- Heading Section -->
+<div class="text-center mb-16 space-y-4">
+<h1 class="text-6xl md:text-7xl font-headline font-extrabold tracking-tight text-on-surface">
+                Who's Watching?
+            </h1>
+<p class="text-xl text-on-surface-variant font-body font-light max-w-xl mx-auto opacity-80">
+                Pick your profile to dive back into your curated neon world.
+            </p>
+</div>
+<!-- Profiles Grid -->
+<div class="flex flex-wrap justify-center gap-12 max-w-6xl">
+<!-- Profile 1: NeonCurator (Focused Initial State) -->
+<button class="profile-focus group flex flex-col items-center gap-6 transition-all duration-300 focus:outline-none outline-none">
+<div class="relative w-48 h-48 rounded-full overflow-hidden border-4 border-transparent bg-surface-container-high shadow-2xl transition-all duration-300 group-focus:border-[#FB7299]">
+<img alt="User avatar for NeonCurator" class="w-full h-full object-cover grayscale group-focus:grayscale-0" data-alt="Portrait of a person with neon lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4QsMdMAGBzPfdMM6UpbMiP75xJmNJoZOH_nJSPWAL4zONud2Ebi8JThYxpfEP-z3wQrNc3MiFj3H-yY7r_AuEa4NIGCuJYEhnpqJ850_N7mYh5HgcWPHn9K7z7dyryLK_dVmqc-clL_2ptNl8-gV9dkQwHCa5uxQeFjoek2Hsq5KUhll5O8MKIqb0XQQOFM_J1oEaHa9svamr3RAaZorUrFxbPc6u1vXr0TJ09J_X_NMSGiTA1EphzjI2pAckXHZ9HZvMo0kpmBap"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent"></div>
+</div>
+<span class="text-2xl font-headline font-bold text-on-surface group-focus:text-[#FB7299] transition-colors">NeonCurator</span>
+</button>
+<!-- Profile 2: AnimeLover -->
+<button class="profile-focus group flex flex-col items-center gap-6 transition-all duration-300 focus:outline-none outline-none">
+<div class="relative w-48 h-48 rounded-full overflow-hidden border-4 border-transparent bg-surface-container-high shadow-2xl transition-all duration-300 group-focus:border-[#FB7299]">
+<img alt="User avatar for AnimeLover" class="w-full h-full object-cover grayscale group-focus:grayscale-0" data-alt="Stylized portrait of a young woman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFSttzprBA6OzYOCuVTh8L5JxMm3liMjLNH9BUTcBCN8oUQti4uj9otSSzHjqDursoOE-hUeMp7MAqM7vDz46Xtw10No6jAkRl20JmElx7aA1zeppEDf3yAG964oz5eSA-bVg-tC0Ha2itNjE_Jz3ZAOtcTlkoKs1cs3od0jNADkQcHY7cXI-yjhkjiXOay3tSxDyiO7SaVuwM1OCBHWWay_PT7q2aaAw0LGUr_vO7dgEvS8Fga0qArbOUSICOx7u1cgzz2Uf11WyL"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent"></div>
+</div>
+<span class="text-2xl font-headline font-bold text-on-surface group-focus:text-[#FB7299] transition-colors">AnimeLover</span>
+</button>
+<!-- Profile 3: Guest -->
+<button class="profile-focus group flex flex-col items-center gap-6 transition-all duration-300 focus:outline-none outline-none">
+<div class="relative w-48 h-48 rounded-full overflow-hidden border-4 border-transparent bg-surface-container-high shadow-2xl transition-all duration-300 group-focus:border-[#FB7299] flex items-center justify-center">
+<div class="w-full h-full bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-6xl text-outline opacity-40" data-icon="face">face</span>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent"></div>
+</div>
+<span class="text-2xl font-headline font-bold text-on-surface group-focus:text-[#FB7299] transition-colors">Guest</span>
+</button>
+<!-- Profile 4: Add Account -->
+<button class="profile-focus group flex flex-col items-center gap-6 transition-all duration-300 focus:outline-none outline-none">
+<div class="relative w-48 h-48 rounded-full flex items-center justify-center bg-surface-container-low border-2 border-dashed border-outline-variant transition-all duration-300 group-focus:border-[#FB7299] group-focus:bg-surface-container-high">
+<span class="material-symbols-outlined text-5xl text-on-surface-variant group-focus:text-[#FB7299]" data-icon="add">add</span>
+</div>
+<span class="text-2xl font-headline font-bold text-on-surface-variant group-focus:text-[#FB7299] transition-colors">Add Account</span>
+</button>
+</div>
+<!-- Bottom Assistance Hint (TV Specific) -->
+<div class="mt-24 flex items-center gap-12 py-6 px-10 bg-surface-container-low/50 backdrop-blur-md rounded-full border border-outline-variant/10">
+<div class="flex items-center gap-3">
+<div class="w-6 h-6 rounded-full bg-[#FB7299]/20 border border-[#FB7299] flex items-center justify-center">
+<span class="text-[10px] font-bold text-[#FB7299]">OK</span>
+</div>
+<span class="text-sm font-label text-on-surface-variant">Select Profile</span>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-6 h-6 rounded-full bg-on-surface/10 border border-outline flex items-center justify-center">
+<span class="material-symbols-outlined text-xs" data-icon="settings">settings</span>
+</div>
+<span class="text-sm font-label text-on-surface-variant">Manage Accounts</span>
+</div>
+</div>
+</main>
+<!-- Visual Polish: Soft Grain Overlay -->
+<div class="fixed inset-0 pointer-events-none opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] z-50"></div>
+</body></html>
