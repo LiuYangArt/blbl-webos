@@ -1,7 +1,6 @@
 import {
   fetchJson,
   getBiliApiUrl,
-  getBiliMediaUrl,
   getBiliPassportUrl,
   getBiliSearchUrl,
   unwrapData,
@@ -242,7 +241,7 @@ function getPlayCandidateUrls(segment: RawPlaySegment | undefined) {
   ]
     .filter((item): item is string => Boolean(item))
     .map(normalizeMediaUrl);
-  return Array.from(new Set(rawCandidates.map(getBiliMediaUrl)));
+  return Array.from(new Set(rawCandidates));
 }
 
 function getDashCandidateUrls(stream: RawDashStream | undefined) {
@@ -254,7 +253,7 @@ function getDashCandidateUrls(stream: RawDashStream | undefined) {
   ]
     .filter((item): item is string => Boolean(item))
     .map(normalizeMediaUrl);
-  return Array.from(new Set(rawCandidates.map(getBiliMediaUrl)));
+  return Array.from(new Set(rawCandidates));
 }
 
 function parseVideoCodec(codecs: string | undefined): ParsedVideoCodec {

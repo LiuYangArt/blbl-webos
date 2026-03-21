@@ -7,7 +7,7 @@ import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { PlayerControlBar } from '../../components/PlayerControlBar';
 import { SectionHeader } from '../../components/SectionHeader';
-import { readDeviceInfo } from '../../platform/webos';
+import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
 import { fetchPlaySource, fetchRelatedVideos } from '../../services/api/bilibili';
 import type { VideoCodecPreference } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
@@ -24,6 +24,7 @@ import {
   writePlayerCodecPreference,
   writePlayerCodecResult,
 } from './playerSettings';
+import { getPlayerTransportHint, resolvePlayerTransport } from './playerTransport';
 
 type PlayerPageProps = {
   bvid: string;
@@ -89,8 +90,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   }, [capability, codecMemory, codecPreference, play]);
 
   const currentAttempt = playbackPlan.attempts[activeAttemptIndex] ?? null;
-  const currentSourceUrl = currentAttempt?.source.candidateUrls[activeCandidateUrlIndex] ?? currentAttempt?.source.url ?? '';
+  const currentRawSourceUrl = currentAttempt?.source.candidateUrls[activeCandidateUrlIndex] ?? currentAttempt?.source.url ?? '';
+  const currentTransport = useMemo(() => resolvePlayerTransport(currentRawSourceUrl), [currentRawSourceUrl]);
+  const currentSourceUrl = currentTransport.url;
   const availableCodecs = play && currentAttempt ? getAvailableCodecsForQuality(play, currentAttempt.quality) : [];
+  const isWebOS = isWebOSAvailable();
+  const transportHint = getPlayerTransportHint(currentTransport.mode, isWebOS);
 
   usePageBackHandler(isSettingsOpen ? () => {
     setIsSettingsOpen(false);
@@ -235,7 +240,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       }
 
       const mediaError = video.error;
-      setPlaybackError(mediaError?.message || '当前视频暂时无法在此设备播放，可尝试切换 AVC 或降低清晰度');
+      setPlaybackError(
+        mediaError?.message
+          || (transportHint ?? '当前视频暂时无法在此设备播放，可尝试切换 AVC 或降低清晰度'),
+      );
     };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -260,10 +268,13 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     cid,
     currentAttempt,
     currentSourceUrl,
+    currentTransport.mode,
+    isWebOS,
     play,
     playbackPlan.attempts,
     setWatchProgress,
     title,
+    transportHint,
   ]);
 
   if (playerData.status !== 'success') {
@@ -399,10 +410,17 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                   <strong>{currentAttempt.isCompatible ? '兼容流 durl/mp4' : 'DASH'}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
+                  <span>媒体传输</span>
+                  <strong>{currentTransport.label}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
                   <span>可用编码</span>
                   <strong>{availableCodecs.length ? availableCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回'}</strong>
                 </div>
               </div>
+              {transportHint ? (
+                <p className="player-settings-drawer__hint">{transportHint}</p>
+              ) : null}
             </div>
 
             <div className="player-settings-drawer__section">
