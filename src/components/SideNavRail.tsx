@@ -29,6 +29,7 @@ export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailPr
               key={item.key}
               row={index}
               col={0}
+              focusGroup="nav"
               symbol={item.icon}
               label={item.label}
               iconSize="lg"

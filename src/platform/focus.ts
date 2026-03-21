@@ -1,10 +1,16 @@
 type Direction = 'left' | 'right' | 'up' | 'down';
+type FocusGroup = 'content' | 'nav' | string;
+type FocusFirstOptions = {
+  preferredGroup?: FocusGroup;
+  allowFallbackGroup?: boolean;
+};
 
 type FocusableElement = HTMLElement & {
   dataset: DOMStringMap & {
     focusRow?: string;
     focusCol?: string;
     focusDefault?: string;
+    focusGroup?: string;
   };
 };
 
@@ -23,13 +29,69 @@ function readPosition(element: FocusableElement) {
   };
 }
 
-export function focusFirst() {
+function readGroup(element: FocusableElement): FocusGroup {
+  return element.dataset.focusGroup ?? 'content';
+}
+
+function findFirstInGroup(elements: FocusableElement[], preferredGroup: FocusGroup) {
+  const groupElements = elements.filter((element) => readGroup(element) === preferredGroup);
+  const preferred = groupElements.find((element) => element.dataset.focusDefault === 'true');
+  return preferred ?? groupElements[0] ?? null;
+}
+
+function scoreAndSortCandidates(
+  elements: FocusableElement[],
+  current: { row: number; col: number },
+  direction: Direction,
+) {
+  return elements
+    .map((element) => ({
+      element,
+      next: readPosition(element),
+      score: scoreCandidate(direction, current, readPosition(element)),
+    }))
+    .filter((item) => Number.isFinite(item.score))
+    .sort((left, right) => {
+      const leftRowDiff = Math.abs(left.next.row - current.row);
+      const rightRowDiff = Math.abs(right.next.row - current.row);
+      const leftColDiff = Math.abs(left.next.col - current.col);
+      const rightColDiff = Math.abs(right.next.col - current.col);
+
+      if (direction === 'left' || direction === 'right') {
+        if (leftRowDiff !== rightRowDiff) {
+          return leftRowDiff - rightRowDiff;
+        }
+        if (leftColDiff !== rightColDiff) {
+          return leftColDiff - rightColDiff;
+        }
+      } else {
+        if (leftColDiff !== rightColDiff) {
+          return leftColDiff - rightColDiff;
+        }
+        if (leftRowDiff !== rightRowDiff) {
+          return leftRowDiff - rightRowDiff;
+        }
+      }
+
+      return left.score - right.score;
+    });
+}
+
+export function focusFirst({ preferredGroup = 'content', allowFallbackGroup = true }: FocusFirstOptions = {}) {
   const elements = getFocusableElements();
-  const preferred = elements.find((element) => element.dataset.focusDefault === 'true');
-  preferred?.focus();
-  if (!preferred) {
-    elements[0]?.focus();
+  const preferred = findFirstInGroup(elements, preferredGroup);
+  if (preferred) {
+    preferred.focus();
+    return preferred;
   }
+
+  if (!allowFallbackGroup) {
+    return null;
+  }
+
+  const fallback = elements.find((element) => element.dataset.focusDefault === 'true') ?? elements[0] ?? null;
+  fallback?.focus();
+  return fallback;
 }
 
 export function activateFocused() {
@@ -78,19 +140,35 @@ export function moveFocus(direction: Direction) {
     : null;
 
   if (!current || !current.matches(selector)) {
-    focusFirst();
+    focusFirst({
+      preferredGroup: direction === 'left' ? 'nav' : 'content',
+      allowFallbackGroup: direction === 'left',
+    });
     return;
   }
 
   const currentPosition = readPosition(current);
-  const next = elements
-    .filter((element) => element !== current)
-    .map((element) => ({
-      element,
-      score: scoreCandidate(direction, currentPosition, readPosition(element)),
-    }))
-    .filter((item) => Number.isFinite(item.score))
-    .sort((left, right) => left.score - right.score)[0]?.element;
+  const currentGroup = readGroup(current);
+  const siblings = elements.filter((element) => element !== current && readGroup(element) === currentGroup);
+  const nextInGroup = scoreAndSortCandidates(siblings, currentPosition, direction)[0]?.element;
+  if (nextInGroup) {
+    nextInGroup.focus();
+    return;
+  }
 
-  next?.focus();
+  const fallbackGroup = currentGroup === 'nav'
+    ? (direction === 'right' ? 'content' : null)
+    : (direction === 'left' ? 'nav' : null);
+
+  if (!fallbackGroup) {
+    return;
+  }
+
+  const nextCrossGroup = scoreAndSortCandidates(
+    elements.filter((element) => element !== current && readGroup(element) === fallbackGroup),
+    currentPosition,
+    direction,
+  )[0]?.element;
+
+  nextCrossGroup?.focus();
 }

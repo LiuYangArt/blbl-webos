@@ -5,31 +5,57 @@ type RemoteHandlers = {
   onBack: () => void;
 };
 
+const handledKeys = new Set<number>([
+  REMOTE_KEYS.LEFT,
+  REMOTE_KEYS.RIGHT,
+  REMOTE_KEYS.UP,
+  REMOTE_KEYS.DOWN,
+  REMOTE_KEYS.ENTER,
+  REMOTE_KEYS.BACK,
+]);
+const KEY_GUARD_MS = 140;
+
 export function attachRemoteControl({ onBack }: RemoteHandlers) {
+  const pressedKeys = new Set<number>();
+  const lastHandledAt = new Map<number, number>();
+
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (!handledKeys.has(event.keyCode)) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (event.repeat || pressedKeys.has(event.keyCode)) {
+      return;
+    }
+
+    const now = performance.now();
+    const lastHandled = lastHandledAt.get(event.keyCode) ?? -Infinity;
+    if (now - lastHandled < KEY_GUARD_MS) {
+      return;
+    }
+
+    pressedKeys.add(event.keyCode);
+    lastHandledAt.set(event.keyCode, now);
+
     switch (event.keyCode) {
       case REMOTE_KEYS.LEFT:
-        event.preventDefault();
         moveFocus('left');
         break;
       case REMOTE_KEYS.RIGHT:
-        event.preventDefault();
         moveFocus('right');
         break;
       case REMOTE_KEYS.UP:
-        event.preventDefault();
         moveFocus('up');
         break;
       case REMOTE_KEYS.DOWN:
-        event.preventDefault();
         moveFocus('down');
         break;
       case REMOTE_KEYS.ENTER:
-        event.preventDefault();
         activateFocused();
         break;
       case REMOTE_KEYS.BACK:
-        event.preventDefault();
         onBack();
         break;
       default:
@@ -37,9 +63,21 @@ export function attachRemoteControl({ onBack }: RemoteHandlers) {
     }
   };
 
+  const handleKeyUp = (event: KeyboardEvent) => {
+    pressedKeys.delete(event.keyCode);
+  };
+
+  const resetPressedKeys = () => {
+    pressedKeys.clear();
+  };
+
   window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keyup', handleKeyUp);
+  window.addEventListener('blur', resetPressedKeys);
 
   return () => {
     window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('keyup', handleKeyUp);
+    window.removeEventListener('blur', resetPressedKeys);
   };
 }

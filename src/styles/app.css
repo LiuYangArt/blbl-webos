@@ -122,6 +122,7 @@ button {
   display: grid;
   grid-template-columns: var(--tv-nav-collapsed-width) minmax(0, 1fr);
   min-height: 100vh;
+  align-items: start;
 }
 
 .tv-app-main {
@@ -163,7 +164,7 @@ button {
   flex-direction: column;
   gap: 24px;
   width: var(--tv-nav-collapsed-width);
-  min-height: 100vh;
+  height: 100vh;
   padding: 32px 14px 24px;
   overflow: hidden;
   position: sticky;
@@ -244,6 +245,8 @@ button {
 .side-nav-rail__list {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 16px;
 }
 
@@ -256,6 +259,8 @@ button {
   color: var(--tv-text-muted);
   text-align: left;
   transform-origin: left center;
+  background: transparent;
+  box-shadow: none;
 }
 
 .side-nav-item .tv-icon-button__content {
@@ -279,9 +284,9 @@ button {
 }
 
 .side-nav-item--active {
-  background: rgba(53, 52, 54, 0.9);
+  background: rgba(53, 52, 54, 0.66);
   color: var(--tv-text);
-  box-shadow: inset 0 0 0 1px rgba(251, 114, 153, 0.18);
+  box-shadow: none;
 }
 
 .side-nav-item--active .side-nav-item__icon {
@@ -291,6 +296,7 @@ button {
 
 .side-nav-rail__footer {
   margin-top: auto;
+  flex: 0 0 auto;
   min-height: 76px;
   padding: 14px 10px;
   border-radius: 24px;
@@ -316,8 +322,9 @@ button {
 
 .side-nav-item:focus-visible {
   transform: translateX(4px) scale(1.02);
-  background: rgba(53, 52, 54, 0.96);
+  background: rgba(53, 52, 54, 0.9);
   color: var(--tv-text);
+  box-shadow: none;
 }
 
 .side-nav-item:focus-visible .tv-icon-button__icon {
@@ -609,6 +616,12 @@ button {
   background: rgba(28, 27, 28, 0.52);
   backdrop-filter: var(--tv-blur);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.focus-button--nav {
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 .focus-button--ghost {

@@ -59,12 +59,48 @@ function AppContent() {
   }, [refreshAuth]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      focusFirst();
-    }, 0);
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLElement
+      && active.matches('[data-focus-row][data-focus-col]')
+      && active.dataset.focusGroup !== 'content'
+    ) {
+      active.blur();
+    }
+
+    const tryFocusContent = () => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement
+        && activeElement.matches('[data-focus-row][data-focus-col]')
+        && activeElement.dataset.focusGroup === 'content'
+      ) {
+        return true;
+      }
+
+      return Boolean(focusFirst({ preferredGroup: 'content', allowFallbackGroup: false }));
+    };
+
+    if (tryFocusContent()) {
+      return undefined;
+    }
+
+    const pageContent = document.querySelector('.tv-page-content');
+    const observer = new MutationObserver(() => {
+      if (tryFocusContent()) {
+        observer.disconnect();
+      }
+    });
+
+    if (pageContent) {
+      observer.observe(pageContent, {
+        childList: true,
+        subtree: true,
+      });
+    }
 
     return () => {
-      window.clearTimeout(timer);
+      observer.disconnect();
     };
   }, [focusKey]);
 
