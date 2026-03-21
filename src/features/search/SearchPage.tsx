@@ -6,6 +6,7 @@ import { usePageBackHandler } from '../../app/PageBackHandler';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection } from '../../platform/focus';
 import {
   fetchHotKeywords,
   fetchRecommendedVideos,
@@ -52,6 +53,7 @@ export function SearchPage({ onSubmit, onOpenDetail }: SearchPageProps) {
   }
 
   const { defaultWord, hotKeywords, preview } = discovery.data;
+  const historySectionId = searchHistory.length ? 'search-history' : 'search-preview-grid';
 
   const submitKeyword = (keyword: string) => {
     const normalized = keyword.trim();
@@ -64,7 +66,13 @@ export function SearchPage({ onSubmit, onOpenDetail }: SearchPageProps) {
 
   return (
     <main className="page-shell">
-      <section className="content-section search-hero">
+      <FocusSection
+        as="section"
+        id="search-actions"
+        group="content"
+        className="content-section search-hero"
+        leaveFor={{ left: '@side-nav', down: '@search-hot-keywords' }}
+      >
         <SectionHeader
           title="搜索内容"
           description="TV 首版把输入做成可聚焦入口，再配合热搜与历史降低输入成本。"
@@ -72,14 +80,21 @@ export function SearchPage({ onSubmit, onOpenDetail }: SearchPageProps) {
         />
 
         <div className="search-entry">
-          <FocusButton row={0} col={10} variant="primary" size="hero" defaultFocus onClick={() => setComposerOpen(true)}>
+          <FocusButton
+            variant="primary"
+            size="hero"
+            sectionId="search-actions"
+            focusId="search-open-composer"
+            defaultFocus
+            onClick={() => setComposerOpen(true)}
+          >
             输入关键词
           </FocusButton>
           <FocusButton
-            row={0}
-            col={11}
             variant="secondary"
             size="hero"
+            sectionId="search-actions"
+            focusId="search-default-word"
             onClick={() => submitKeyword(defaultWord.keyword)}
           >
             搜索默认词
@@ -112,37 +127,52 @@ export function SearchPage({ onSubmit, onOpenDetail }: SearchPageProps) {
             </div>
           </div>
         ) : null}
-      </section>
+      </FocusSection>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="search-hot-keywords"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav', up: '@search-actions', down: `@${historySectionId}` }}
+      >
         <SectionHeader title="热搜" description="点击热词直接进入结果页。" actionLabel={`${hotKeywords.length} 个热词`} />
         <div className="chip-grid">
           {hotKeywords.slice(0, 8).map((item, index) => (
             <FocusButton
               key={item.keyword}
-              row={1 + Math.floor(index / 4)}
-              col={10 + (index % 4)}
               variant="glass"
               className="detail-chip"
+              sectionId="search-hot-keywords"
+              focusId={`search-hot-${index}`}
               onClick={() => submitKeyword(item.keyword)}
             >
               {item.showName || item.keyword}
             </FocusButton>
           ))}
         </div>
-      </section>
+      </FocusSection>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="search-history"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        disabled={!searchHistory.length}
+        leaveFor={{ left: '@side-nav', up: '@search-hot-keywords', down: '@search-preview-grid' }}
+      >
         <SectionHeader title="搜索历史" description="搜索历史保存在本地，便于遥控器下快速复用。" actionLabel={`${searchHistory.length} 条`} />
         {searchHistory.length ? (
           <div className="chip-grid">
             {searchHistory.map((item, index) => (
               <FocusButton
                 key={item}
-                row={4 + Math.floor(index / 4)}
-                col={10 + (index % 4)}
                 variant="secondary"
                 className="detail-chip"
+                sectionId="search-history"
+                focusId={`search-history-${index}`}
                 onClick={() => submitKeyword(item)}
                 onContextMenu={(event) => {
                   event.preventDefault();
@@ -156,16 +186,29 @@ export function SearchPage({ onSubmit, onOpenDetail }: SearchPageProps) {
         ) : (
           <p className="page-helper-text">还没有历史搜索，先试试热搜或默认词。</p>
         )}
-      </section>
+      </FocusSection>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="search-preview-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav', up: searchHistory.length ? '@search-history' : '@search-hot-keywords' }}
+      >
         <SectionHeader title="直接开看" description="搜索页底部保留一组推荐内容，减少空场景。" actionLabel="推荐预览" />
         <div className="media-grid">
           {preview.map((item, index) => (
-            <MediaCard key={item.bvid} row={7 + Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />
+            <MediaCard
+              key={item.bvid}
+              sectionId="search-preview-grid"
+              focusId={`search-preview-${index}`}
+              item={item}
+              onClick={() => onOpenDetail(item)}
+            />
           ))}
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

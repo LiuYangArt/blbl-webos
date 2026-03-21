@@ -2,6 +2,8 @@ import { HeroBanner } from '../../components/HeroBanner';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
 import { useAsyncData } from '../../app/useAsyncData';
+import { FocusButton } from '../../components/FocusButton';
+import { FocusSection } from '../../platform/focus';
 import { fetchPopularVideos, fetchRecommendedVideos } from '../../services/api/bilibili';
 import type { DetailRoutePayload } from '../../app/routes';
 import { PageStatus } from '../shared/PageStatus';
@@ -42,37 +44,85 @@ export function HomePage({ onOpenDetail, onOpenSearch, onOpenHot }: HomePageProp
   return (
     <main className="page-shell">
       {hero ? (
-        <HeroBanner
-          item={hero}
-          primaryLabel="查看详情"
-          secondaryLabel="去搜索"
-          onPrimaryAction={() => onOpenDetail(hero)}
-          onSecondaryAction={onOpenSearch}
-        />
+        <FocusSection
+          as="section"
+          id="home-hero-actions"
+          group="content"
+          leaveFor={{ left: '@side-nav', down: '@home-recommend-grid' }}
+        >
+          <HeroBanner
+            item={hero}
+            sectionId="home-hero-actions"
+            primaryFocusId="home-hero-primary"
+            secondaryFocusId="home-hero-secondary"
+            primaryLabel="查看详情"
+            secondaryLabel="去搜索"
+            onPrimaryAction={() => onOpenDetail(hero)}
+            onSecondaryAction={onOpenSearch}
+          />
+        </FocusSection>
       ) : null}
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="home-recommend-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{
+          left: '@side-nav',
+          up: hero ? '@home-hero-actions' : undefined,
+          down: '@home-hot-grid',
+        }}
+      >
         <SectionHeader title="首页推荐" />
         <div className="media-grid">
           {recommendItems.map((item, index) => (
-            <MediaCard key={item.bvid} row={1 + Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />
+            <MediaCard
+              key={item.bvid}
+              sectionId="home-recommend-grid"
+              focusId={`home-recommend-${index}`}
+              defaultFocus={!hero && index === 0}
+              item={item}
+              onClick={() => onOpenDetail(item)}
+            />
           ))}
         </div>
-      </section>
+      </FocusSection>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="home-hot-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav', up: '@home-recommend-grid' }}
+      >
         <SectionHeader title="热门速看" />
         <div className="media-grid">
           {popular.slice(0, 6).map((item, index) => (
-            <MediaCard key={item.bvid} row={3 + Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />
+            <MediaCard
+              key={item.bvid}
+              sectionId="home-hot-grid"
+              focusId={`home-hot-${index}`}
+              item={item}
+              onClick={() => onOpenDetail(item)}
+            />
           ))}
         </div>
         <div className="page-inline-actions">
-          <button className="page-inline-link" type="button" onClick={onOpenHot}>
+          <FocusButton
+            variant="ghost"
+            size="sm"
+            className="page-inline-link"
+            sectionId="home-hot-grid"
+            focusId="home-hot-more"
+            onClick={onOpenHot}
+          >
             查看完整热门页
-          </button>
+          </FocusButton>
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

@@ -6,6 +6,7 @@ import { usePageBackHandler } from '../../app/PageBackHandler';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection } from '../../platform/focus';
 import { searchVideos } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
@@ -54,14 +55,27 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenDetail }: SearchRes
 
   return (
     <main className="page-shell">
-      <section className="content-section search-hero">
+      <FocusSection
+        as="section"
+        id="search-results-actions"
+        group="content"
+        className="content-section search-hero"
+        leaveFor={{ left: '@side-nav', down: '@search-results-grid' }}
+      >
         <SectionHeader
           title={`搜索结果：${keyword}`}
           description="当前首版优先支持视频结果，并保持统一卡片体系。"
           actionLabel={`${items.length} 条结果`}
         />
         <div className="search-entry">
-          <FocusButton row={0} col={10} variant="primary" size="hero" defaultFocus onClick={() => setComposerOpen(true)}>
+          <FocusButton
+            variant="primary"
+            size="hero"
+            sectionId="search-results-actions"
+            focusId="search-results-open-composer"
+            defaultFocus
+            onClick={() => setComposerOpen(true)}
+          >
             重新输入
           </FocusButton>
         </div>
@@ -91,20 +105,33 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenDetail }: SearchRes
             </div>
           </div>
         ) : null}
-      </section>
+      </FocusSection>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="search-results-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav', up: '@search-results-actions' }}
+      >
         <SectionHeader title="视频结果" description="点击任意结果继续进入详情页。" actionLabel="详情跳转" />
         {items.length ? (
           <div className="media-grid">
             {items.slice(0, 18).map((item, index) => (
-              <MediaCard key={item.bvid} row={1 + Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />
+              <MediaCard
+                key={item.bvid}
+                sectionId="search-results-grid"
+                focusId={`search-result-${index}`}
+                item={item}
+                onClick={() => onOpenDetail(item)}
+              />
             ))}
           </div>
         ) : (
           <p className="page-helper-text">没有找到结果，试试缩短关键词或换一个热搜词。</p>
         )}
-      </section>
+      </FocusSection>
     </main>
   );
 }

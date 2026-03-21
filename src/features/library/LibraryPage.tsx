@@ -2,6 +2,7 @@ import { useAppStore } from '../../app/AppStore';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection } from '../../platform/focus';
 import {
   fetchCurrentUserProfile,
   fetchFavoriteFolders,
@@ -52,16 +53,23 @@ export function LibraryPage(props: LibraryPageProps) {
     const items = ('items' in data ? data.items : undefined) ?? [];
     return (
       <main className="page-shell">
-        <section className="content-section">
+        <FocusSection
+          as="section"
+          id="later-list"
+          group="content"
+          enterTo="last-focused"
+          className="content-section"
+          leaveFor={{ left: '@side-nav' }}
+        >
           <SectionHeader title="稍后再看" description="首版先支持列表浏览和进入详情页，后续再补管理动作。" actionLabel={`${items.length} 条`} />
           <div className="list-panel">
             {items.map((item, index) => (
               <div key={item.bvid} className="list-panel__row">
                 <FocusButton
-                  row={index}
-                  col={10}
                   variant="card"
                   className="history-card"
+                  sectionId="later-list"
+                  focusId={`later-item-${index}`}
                   defaultFocus={index === 0}
                   onClick={() => props.onOpenDetail({ bvid: item.bvid, title: item.title })}
                 >
@@ -75,7 +83,7 @@ export function LibraryPage(props: LibraryPageProps) {
               </div>
             ))}
           </div>
-        </section>
+        </FocusSection>
       </main>
     );
   }
@@ -83,16 +91,23 @@ export function LibraryPage(props: LibraryPageProps) {
   const folders = ('folders' in data ? data.folders : undefined) ?? [];
   return (
     <main className="page-shell">
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="favorites-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav' }}
+      >
         <SectionHeader title="收藏夹" description="首版先做文件夹列表和详情播放入口，管理动作后置。" actionLabel={`${folders.length} 个`} />
         <div className="chip-grid">
           {folders.map((folder, index) => (
             <FocusButton
               key={folder.id}
-              row={Math.floor(index / 3)}
-              col={10 + (index % 3)}
               variant={index === 0 ? 'primary' : 'glass'}
               size="hero"
+              sectionId="favorites-grid"
+              focusId={`favorite-folder-${index}`}
               defaultFocus={index === 0}
               className="library-folder-card"
               onClick={() => props.onOpenFavorite(folder)}
@@ -100,9 +115,9 @@ export function LibraryPage(props: LibraryPageProps) {
               <span>{folder.title}</span>
               <small>{folder.mediaCount} 个视频</small>
             </FocusButton>
-          ))}
+            ))}
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

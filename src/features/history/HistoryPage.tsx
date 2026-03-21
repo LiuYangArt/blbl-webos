@@ -1,6 +1,7 @@
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection } from '../../platform/focus';
 import { fetchHistoryList } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
@@ -31,7 +32,14 @@ export function HistoryPage({ onLogin, onOpenDetail, onOpenPlayer }: HistoryPage
 
   return (
     <main className="page-shell">
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="history-list"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav' }}
+      >
         <SectionHeader
           title="观看历史"
           description="首版优先支持继续播放和回到详情页，删除动作会在后续补成完整服务化能力。"
@@ -41,10 +49,10 @@ export function HistoryPage({ onLogin, onOpenDetail, onOpenPlayer }: HistoryPage
           {items.map((item, index) => (
             <div key={item.kid} className="list-panel__row">
               <FocusButton
-                row={index}
-                col={10}
                 variant="card"
                 className="history-card"
+                sectionId="history-list"
+                focusId={`history-play-${index}`}
                 defaultFocus={index === 0}
                 onClick={() => onOpenPlayer({
                   bvid: item.bvid,
@@ -62,9 +70,9 @@ export function HistoryPage({ onLogin, onOpenDetail, onOpenPlayer }: HistoryPage
               </FocusButton>
 
               <FocusButton
-                row={index}
-                col={11}
                 variant="glass"
+                sectionId="history-list"
+                focusId={`history-detail-${index}`}
                 onClick={() => onOpenDetail({ bvid: item.bvid, title: item.title })}
               >
                 查看详情
@@ -72,7 +80,7 @@ export function HistoryPage({ onLogin, onOpenDetail, onOpenPlayer }: HistoryPage
             </div>
           ))}
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

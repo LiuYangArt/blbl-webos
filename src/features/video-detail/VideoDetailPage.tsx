@@ -5,6 +5,7 @@ import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection } from '../../platform/focus';
 import { fetchRelatedVideos, fetchVideoDetail } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
@@ -53,7 +54,13 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
 
   return (
     <main className="page-shell">
-      <section className="detail-hero">
+      <FocusSection
+        as="section"
+        id="detail-hero-actions"
+        group="content"
+        className="detail-hero"
+        leaveFor={{ left: '@side-nav', down: '@detail-episodes' }}
+      >
         <div className="detail-hero__cover">
           <img src={video.cover} alt="" referrerPolicy="no-referrer" />
         </div>
@@ -66,10 +73,10 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
           <p className="detail-hero__description">{video.description || '这个视频还没有公开简介。'}</p>
           <div className="detail-hero__actions">
             <FocusButton
-              row={0}
-              col={10}
               variant="primary"
               size="hero"
+              sectionId="detail-hero-actions"
+              focusId="detail-play-primary"
               defaultFocus
               onClick={() => onPlay({
                 cid: continueEntry?.cid ?? video.parts[0]?.cid ?? video.cid,
@@ -80,10 +87,10 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
               {continueEntry ? '继续播放' : '立即播放'}
             </FocusButton>
             <FocusButton
-              row={0}
-              col={11}
               variant="secondary"
               size="hero"
+              sectionId="detail-hero-actions"
+              focusId="detail-play-from-start"
               onClick={() => onPlay({
                 cid: video.parts[0]?.cid ?? video.cid,
                 title: video.title,
@@ -94,9 +101,16 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
             </FocusButton>
           </div>
         </div>
-      </section>
+      </FocusSection>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="detail-episodes"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav', up: '@detail-hero-actions', down: '@detail-related-grid' }}
+      >
         <SectionHeader
           title="分 P / 选集"
           description="首版详情页先支持基础分 P 切换，后续再扩展番剧和更多面板。"
@@ -106,10 +120,10 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
           {parts.map((part, index) => (
             <FocusButton
               key={part.cid}
-              row={1 + Math.floor(index / 4)}
-              col={10 + (index % 4)}
               variant={continueEntry?.cid === part.cid ? 'primary' : 'glass'}
               className="detail-chip"
+              sectionId="detail-episodes"
+              focusId={`detail-part-${index}`}
               onClick={() => onPlay({ cid: part.cid, title: video.title, part: part.part })}
             >
               <span>{part.part || `P${part.page}`}</span>
@@ -117,9 +131,16 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
             </FocusButton>
           ))}
         </div>
-      </section>
+      </FocusSection>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="detail-related-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav', up: '@detail-episodes' }}
+      >
         <SectionHeader
           title="相关推荐"
           description="从详情继续跳详情，保持首页 -> 详情 -> 播放 的主链路稳定。"
@@ -127,10 +148,16 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
         />
         <div className="media-grid">
           {related.slice(0, 6).map((item, index) => (
-            <MediaCard key={item.bvid} row={4 + Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />
+            <MediaCard
+              key={item.bvid}
+              sectionId="detail-related-grid"
+              focusId={`detail-related-${index}`}
+              item={item}
+              onClick={() => onOpenDetail(item)}
+            />
           ))}
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

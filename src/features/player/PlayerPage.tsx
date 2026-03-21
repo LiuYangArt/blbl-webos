@@ -7,6 +7,7 @@ import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { PlayerControlBar } from '../../components/PlayerControlBar';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection, captureFocus, releaseFocus } from '../../platform/focus';
 import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
 import { fetchPlaySource, fetchRelatedVideos } from '../../services/api/bilibili';
 import type { PlayAudioStream, PlaySource, VideoCodecPreference } from '../../services/api/types';
@@ -126,7 +127,6 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   const currentMimeType = currentAttempt?.videoStream?.mimeType ?? 'video/mp4';
   usePageBackHandler(isSettingsOpen ? () => {
     setIsSettingsOpen(false);
-    queueFocus('[data-focus-row="0"][data-focus-col="15"]');
     return true;
   } : null);
 
@@ -151,10 +151,17 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   }, [bvid, cid, playbackPlan.warning, currentAttempt?.id]);
 
   useEffect(() => {
-    if (!isSettingsOpen) {
-      return;
+    if (isSettingsOpen) {
+      captureFocus({
+        sectionId: 'player-settings-drawer',
+        restoreTarget: 'player-open-settings',
+      });
+      return () => {
+        releaseFocus('player-settings-drawer');
+      };
     }
-    queueFocus('[data-focus-row="2"][data-focus-col="20"]');
+
+    releaseFocus('player-settings-drawer');
   }, [isSettingsOpen]);
 
   useEffect(() => {
@@ -470,7 +477,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
 
   return (
     <main className="page-shell">
-      <section className="player-hero">
+      <FocusSection
+        as="section"
+        id="player-shell"
+        group="content"
+        className="player-hero"
+      >
         <div className="player-hero__video">
           <video
             ref={videoRef}
@@ -510,6 +522,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
           </div>
 
           <PlayerControlBar
+            sectionId="player-controls"
             isPlaying={isPlaying}
             onBack={onBack}
             onReplay={() => seekVideo(videoRef.current, -10)}
@@ -527,7 +540,13 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
         </div>
 
         {isSettingsOpen ? (
-          <aside className="player-settings-drawer">
+          <FocusSection
+            as="aside"
+            id="player-settings-drawer"
+            group="overlay"
+            enterTo="default-element"
+            className="player-settings-drawer"
+          >
             <div className="player-settings-drawer__header">
               <span className="player-hero__badge">播放设置</span>
               <h2>编码策略</h2>
@@ -540,12 +559,13 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                 {CODEC_OPTIONS.map((option, index) => (
                   <FocusButton
                     key={option}
-                    row={2}
-                    col={20 + index}
                     className={!selectableCodecs.has(option) ? 'focus-button--disabled' : undefined}
                     disabled={!selectableCodecs.has(option)}
                     variant={codecPreference === option ? 'primary' : 'ghost'}
                     size="sm"
+                    sectionId="player-settings-drawer"
+                    focusId={`player-codec-${option}`}
+                    defaultFocus={(codecPreference === option && selectableCodecs.has(option)) || (index === 0 && !selectableCodecs.has(codecPreference))}
                     onClick={() => {
                       const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
                       resumeProgressRef.current = currentTime;
@@ -650,10 +670,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
               <span className="player-settings-drawer__label">快捷操作</span>
               <div className="player-settings-drawer__actions">
                 <FocusButton
-                  row={3}
-                  col={20}
                   variant="glass"
                   size="sm"
+                  sectionId="player-settings-drawer"
+                  focusId="player-reload-current-strategy"
                   onClick={() => {
                     const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
                     resumeProgressRef.current = currentTime;
@@ -665,10 +685,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                   重新加载当前策略
                 </FocusButton>
                 <FocusButton
-                  row={3}
-                  col={21}
                   variant="ghost"
                   size="sm"
+                  sectionId="player-settings-drawer"
+                  focusId="player-reset-auto-strategy"
                   onClick={() => {
                     const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
                     resumeProgressRef.current = currentTime;
@@ -690,11 +710,18 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                 {playbackPlan.attempts.map((attempt) => `${attempt.qualityLabel} ${attempt.codecLabel}`).join(' -> ')}
               </p>
             </div>
-          </aside>
+          </FocusSection>
         ) : null}
-      </section>
+      </FocusSection>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="player-related-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav', up: '@player-controls' }}
+      >
         <SectionHeader
           title="相关推荐"
           description="播放器已经切到电视端自包含播放链路，下面继续验证页面跳转与返回。"
@@ -702,19 +729,18 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
         />
         <div className="media-grid">
           {related.slice(0, 6).map((item, index) => (
-            <MediaCard key={item.bvid} row={1 + Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />
+            <MediaCard
+              key={item.bvid}
+              sectionId="player-related-grid"
+              focusId={`player-related-${index}`}
+              item={item}
+              onClick={() => onOpenDetail(item)}
+            />
           ))}
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
-}
-
-function queueFocus(selector: string): void {
-  window.setTimeout(() => {
-    const element = document.querySelector<HTMLElement>(selector);
-    element?.focus();
-  }, 0);
 }
 
 function getDurationSeconds(video: HTMLVideoElement, durationMs: number): number {

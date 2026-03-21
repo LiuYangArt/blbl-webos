@@ -1,6 +1,7 @@
 import { useAsyncData } from '../../app/useAsyncData';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection } from '../../platform/focus';
 import { fetchFavoriteFolderDetail } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
@@ -31,14 +32,21 @@ export function FavoriteDetailPage({ mediaId, title, onOpenDetail }: FavoriteDet
 
   return (
     <main className="page-shell">
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="favorite-detail-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav' }}
+      >
         <SectionHeader title={title} description="先支持查看和播放，复杂管理动作后置。" actionLabel={`${items.length} 个视频`} />
         <div className="media-grid">
           {items.map((item, index) => (
             <MediaCard
               key={`${item.bvid}:${item.cid}`}
-              row={Math.floor(index / 3)}
-              col={10 + (index % 3)}
+              sectionId="favorite-detail-grid"
+              focusId={`favorite-detail-${index}`}
               item={{
                 aid: item.aid,
                 bvid: item.bvid,
@@ -55,7 +63,7 @@ export function FavoriteDetailPage({ mediaId, title, onOpenDetail }: FavoriteDet
             />
           ))}
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

@@ -24,6 +24,20 @@ export function attachRemoteControl({ onBack }: RemoteHandlers) {
       return;
     }
 
+    const activeElement = document.activeElement;
+    if (
+      event.keyCode !== REMOTE_KEYS.BACK
+      && activeElement instanceof HTMLElement
+      && (
+        activeElement instanceof HTMLInputElement
+        || activeElement instanceof HTMLTextAreaElement
+        || activeElement instanceof HTMLSelectElement
+        || activeElement.isContentEditable
+      )
+    ) {
+      return;
+    }
+
     event.preventDefault();
 
     if (event.repeat || pressedKeys.has(event.keyCode)) {

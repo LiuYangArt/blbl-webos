@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { FocusButton } from '../../components/FocusButton';
+import { FocusSection } from '../../platform/focus';
 import { createWebQrLogin, pollWebQrLogin } from '../../services/api/bilibili';
 import { useAppStore } from '../../app/AppStore';
 import { PageStatus } from '../shared/PageStatus';
@@ -119,7 +120,13 @@ export function LoginPage({ onCompleted }: LoginPageProps) {
 
   return (
     <main className="page-shell">
-      <section className="content-section login-panel">
+      <FocusSection
+        as="section"
+        id="login-actions"
+        group="content"
+        className="content-section login-panel"
+        leaveFor={{ left: '@side-nav' }}
+      >
         <div className="login-panel__content">
           <div className="login-panel__qr">
             <img src={state.qrUrl} alt="哔哩哔哩扫码登录二维码" />
@@ -134,13 +141,20 @@ export function LoginPage({ onCompleted }: LoginPageProps) {
               <li>确认后会自动回到个人中心，无需手动刷新。</li>
             </ol>
             <div className="login-panel__actions">
-              <FocusButton row={0} col={10} variant="primary" size="hero" defaultFocus onClick={() => window.open(state.loginUrl, '_blank', 'noopener,noreferrer')}>
+              <FocusButton
+                variant="primary"
+                size="hero"
+                sectionId="login-actions"
+                focusId="login-open-web"
+                defaultFocus
+                onClick={() => window.open(state.loginUrl, '_blank', 'noopener,noreferrer')}
+              >
                 在新窗口打开登录页
               </FocusButton>
             </div>
           </div>
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

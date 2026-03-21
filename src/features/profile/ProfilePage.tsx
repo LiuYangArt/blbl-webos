@@ -1,6 +1,7 @@
 import { useAppStore } from '../../app/AppStore';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection } from '../../platform/focus';
 import { PageStatus } from '../shared/PageStatus';
 
 type ProfilePageProps = {
@@ -51,20 +52,45 @@ export function ProfilePage({
         </div>
       </section>
 
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="profile-actions"
+        group="content"
+        className="content-section"
+        leaveFor={{ left: '@side-nav' }}
+      >
         <SectionHeader title="你的内容" description="先保留 TV 端最常用的内容入口，避免把“我的”页做成移动端大杂烩。" />
         <div className="chip-grid">
-          <FocusButton row={0} col={10} variant="primary" size="hero" defaultFocus onClick={onOpenHistory}>
+          <FocusButton
+            variant="primary"
+            size="hero"
+            sectionId="profile-actions"
+            focusId="profile-history"
+            defaultFocus
+            onClick={onOpenHistory}
+          >
             观看历史
           </FocusButton>
-          <FocusButton row={0} col={11} variant="secondary" size="hero" onClick={onOpenLater}>
+          <FocusButton
+            variant="secondary"
+            size="hero"
+            sectionId="profile-actions"
+            focusId="profile-later"
+            onClick={onOpenLater}
+          >
             稍后再看
           </FocusButton>
-          <FocusButton row={0} col={12} variant="secondary" size="hero" onClick={onOpenFavorites}>
+          <FocusButton
+            variant="secondary"
+            size="hero"
+            sectionId="profile-actions"
+            focusId="profile-favorites"
+            onClick={onOpenFavorites}
+          >
             收藏夹
           </FocusButton>
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

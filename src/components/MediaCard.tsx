@@ -2,19 +2,39 @@ import type { VideoCardItem } from '../services/api/types';
 import { FocusButton } from './FocusButton';
 
 type MediaCardProps = {
-  row: number;
-  col: number;
   item: VideoCardItem;
   onClick: () => void;
+  focusId?: string;
+  sectionId?: string;
+  defaultFocus?: boolean;
+  focusLeft?: string;
+  focusRight?: string;
+  focusUp?: string;
+  focusDown?: string;
 };
 
-export function MediaCard({ row, col, item, onClick }: MediaCardProps) {
+export function MediaCard({
+  item,
+  onClick,
+  focusId,
+  sectionId,
+  defaultFocus = false,
+  focusLeft,
+  focusRight,
+  focusUp,
+  focusDown,
+}: MediaCardProps) {
   return (
     <FocusButton
-      row={row}
-      col={col}
       variant="card"
       className="media-card"
+      focusId={focusId}
+      sectionId={sectionId}
+      defaultFocus={defaultFocus}
+      focusLeft={focusLeft}
+      focusRight={focusRight}
+      focusUp={focusUp}
+      focusDown={focusDown}
       onClick={onClick}
     >
       <div className="media-card__poster" aria-hidden="true">

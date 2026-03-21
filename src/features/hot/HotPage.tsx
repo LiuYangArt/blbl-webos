@@ -2,6 +2,7 @@ import type { DetailRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
+import { FocusSection } from '../../platform/focus';
 import { fetchPopularVideos } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
@@ -30,7 +31,14 @@ export function HotPage({ onOpenDetail }: HotPageProps) {
 
   return (
     <main className="page-shell">
-      <section className="content-section">
+      <FocusSection
+        as="section"
+        id="hot-grid"
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={{ left: '@side-nav' }}
+      >
         <SectionHeader
           title="热门精选"
           description="首版优先接入稳定公开接口，为 TV 端补上首页之外的主动浏览入口。"
@@ -38,10 +46,16 @@ export function HotPage({ onOpenDetail }: HotPageProps) {
         />
         <div className="media-grid">
           {items.map((item, index) => (
-            <MediaCard key={item.bvid} row={Math.floor(index / 3)} col={10 + (index % 3)} item={item} onClick={() => onOpenDetail(item)} />
+            <MediaCard
+              key={item.bvid}
+              sectionId="hot-grid"
+              focusId={`hot-item-${index}`}
+              item={item}
+              onClick={() => onOpenDetail(item)}
+            />
           ))}
         </div>
-      </section>
+      </FocusSection>
     </main>
   );
 }

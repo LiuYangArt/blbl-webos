@@ -64,6 +64,16 @@
 - 不允许出现“视觉像按钮，但无法聚焦”的主操作。
 - 返回键行为统一遵循：`弹窗 > 面板 > 页面 > 退出应用`。
 - 搜索框、筛选项、播放器控制项都必须先设计焦点流，再设计样式。
+- 焦点基础设施统一采用 `Section + Spatial Navigation` 模型，不再新增 `row / col` 坐标式焦点规则。
+- 页面只声明焦点结构，不在业务组件里手写“按左跳到谁、按下猜到谁”的运算逻辑。
+- 每个页面进入时，默认焦点必须先落在主内容区 section，而不是左侧导航。
+- 左侧导航不能主动抢焦点；只有内容区 section 显式声明 `leaveFor.left = '@side-nav'` 时，才允许切回导航。
+- Hero、按钮组、chip 网格、卡片网格、播放器控制条、抽屉和弹窗都必须先拆成 section，再定义 section 间关系。
+- section 必须明确 `defaultElement` 或 `defaultFocus`；需要恢复上下文的列表区默认使用 `enterTo = 'last-focused'`。
+- section 内优先做“当前区域内的稳定 4-way 导航”；跨 section 只能依赖显式 `leaveFor`，不能靠几何距离误判。
+- 抽屉、弹窗、输入面板这类临时层一旦打开，必须接管焦点；关闭后必须恢复到触发它的元素。
+- 焦点邻接关系优先通过统一属性声明，例如 `focusId`、`sectionId`、`focusLeft/right/up/down`，禁止散落使用临时 DOM selector 回焦点。
+- Pointer 只做补充，不得成为任何主操作的唯一可达方式。
 
 ## 5. 组件复用规则
 
@@ -71,6 +81,7 @@
 
 - `AppShell`
 - `SideNavRail`
+- `FocusSection`
 - `FocusButton`
 - `TvIconButton`
 - `HeroBanner`
@@ -111,7 +122,7 @@
 1. 先对照 `ui_ref/` 和本规范确认页面是否延续同一视觉语言。
 2. 先判断能否复用现有组件和 token。
 3. 如果需要新组件，先抽组件再接页面。
-4. 改交互时同步检查焦点流和返回链路。
+4. 改交互时同步检查 section 划分、焦点流、抽屉接管与返回链路。
 5. 完成后至少执行 `npm run lint`、`npm run typecheck`、`npm run build`。
 6. 如果改动了 App 图标或 `appinfo.json` 资源路径，还要执行 `npm run build:webos` 确认打包产物中的图标文件正确。
 7. 如果新增或替换了应用内图标，必须同步更新 `src/app/iconRegistry.ts`，不能只在组件里临时写一个字符串。
@@ -125,3 +136,5 @@
 - 禁止把临时生成图、未裁切主稿或非标准尺寸图片直接当作 webOS 应用图标入库。
 - 禁止在业务组件里散落定义一套页面专属 token 来绕过全局样式体系。
 - 禁止为了“先跑起来”牺牲主操作的可聚焦性。
+- 禁止继续新增 `data-focus-row / data-focus-col` 一类坐标驱动焦点实现。
+- 禁止用硬编码 DOM selector 在页面里做抽屉关闭回焦点，必须走统一的焦点接管与恢复机制。

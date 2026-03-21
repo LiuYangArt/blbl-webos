@@ -7,6 +7,9 @@ type HeroBannerProps = {
   onSecondaryAction: () => void;
   primaryLabel: string;
   secondaryLabel: string;
+  sectionId: string;
+  primaryFocusId: string;
+  secondaryFocusId: string;
 };
 
 export function HeroBanner({
@@ -15,6 +18,9 @@ export function HeroBanner({
   onSecondaryAction,
   primaryLabel,
   secondaryLabel,
+  sectionId,
+  primaryFocusId,
+  secondaryFocusId,
 }: HeroBannerProps) {
   return (
     <section className="hero-banner">
@@ -33,10 +39,23 @@ export function HeroBanner({
           <span>{formatPlayCount(item.playCount)} 播放</span>
         </div>
         <div className="hero-banner__actions">
-          <FocusButton row={0} col={10} variant="primary" size="hero" defaultFocus onClick={onPrimaryAction}>
+          <FocusButton
+            variant="primary"
+            size="hero"
+            sectionId={sectionId}
+            focusId={primaryFocusId}
+            defaultFocus
+            onClick={onPrimaryAction}
+          >
             {primaryLabel}
           </FocusButton>
-          <FocusButton row={0} col={11} variant="secondary" size="hero" onClick={onSecondaryAction}>
+          <FocusButton
+            variant="secondary"
+            size="hero"
+            sectionId={sectionId}
+            focusId={secondaryFocusId}
+            onClick={onSecondaryAction}
+          >
             {secondaryLabel}
           </FocusButton>
         </div>

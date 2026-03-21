@@ -16,7 +16,7 @@ import { ProfilePage } from './features/profile/ProfilePage';
 import { SearchPage } from './features/search/SearchPage';
 import { SearchResultsPage } from './features/search/SearchResultsPage';
 import { VideoDetailPage } from './features/video-detail/VideoDetailPage';
-import { focusFirst } from './platform/focus';
+import { focusFirst, isFocusableElement, readFocusGroup } from './platform/focus';
 import { attachRemoteControl } from './platform/remote';
 import { platformBack } from './platform/webos';
 
@@ -62,8 +62,8 @@ function AppContent() {
     const active = document.activeElement;
     if (
       active instanceof HTMLElement
-      && active.matches('[data-focus-row][data-focus-col]')
-      && active.dataset.focusGroup !== 'content'
+      && isFocusableElement(active)
+      && readFocusGroup(active) !== 'content'
     ) {
       active.blur();
     }
@@ -72,8 +72,8 @@ function AppContent() {
       const activeElement = document.activeElement;
       if (
         activeElement instanceof HTMLElement
-        && activeElement.matches('[data-focus-row][data-focus-col]')
-        && activeElement.dataset.focusGroup === 'content'
+        && isFocusableElement(activeElement)
+        && readFocusGroup(activeElement) === 'content'
       ) {
         return true;
       }
