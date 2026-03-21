@@ -70,11 +70,57 @@ export type HotKeyword = {
   icon?: string;
 };
 
-export type PlaySource = {
+export type VideoCodecPreference = 'auto' | 'avc' | 'hevc' | 'av1';
+
+export type ParsedVideoCodec = 'avc' | 'hevc' | 'av1' | 'unknown';
+
+export type PlayVideoStream = {
+  id: number;
+  quality: number;
+  qualityLabel: string;
+  codec: ParsedVideoCodec;
+  codecs: string;
+  url: string;
+  backupUrls: string[];
+  width: number;
+  height: number;
+  bandwidth: number;
+  frameRate: number;
+};
+
+export type PlayAudioStream = {
+  id: number;
+  url: string;
+  backupUrls: string[];
+  bandwidth: number;
+  codecs: string;
+};
+
+export type PlayQualityOption = {
+  qn: number;
+  label: string;
+  limitReason: number;
+  codecs: ParsedVideoCodec[];
+};
+
+export type PlayCompatibleSource = {
+  quality: number;
+  qualityLabel: string;
+  format: string;
   url: string;
   candidateUrls: string[];
+};
+
+export type PlaySource = {
+  mode: 'dash' | 'durl';
   qualityLabel: string;
+  currentQuality: number;
   durationMs: number;
+  qualities: PlayQualityOption[];
+  videoStreams: PlayVideoStream[];
+  audioStreams: PlayAudioStream[];
+  compatibleSources: PlayCompatibleSource[];
+  candidateUrls: string[];
 };
 
 export type UserProfile = {

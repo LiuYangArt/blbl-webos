@@ -7,6 +7,18 @@ export const REMOTE_KEYS = {
   BACK: 461,
 } as const;
 
+export type WebOsDeviceInfo = {
+  modelName?: string;
+  model_name?: string;
+  sdkVersion?: string;
+  sdk_version?: string;
+  platformVersion?: string;
+  platform_version?: string;
+  screenWidth?: number;
+  screenHeight?: number;
+  [key: string]: unknown;
+};
+
 export function isWebOSAvailable() {
   return typeof window !== 'undefined' && typeof window.webOS !== 'undefined';
 }
@@ -32,14 +44,14 @@ export function getKeyboardVisible() {
 }
 
 export function readDeviceInfo() {
-  return new Promise<Record<string, unknown> | null>((resolve) => {
+  return new Promise<WebOsDeviceInfo | null>((resolve) => {
     if (!window.webOS?.deviceInfo) {
       resolve(null);
       return;
     }
 
     window.webOS.deviceInfo((device) => {
-      resolve(device);
+      resolve(device as WebOsDeviceInfo);
     });
   });
 }

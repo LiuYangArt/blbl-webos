@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
+import legacy from '@vitejs/plugin-legacy';
 
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
 const BILI_MEDIA_PREFIX = '/__bili_media/';
@@ -107,7 +108,15 @@ const biliMediaPlugin: Plugin = {
 
 export default defineConfig({
   base: './',
-  plugins: [react(), biliMediaPlugin],
+  plugins: [
+    react(),
+    legacy({
+      targets: ['chrome >= 79'],
+      renderModernChunks: false,
+      modernPolyfills: false,
+    }),
+    biliMediaPlugin,
+  ],
   server: {
     proxy,
   },
@@ -117,7 +126,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    target: WEBOS_LEGACY_BUILD_TARGET,
     cssTarget: WEBOS_LEGACY_BUILD_TARGET,
   },
 });

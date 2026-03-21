@@ -10,7 +10,15 @@ declare global {
       keyboard?: {
         isShowing?: () => boolean;
       };
-      deviceInfo?: (callback: (device: Record<string, unknown>) => void) => void;
+      deviceInfo?: (callback: (device: {
+        modelName?: string;
+        model_name?: string;
+        sdkVersion?: string;
+        sdk_version?: string;
+        platformVersion?: string;
+        platform_version?: string;
+        [key: string]: unknown;
+      }) => void) => void;
       fetchAppRootPath?: () => string;
     };
   }

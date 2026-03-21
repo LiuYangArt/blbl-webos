@@ -1,5 +1,44 @@
 # webOS 播放器编码自适配与手动切换落地方案
 
+## 0. 2026-03-21 补充结论
+
+本计划在第一轮落地后，已经完成：
+
+- DASH 元信息获取
+- codec 策略与手动切换
+- 播放器设置入口
+
+但在 `webOS TV 6.0 Simulator` 中继续出现 `MEDIA_ELEMENT_ERROR: Format error`。
+
+补充排障结论见：
+
+- [2026-03-21-webos-simulator-format-error-postmortem.md](/F:/CodeProjects/bilibili_webos/docs/postmortems/2026-03-21-webos-simulator-format-error-postmortem.md)
+
+当前已确认：
+
+- 问题不只在 codec 选择
+- 还在于 B 站媒体直链对 `Referer/User-Agent` 的要求，以及当前 HTML5 `<video>` 执行链路本身的限制
+
+因此本计划后续实施优先级已补充为：
+
+1. 保持当前 codec 策略与播放器 UI 的稳定基线
+2. 暂停 `webOS JS Service + 本地媒体 relay` 原型
+3. 再评估下一条播放链路方案
+
+同日晚些时候，失败原型已经从仓库代码中撤掉，当前稳定基线重新验证通过：
+
+- `npm run typecheck`
+- `npm run lint`
+- `npm run build`
+- `npm run build:webos`
+- `npm run webos:simulator`
+
+这意味着：
+
+- 当前代码已回到“可以正常构建、可以重新启动 Simulator”的状态
+- 但这不等于“Simulator 已具备 B 站视频可播能力”
+- 后续真机联调应先确认 UI 正常显示，再继续验证播放链路
+
 ## 1. 目标
 
 本方案用于把当前播放器从“单条直链 MP4 直接喂给 `<video>`”升级为“面向 LG webOS TV 的可用编码自动适配播放器”。

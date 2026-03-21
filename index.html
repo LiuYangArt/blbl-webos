@@ -5,6 +5,92 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b1020" />
     <title>Bilibili WebOS</title>
+    <script>
+      (function () {
+        var state = {
+          stage: 'html-loaded',
+          detail: 'HTML 已加载，等待前端模块启动',
+          mounted: false,
+        };
+
+        function ensurePanel() {
+          var panel = document.getElementById('boot-diagnostic');
+          if (panel) {
+            return panel;
+          }
+
+          panel = document.createElement('div');
+          panel.id = 'boot-diagnostic';
+          panel.setAttribute('role', 'status');
+          panel.style.position = 'fixed';
+          panel.style.left = '48px';
+          panel.style.top = '48px';
+          panel.style.zIndex = '2147483647';
+          panel.style.maxWidth = '960px';
+          panel.style.padding = '20px 24px';
+          panel.style.borderRadius = '20px';
+          panel.style.background = 'rgba(7, 10, 16, 0.88)';
+          panel.style.color = '#f5f7fb';
+          panel.style.border = '1px solid rgba(255,255,255,0.14)';
+          panel.style.boxShadow = '0 20px 60px rgba(0,0,0,0.35)';
+          panel.style.fontFamily = '"Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
+          panel.style.fontSize = '26px';
+          panel.style.lineHeight = '1.45';
+          panel.style.whiteSpace = 'pre-wrap';
+          document.body.appendChild(panel);
+          return panel;
+        }
+
+        function render() {
+          if (state.mounted) {
+            var mountedPanel = document.getElementById('boot-diagnostic');
+            if (mountedPanel) {
+              mountedPanel.style.display = 'none';
+            }
+            return;
+          }
+
+          var panel = ensurePanel();
+          panel.textContent = '应用启动诊断\n阶段: ' + state.stage + '\n详情: ' + state.detail;
+        }
+
+        window.__biliBootDiag = {
+          update: function (stage, detail) {
+            state.stage = stage || state.stage;
+            state.detail = detail || state.detail;
+            render();
+          },
+          mounted: function () {
+            state.mounted = true;
+            render();
+          },
+        };
+
+        window.addEventListener('error', function (event) {
+          var message = event && event.message ? event.message : '未知脚本错误';
+          var filename = event && event.filename ? event.filename : '';
+          window.__biliBootDiag.update('window-error', message + (filename ? ' @ ' + filename : ''));
+        });
+
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason;
+          var message = reason && reason.message ? reason.message : String(reason || '未知 Promise 错误');
+          window.__biliBootDiag.update('promise-rejection', message);
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+          render();
+          window.setTimeout(function () {
+            if (!state.mounted) {
+              window.__biliBootDiag.update(
+                'startup-timeout',
+                '前端模块没有在预期时间内完成挂载。通常代表模块脚本未执行，或执行早期就报错了。'
+              );
+            }
+          }, 4000);
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

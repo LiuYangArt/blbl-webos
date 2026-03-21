@@ -8,6 +8,7 @@ type PlayerControlBarProps = {
   onTogglePlay: () => void;
   onForward: () => void;
   onRefresh: () => void;
+  onOpenSettings: () => void;
 };
 
 export function PlayerControlBar({
@@ -17,12 +18,14 @@ export function PlayerControlBar({
   onTogglePlay,
   onForward,
   onRefresh,
+  onOpenSettings,
 }: PlayerControlBarProps) {
   const secondaryActions = [
     { col: 10, symbol: TV_ICONS.playerBack, label: '返回', onClick: onBack },
     { col: 11, symbol: TV_ICONS.playerReplay10, label: '-10 秒', onClick: onReplay },
     { col: 13, symbol: TV_ICONS.playerForward10, label: '+10 秒', onClick: onForward },
     { col: 14, symbol: TV_ICONS.playerRefresh, label: '重载播放源', onClick: onRefresh },
+    { col: 15, symbol: TV_ICONS.playerSettings, label: '设置', onClick: onOpenSettings },
   ] as const;
 
   return (

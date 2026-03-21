@@ -14,7 +14,12 @@ import type {
   HistoryItem,
   HotKeyword,
   LaterItem,
+  ParsedVideoCodec,
+  PlayAudioStream,
+  PlayCompatibleSource,
+  PlayQualityOption,
   PlaySource,
+  PlayVideoStream,
   SearchDefaultWord,
   UserProfile,
   VideoCardItem,
@@ -98,6 +103,19 @@ type RawPlaySegment = {
   backup_url?: string[];
 };
 
+type RawDashStream = {
+  id?: Numeric;
+  baseUrl?: string;
+  base_url?: string;
+  backupUrl?: string[];
+  backup_url?: string[];
+  codecs?: string;
+  width?: Numeric;
+  height?: Numeric;
+  bandwidth?: Numeric;
+  frame_rate?: string;
+};
+
 type RawPlaySource = {
   durl?: RawPlaySegment[];
   accept_quality?: number[];
@@ -105,6 +123,19 @@ type RawPlaySource = {
   accept_description?: string[];
   format?: string;
   timelength?: Numeric;
+  support_formats?: Array<{
+    quality?: Numeric;
+    new_description?: string;
+    display_desc?: string;
+    format?: string;
+    codecs?: string[];
+    can_watch_qn_reason?: Numeric;
+    limit_watch_reason?: Numeric;
+  }>;
+  dash?: {
+    video?: RawDashStream[];
+    audio?: RawDashStream[];
+  };
 };
 
 type RawNavData = {
@@ -212,6 +243,103 @@ function getPlayCandidateUrls(segment: RawPlaySegment | undefined) {
     .filter((item): item is string => Boolean(item))
     .map(normalizeMediaUrl);
   return Array.from(new Set(rawCandidates.map(getBiliMediaUrl)));
+}
+
+function getDashCandidateUrls(stream: RawDashStream | undefined) {
+  const rawCandidates = [
+    stream?.baseUrl,
+    stream?.base_url,
+    ...(stream?.backupUrl ?? []),
+    ...(stream?.backup_url ?? []),
+  ]
+    .filter((item): item is string => Boolean(item))
+    .map(normalizeMediaUrl);
+  return Array.from(new Set(rawCandidates.map(getBiliMediaUrl)));
+}
+
+function parseVideoCodec(codecs: string | undefined): ParsedVideoCodec {
+  const normalized = String(codecs ?? '').trim().toLowerCase();
+  if (normalized.startsWith('avc')) {
+    return 'avc';
+  }
+  if (normalized.startsWith('hev') || normalized.startsWith('hvc')) {
+    return 'hevc';
+  }
+  if (normalized.startsWith('av01')) {
+    return 'av1';
+  }
+  return 'unknown';
+}
+
+function parseFrameRate(value: string | undefined) {
+  if (!value) {
+    return 0;
+  }
+  const normalized = value.trim();
+  if (!normalized.includes('/')) {
+    return Number(normalized) || 0;
+  }
+  const [numerator, denominator] = normalized.split('/').map((item) => Number(item));
+  if (!numerator || !denominator) {
+    return 0;
+  }
+  return Number((numerator / denominator).toFixed(2));
+}
+
+function buildPlayQualities(data: RawPlaySource): PlayQualityOption[] {
+  const supportFormats = data.support_formats ?? [];
+  if (supportFormats.length > 0) {
+    return supportFormats.map((item) => ({
+      qn: Number(item.quality ?? 0),
+      label: String(item.new_description ?? item.display_desc ?? item.format ?? `${item.quality ?? 0}P`),
+      limitReason: Number(item.limit_watch_reason ?? item.can_watch_qn_reason ?? 0),
+      codecs: Array.from(new Set((item.codecs ?? []).map(parseVideoCodec).filter((codec) => codec !== 'unknown'))),
+    }));
+  }
+
+  return (data.accept_quality ?? []).map((quality, index) => ({
+    qn: quality,
+    label: String(data.accept_description?.[index] ?? `${quality}P`),
+    limitReason: 0,
+    codecs: [],
+  }));
+}
+
+function buildVideoStreams(data: RawPlaySource, qualities: PlayQualityOption[]): PlayVideoStream[] {
+  const qualityLabelMap = new Map(qualities.map((item) => [item.qn, item.label]));
+  return (data.dash?.video ?? []).map((stream) => {
+    const urls = getDashCandidateUrls(stream);
+    return {
+      id: Number(stream.id ?? 0),
+      quality: Number(stream.id ?? 0),
+      qualityLabel: String(qualityLabelMap.get(Number(stream.id ?? 0)) ?? `${stream.id ?? 0}P`),
+      codec: parseVideoCodec(stream.codecs),
+      codecs: String(stream.codecs ?? ''),
+      url: urls[0] ?? '',
+      backupUrls: urls.slice(1),
+      width: Number(stream.width ?? 0),
+      height: Number(stream.height ?? 0),
+      bandwidth: Number(stream.bandwidth ?? 0),
+      frameRate: parseFrameRate(stream.frame_rate),
+    };
+  }).filter((stream) => Boolean(stream.url));
+}
+
+function buildAudioStreams(data: RawPlaySource): PlayAudioStream[] {
+  return (data.dash?.audio ?? []).map((stream) => {
+    const urls = getDashCandidateUrls(stream);
+    return {
+      id: Number(stream.id ?? 0),
+      url: urls[0] ?? '',
+      backupUrls: urls.slice(1),
+      bandwidth: Number(stream.bandwidth ?? 0),
+      codecs: String(stream.codecs ?? ''),
+    };
+  }).filter((stream) => Boolean(stream.url));
+}
+
+function pickQualityLabel(qualities: PlayQualityOption[], quality: number, fallback?: string) {
+  return String(qualities.find((item) => item.qn === quality)?.label ?? fallback ?? `${quality}P`);
 }
 
 function parseDuration(value: string | number | undefined) {
@@ -382,22 +510,131 @@ export async function fetchRelatedVideos(bvid: string) {
   return unwrapData(payload).map(mapVideoCard);
 }
 
-export async function fetchPlaySource(bvid: string, cid: number, quality = 80): Promise<PlaySource> {
+async function requestPlaySource(
+  bvid: string,
+  cid: number,
+  quality: number,
+  fnval: number,
+) {
   const payload = await fetchJson<ApiEnvelope<RawPlaySource>>(
-    getBiliApiUrl(`/x/player/playurl?bvid=${encodeURIComponent(bvid)}&cid=${cid}&qn=${quality}&fnval=0&otype=json`),
+    getBiliApiUrl(`/x/player/playurl?bvid=${encodeURIComponent(bvid)}&cid=${cid}&qn=${quality}&fnval=${fnval}&fnver=0&fourk=1&otype=json`),
   );
-  const data = unwrapData(payload);
-  const candidateUrls = getPlayCandidateUrls(data.durl?.[0]);
-  if (!candidateUrls.length) {
+  return unwrapData(payload);
+}
+
+async function requestDashPlaySource(bvid: string, cid: number, quality: number) {
+  const candidates = [4048, 16];
+  let lastError: unknown = null;
+
+  for (const fnval of candidates) {
+    try {
+      const data = await requestPlaySource(bvid, cid, quality, fnval);
+      if (data.dash?.video?.length) {
+        return data;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    return null;
+  }
+
+  return null;
+}
+
+async function fetchCompatibleSources(
+  bvid: string,
+  cid: number,
+  qualities: PlayQualityOption[],
+  fallbackQuality: number,
+) {
+  const visited = new Set<number>();
+  const preferredQualities = [fallbackQuality, ...qualities.map((item) => item.qn), 32, 16]
+    .filter((item, index, list) => list.indexOf(item) === index)
+    .sort((left, right) => right - left);
+
+  const compatibleSources: PlayCompatibleSource[] = [];
+
+  for (const quality of preferredQualities) {
+    try {
+      const data = await requestPlaySource(bvid, cid, quality, 0);
+      const candidateUrls = getPlayCandidateUrls(data.durl?.[0]);
+      const actualQuality = Number(data.quality ?? quality);
+      if (!candidateUrls.length || visited.has(actualQuality)) {
+        continue;
+      }
+      visited.add(actualQuality);
+      compatibleSources.push({
+        quality: actualQuality,
+        qualityLabel: pickQualityLabel(qualities, actualQuality, data.format),
+        format: String(data.format ?? 'mp4'),
+        url: candidateUrls[0],
+        candidateUrls,
+      });
+    } catch {
+      // 兼容流按档位逐级尝试，单档失败不应中断整个播放计划。
+    }
+  }
+
+  return compatibleSources;
+}
+
+export async function fetchPlaySource(bvid: string, cid: number, quality = 80): Promise<PlaySource> {
+  const dashData = await requestDashPlaySource(bvid, cid, quality);
+  if (!dashData) {
+    const durlData = await requestPlaySource(bvid, cid, quality, 0);
+    const candidateUrls = getPlayCandidateUrls(durlData.durl?.[0]);
+    if (!candidateUrls.length) {
+      throw new Error('当前视频没有可用播放地址');
+    }
+    const qualities = buildPlayQualities(durlData);
+    const currentQuality = Number(durlData.quality ?? quality);
+    return {
+      mode: 'durl',
+      qualityLabel: pickQualityLabel(qualities, currentQuality, durlData.format),
+      currentQuality,
+      durationMs: Number(durlData.timelength ?? 0),
+      qualities,
+      videoStreams: [],
+      audioStreams: [],
+      compatibleSources: [{
+        quality: currentQuality,
+        qualityLabel: pickQualityLabel(qualities, currentQuality, durlData.format),
+        format: String(durlData.format ?? 'mp4'),
+        url: candidateUrls[0],
+        candidateUrls,
+      }],
+      candidateUrls,
+    };
+  }
+  const qualities = buildPlayQualities(dashData);
+  const videoStreams = buildVideoStreams(dashData, qualities);
+  const audioStreams = buildAudioStreams(dashData);
+  const compatibleSources = await fetchCompatibleSources(
+    bvid,
+    cid,
+    qualities,
+    Number(dashData.quality ?? quality),
+  );
+
+  if (!videoStreams.length && compatibleSources.length === 0) {
     throw new Error('当前视频没有可用播放地址');
   }
-  const qualityIndex = data.accept_quality?.findIndex((item) => item === data.quality) ?? -1;
-  const qualityLabel = qualityIndex >= 0 ? data.accept_description?.[qualityIndex] : undefined;
+
+  const currentQuality = compatibleSources[0]?.quality ?? Number(dashData.quality ?? quality);
+  const qualityLabel = pickQualityLabel(qualities, currentQuality, dashData.format);
   return {
-    url: candidateUrls[0],
-    candidateUrls,
-    qualityLabel: String(qualityLabel ?? data.format ?? '可播流'),
-    durationMs: Number(data.timelength ?? 0),
+    mode: videoStreams.length > 0 ? 'dash' : 'durl',
+    qualityLabel,
+    currentQuality,
+    durationMs: Number(dashData.timelength ?? 0),
+    qualities,
+    videoStreams,
+    audioStreams,
+    compatibleSources,
+    candidateUrls: compatibleSources[0]?.candidateUrls ?? [],
   };
 }
 

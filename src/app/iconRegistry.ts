@@ -15,6 +15,7 @@ export const TV_ICONS = {
   playerPause: 'pause',
   playerForward10: 'forward_10',
   playerRefresh: 'refresh',
+  playerSettings: 'tune',
 } as const satisfies Record<string, MaterialSymbol>;
 
 export type TvIconName = (typeof TV_ICONS)[keyof typeof TV_ICONS];

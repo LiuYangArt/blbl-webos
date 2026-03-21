@@ -19,6 +19,18 @@ import { focusFirst } from './platform/focus';
 import { attachRemoteControl } from './platform/remote';
 import { platformBack } from './platform/webos';
 
+function markBootMounted() {
+  const diagnostics = (window as typeof window & {
+    __biliBootDiag?: {
+      update?: (stage: string, detail?: string) => void;
+      mounted?: () => void;
+    };
+  }).__biliBootDiag;
+
+  diagnostics?.update?.('app-mounted', 'React 应用已经完成首屏挂载');
+  diagnostics?.mounted?.();
+}
+
 function AppContent() {
   const { auth, refreshAuth } = useAppStore();
   const pageStack = usePageStack<AppRoute>({ name: 'home' });
@@ -64,6 +76,10 @@ function AppContent() {
       }
     },
   }), [pop]);
+
+  useEffect(() => {
+    markBootMounted();
+  }, []);
 
   const activeNav = getActiveNav(currentPage, auth.status === 'authenticated');
 
