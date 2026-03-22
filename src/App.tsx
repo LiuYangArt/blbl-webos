@@ -6,15 +6,18 @@ import { PageBackHandlerProvider } from './app/PageBackHandler';
 import { type AppRoute, type PlayerRoutePayload, getActiveNav } from './app/routes';
 import { usePageStack } from './app/usePageStack';
 import { LoginPage } from './features/auth/LoginPage';
+import { FollowingPage } from './features/following/FollowingPage';
 import { HistoryPage } from './features/history/HistoryPage';
 import { HomePage } from './features/home/HomePage';
 import { HotPage } from './features/hot/HotPage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { FavoriteDetailPage } from './features/library/FavoriteDetailPage';
 import { PlayerPage } from './features/player/PlayerPage';
+import { PgcDetailPage } from './features/pgc/PgcDetailPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { SearchPage } from './features/search/SearchPage';
 import { SearchResultsPage } from './features/search/SearchResultsPage';
+import { SubscriptionsPage } from './features/subscriptions/SubscriptionsPage';
 import { VideoDetailPage } from './features/video-detail/VideoDetailPage';
 import { focusFirst, isFocusableElement, readFocusGroup } from './platform/focus';
 import { attachRemoteControl } from './platform/remote';
@@ -45,6 +48,8 @@ function AppContent() {
         return `${currentPage.name}:${currentPage.keyword}`;
       case 'video-detail':
         return `${currentPage.name}:${currentPage.bvid}`;
+      case 'pgc-detail':
+        return `${currentPage.name}:${currentPage.seasonId}`;
       case 'player':
         return `${currentPage.name}:${currentPage.bvid}:${currentPage.cid}`;
       case 'favorite-detail':
@@ -170,9 +175,26 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
     case 'home':
       return (
         <HomePage
+          isLoggedIn={actions.isLoggedIn}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
+          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPgcDetail={(item) => actions.push({ name: 'pgc-detail', seasonId: item.seasonId, title: item.title })}
           onOpenSearch={() => actions.replace({ name: 'search' })}
           onOpenHot={() => actions.replace({ name: 'hot' })}
+        />
+      );
+    case 'following':
+      return (
+        <FollowingPage
+          onLogin={() => actions.push({ name: 'login' })}
+          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+        />
+      );
+    case 'subscriptions':
+      return (
+        <SubscriptionsPage
+          onLogin={() => actions.push({ name: 'login' })}
+          onOpenPgcDetail={(item) => actions.push({ name: 'pgc-detail', seasonId: item.seasonId, title: item.title })}
         />
       );
     case 'hot':
@@ -205,6 +227,14 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
             title: entry.title,
             part: entry.part,
           })}
+        />
+      );
+    case 'pgc-detail':
+      return (
+        <PgcDetailPage
+          seasonId={route.seasonId}
+          fallbackTitle={route.title}
+          onPlay={(item) => pushPlayer(actions, item)}
         />
       );
     case 'player':

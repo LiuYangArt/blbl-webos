@@ -10,7 +10,15 @@ type SideNavRailProps = {
 };
 
 export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailProps) {
-  const items = ROOT_NAV_ITEMS.filter((item) => (item.key === 'login' ? !isLoggedIn : true));
+  const items = ROOT_NAV_ITEMS.filter((item) => {
+    if (item.key === 'login') {
+      return !isLoggedIn;
+    }
+    if (item.key === 'following' || item.key === 'subscriptions') {
+      return isLoggedIn;
+    }
+    return true;
+  });
 
   return (
     <aside className="side-nav-rail" aria-label="全局导航">

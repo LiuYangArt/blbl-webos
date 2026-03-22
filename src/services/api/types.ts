@@ -74,10 +74,100 @@ export type VideoCodecPreference = 'auto' | 'avc' | 'hevc' | 'av1';
 
 export type ParsedVideoCodec = 'avc' | 'hevc' | 'av1' | 'unknown';
 
+export type HomeChannelKey =
+  | 'personalized'
+  | 'following'
+  | 'subscriptions'
+  | 'hot'
+  | 'ranking'
+  | 'live';
+
+export type FollowUpAccount = {
+  mid: number;
+  name: string;
+  face: string;
+  hasUpdate: boolean;
+};
+
+export type FollowFeedItem = {
+  id: string;
+  bvid: string;
+  title: string;
+  cover: string;
+  ownerName: string;
+  duration: number;
+  description: string;
+  publishedAt: number;
+  reason?: string;
+};
+
+export type FollowingChannelData = {
+  accounts: FollowUpAccount[];
+  items: FollowFeedItem[];
+};
+
+export type PgcSeasonKind = 'anime' | 'cinema';
+
+export type PgcSubscriptionItem = {
+  seasonId: number;
+  title: string;
+  cover: string;
+  badge: string;
+  subtitle: string;
+  progress: string;
+  seasonTypeLabel: string;
+  seasonKind: PgcSeasonKind;
+  latestEpisodeId: number | null;
+  latestEpisodeLabel: string;
+  latestEpisodeTitle: string;
+  latestEpisodeCover: string;
+  latestEpisodeDuration: number;
+  url: string;
+};
+
+export type PgcEpisode = {
+  id: number;
+  cid: number;
+  bvid: string;
+  title: string;
+  longTitle: string;
+  cover: string;
+  duration: number;
+  badge: string;
+  isPlayable: boolean;
+};
+
+export type PgcSeasonDetail = {
+  seasonId: number;
+  title: string;
+  cover: string;
+  evaluate: string;
+  subtitle: string;
+  badge: string;
+  typeName: string;
+  newestEpisodeLabel: string;
+  episodes: PgcEpisode[];
+};
+
 export type PlayDashSegmentBase = {
   initialization: string;
   indexRange: string;
 };
+
+export type PlayAudioKind = 'aac' | 'dolby' | 'flac' | 'unknown';
+
+export type PlayQualityTier =
+  | '360p'
+  | '480p'
+  | '720p'
+  | '1080p'
+  | '1080p-plus'
+  | '4k'
+  | 'hdr'
+  | 'dolby-vision'
+  | '8k'
+  | 'hdr-vivid'
+  | 'unknown';
 
 export type PlayVideoStream = {
   id: number;
@@ -103,6 +193,8 @@ export type PlayAudioStream = {
   segmentBase: PlayDashSegmentBase | null;
   bandwidth: number;
   codecs: string;
+  kind: PlayAudioKind;
+  label: string;
 };
 
 export type PlayQualityOption = {
@@ -110,6 +202,8 @@ export type PlayQualityOption = {
   label: string;
   limitReason: number;
   codecs: ParsedVideoCodec[];
+  tier: PlayQualityTier;
+  badge?: string;
 };
 
 export type PlayCompatibleSource = {
@@ -124,6 +218,9 @@ export type PlaySource = {
   mode: 'dash' | 'durl';
   qualityLabel: string;
   currentQuality: number;
+  requestedQuality: number;
+  requestedQualityLabel: string;
+  qualityLimitReason: number;
   durationMs: number;
   qualities: PlayQualityOption[];
   videoStreams: PlayVideoStream[];

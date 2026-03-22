@@ -32,6 +32,7 @@ import {
   readPlayerSettings,
   writePlayerCodecPreference,
   writePlayerCodecResult,
+  writePlayerQualityPreference,
 } from './playerSettings';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
 
@@ -109,6 +110,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const reportedEnvironmentKeyRef = useRef('');
   const chromeFocusTimeoutRef = useRef<number | null>(null);
   const [codecPreference, setCodecPreference] = useState<VideoCodecPreference>(() => readPlayerSettings().codecPreference);
+  const [qualityPreference, setQualityPreference] = useState<number>(() => readPlayerSettings().qualityPreference);
   const [overlayMode, setOverlayMode] = useState<PlayerOverlayMode>('none');
   const [isChromeVisible, setIsChromeVisible] = useState(false);
   const [chromeActivityTick, setChromeActivityTick] = useState(0);
@@ -125,7 +127,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
   const playerData = useAsyncData(async () => {
     const [play, related, detail, deviceInfo] = await Promise.all([
-      fetchPlaySource(bvid, cid),
+      fetchPlaySource(bvid, cid, qualityPreference),
       fetchRelatedVideos(bvid),
       fetchVideoDetail(bvid),
       readDeviceInfo(),
@@ -137,7 +139,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       deviceInfo,
       capability: buildPlayerCodecCapability(deviceInfo),
     };
-  }, [bvid, cid]);
+  }, [bvid, cid, qualityPreference]);
 
   const progressKey = `${bvid}:${cid}`;
   const savedProgress = watchProgress[progressKey];
@@ -222,6 +224,9 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const isRecommendationsOpen = overlayMode === 'recommendations';
   const isEpisodesOpen = overlayMode === 'episodes';
   const overlayCaptureConfig = getOverlayCaptureConfig(overlayMode);
+  const requestedQualityOption = play?.qualities.find((item) => item.qn === play.requestedQuality) ?? null;
+  const currentQualityOption = play?.qualities.find((item) => item.qn === play.currentQuality) ?? null;
+  const qualityAvailabilityNotice = play ? describeQualityAvailability(play) : null;
 
   function revealPlayerChrome(focusControls: boolean): void {
     setOverlayMode('none');
@@ -309,6 +314,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   useEffect(() => {
     writePlayerCodecPreference(codecPreference);
   }, [codecPreference]);
+
+  useEffect(() => {
+    writePlayerQualityPreference(qualityPreference);
+  }, [qualityPreference]);
 
   useEffect(() => {
     const initialProgress = savedProgressRef.current;
@@ -766,6 +775,17 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     );
   }
 
+  if (!play) {
+    return (
+      <PageStatus
+        title="播放源暂不可用"
+        description="当前没有拿到完整的播放源信息，请稍后重试。"
+        actionLabel="重新获取播放源"
+        onAction={() => void playerData.reload()}
+      />
+    );
+  }
+
   const activeCapability = playerData.data.capability;
   const progressPercent = progressView.duration ? Math.min(100, (progressView.current / progressView.duration) * 100) : 0;
 
@@ -799,7 +819,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                 <h1>{title}</h1>
                 <p>
                   {part ? `${part} · ` : ''}
-                  {currentAttempt.qualityLabel}
+                  {currentQualityOption?.label ?? currentAttempt.qualityLabel}
+                  {play.requestedQuality !== play.currentQuality ? `（已请求 ${play.requestedQualityLabel}）` : ''}
                   {' · '}
                   {currentAttempt.codecLabel}
                   {' · '}
@@ -862,8 +883,45 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
           >
             <div className="player-settings-drawer__header">
               <span className="player-hero__badge">播放设置</span>
-              <h2>编码策略</h2>
+              <h2>画质与编码</h2>
               <p>{activeCapability.deviceLabel} · {activeCapability.deviceClass}</p>
+            </div>
+
+            <div className="player-settings-drawer__section">
+              <span className="player-settings-drawer__label">画质</span>
+              <div className="player-settings-drawer__chips">
+                {play.qualities.map((option, index) => {
+                  const isSelected = qualityPreference === option.qn;
+                  const isReturned = play.currentQuality === option.qn;
+                  const chipLabel = option.badge ? `${option.label} ${option.badge}` : option.label;
+                  return (
+                    <FocusButton
+                      key={option.qn}
+                      variant={isSelected ? 'primary' : 'ghost'}
+                      size="sm"
+                      sectionId={PLAYER_SETTINGS_SECTION_ID}
+                      focusId={`player-quality-${option.qn}`}
+                      defaultFocus={isSelected || (!play.qualities.some((item) => item.qn === qualityPreference) && index === 0)}
+                      onClick={() => {
+                        const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
+                        resumeProgressRef.current = currentTime;
+                        savedProgressRef.current = currentTime;
+                        lastPersistedProgressRef.current = currentTime;
+                        setQualityPreference(option.qn);
+                        setPlaybackNotice(`正在请求 ${option.label}，稍后会按接口实际返回结果继续播放`);
+                        setActiveCandidateIndex(0);
+                        setOverlayMode('none');
+                        setIsChromeVisible(true);
+                      }}
+                    >
+                      {isReturned ? `${chipLabel} · 已返回` : chipLabel}
+                    </FocusButton>
+                  );
+                })}
+              </div>
+              {qualityAvailabilityNotice ? (
+                <p className="player-settings-drawer__hint">{qualityAvailabilityNotice}</p>
+              ) : null}
             </div>
 
             <div className="player-settings-drawer__section">
@@ -915,12 +973,20 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                   <strong>{cid}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
-                  <span>当前画质</span>
-                  <strong>{currentAttempt.qualityLabel}</strong>
+                  <span>请求画质</span>
+                  <strong>{requestedQualityOption?.label ?? play.requestedQualityLabel}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>实际返回画质</span>
+                  <strong>{currentQualityOption?.label ?? currentAttempt.qualityLabel}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
                   <span>编码偏好</span>
                   <strong>{getCodecLabel(codecPreference)}</strong>
+                </div>
+                <div className="player-settings-drawer__info-row">
+                  <span>接口限制码</span>
+                  <strong>{play.qualityLimitReason || '0'}</strong>
                 </div>
                 <div className="player-settings-drawer__info-row">
                   <span>当前执行策略</span>
@@ -1312,18 +1378,25 @@ function formatAudioStreamLabel(audioStream: PlayAudioStream | null): string {
   if (!audioStream) {
     return '未提供独立音频轨';
   }
+  return audioStream.label || audioStream.codecs || '未知音频';
+}
 
-  const codecs = audioStream.codecs.toLowerCase();
-  if (codecs.includes('mp4a')) {
-    return 'AAC';
+function describeQualityAvailability(play: PlaySource): string | null {
+  const requested = play.qualities.find((item) => item.qn === play.requestedQuality);
+  const actual = play.qualities.find((item) => item.qn === play.currentQuality);
+  if (!requested || !actual) {
+    return null;
   }
-  if (codecs.includes('ec-3') || codecs.includes('eac3')) {
-    return 'E-AC3';
+
+  if (play.requestedQuality === play.currentQuality) {
+    return `当前已按 ${requested.label} 返回播放源。`;
   }
-  if (codecs.includes('flac')) {
-    return 'FLAC';
+
+  if (requested.limitReason) {
+    return `已请求 ${requested.label}，但接口本次只返回 ${actual.label}。限制码：${requested.limitReason}。`;
   }
-  return audioStream.codecs || '未知音频';
+
+  return `已请求 ${requested.label}，但接口本次实际返回 ${actual.label}。这通常与当前登录态、会员权限、视频授权或兼容流回退有关。`;
 }
 
 function getUrlHost(url: string): string {
@@ -1362,6 +1435,7 @@ function buildEnvironmentDetails(
     deviceInfo,
     userAgent: navigator.userAgent,
     playMode: play.mode,
+    requestedQuality: play.requestedQuality,
     currentQuality: play.currentQuality,
     videoStreamCount: play.videoStreams.length,
     audioStreamCount: play.audioStreams.length,

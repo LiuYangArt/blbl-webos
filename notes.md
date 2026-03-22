@@ -69,3 +69,98 @@
 - 离线下载与本地文件管理
 - 私信、动态发布、复杂编辑器
 - 需要大量维护成本的长尾设置项
+
+---
+
+# Notes: 首页登录态分区与高画质能力调研
+
+## 当前 WebOS 仓库现状
+
+### Source 1: `src/features/home/HomePage.tsx`
+- 首页目前只有 `Hero + 首页推荐 + 热门速看` 三段。
+- 没有“个性推荐 / 正在关注 / 订阅剧集 / 热门视频 / 排行 / 直播”这一类首页二级频道条。
+- 登录态不会改变首页内容结构，只影响部分其他页面是否可访问。
+
+### Source 2: `src/app/routes.ts` 与 `src/components/SideNavRail.tsx`
+- 左侧一级导航当前固定为：首页、热门、搜索、历史、稍后、收藏、我的、登录。
+- 登录后只会隐藏 `登录` 项，不会新增“正在关注”或“订阅剧集”入口。
+- 这说明用户截图中的能力，当前既不在一级导航，也不在首页二级频道中实现。
+
+### Source 3: `src/services/api/bilibili.ts`
+- 当前播放器接口已经不是纯骨架，而是会请求 `/x/player/playurl`，并带上 `fnval=4048/16`、`fourk=1`。
+- 但 `fetchPlaySource()` 默认入参仍是 `quality = 80`，`PlayerPage` 也是直接调用 `fetchPlaySource(bvid, cid)`，即默认目标档位固定为 `80`。
+- 当前能解析 `support_formats`、`accept_quality`、`dash.video`、`dash.audio`，但还没有“用户可见的画质切换”。
+- 当前类型没有显式承接 `dash.dolby`、`dash.flac`、HDR / 杜比视界等高级视频档位元信息。
+
+## Android 参考项目关于高画质的实现
+
+### Source 4: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\http\video.dart`
+- `VideoHttp.videoUrl()` 请求 UGC/PGC 播放地址时，会带 `qn`、`fnval=4048`、`fourk=1`、`voice_balance=1`。
+- 这说明安卓参考项目从一开始就是按“拿完整 DASH 元信息 + 高画质能力”设计的，而不是只拿一个低档位兼容流。
+- 同文件还存在 `tvPlayUrl()`，会请求 `/x/tv/playurl`，并带 `access_key`、`playurl_type`、`qn`、`fourk=1`。这条链路对后续 WebOS 研究“更像电视端的取流口径”很有参考价值。
+
+### Source 5: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\models\video\play\url.dart`
+- `PlayUrlModel` 会解析 `support_formats`、`dash.video`、`dash.audio`。
+- 音频侧不仅解析普通 `audio`，还会把 `flac.audio` 与 `dolby.audio` 合并进可选音轨。
+- 这意味着参考项目不只认识普通 DASH，还已经给高音质 / 杜比音频预留了数据层入口。
+
+### Source 6: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\models\common\video\video_quality.dart`
+- 质量枚举明确包含：
+  - `1080P`
+  - `1080P 高码率`
+  - `1080P 60帧`
+  - `4K`
+  - `HDR`
+  - `杜比视界`
+  - `8K`
+  - `HDR Vivid`
+- 这说明安卓参考项目在数据模型层已经完整承认这些质量档位的存在。
+
+### Source 7: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\pages\video\controller.dart`
+- `queryVideoUrl()` 会根据接口返回的 `acceptQuality` 和本地偏好，选择“当前可播放的最高质量”或“用户偏好的最近可用质量”。
+- `findVideoByQa()` 与 `updatePlayer()` 会在同一画质下再结合 codec 偏好选取具体视频轨。
+- 这说明安卓参考项目的顺序是：
+  - 先选画质
+  - 再选解码格式
+  - 最后重建播放器数据源
+
+### Source 8: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\pages\video\widgets\header_control.dart`
+- 画质面板直接读取 `supportFormats` 渲染完整画质清单。
+- 被灰掉的画质仍会展示，并给出“可能需要会员、4K/杜比视界效果可能不佳”的提示。
+- 这对 TV 端很重要，因为它能区分“接口知道有这个档位”和“当前账号/设备/视频暂时拿不到”。
+
+## Android 参考项目关于“正在关注 / 订阅剧集”的实现
+
+### Source 9: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\http\dynamics.dart`
+- `followUp()` 请求 `/x/polymer/web-dynamic/v1/portal`，返回 `up_list` 与 `live_users`，更像“关注对象与更新概览”。
+- `followDynamic()` 请求 `/x/polymer/web-dynamic/v1/feed/all`，拿的是实际动态流内容。
+- 这说明“正在关注”不是单一接口能完全解决的，至少要区分“关注对象概览”和“动态内容流”两层。
+
+### Source 10: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\models\dynamics\up.dart`
+- `FollowUpModel` 只承接 `up_list` 和 `live_users`，并记录 `has_update`、`offset` 等增量信息。
+- 也就是说，`portal` 这条接口更适合做首页头部提示或横向头像条，不适合直接替代完整内容流。
+
+### Source 11: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\http\fav.dart`
+- `FavHttp.favPgc()` 请求 `/x/space/bangumi/follow/list`。
+- 关键参数包括：
+  - `vmid`
+  - `type`
+  - `follow_status`
+  - `pn`
+- 其中 `type=1` 对应番剧，`type=2` 对应影视。
+
+### Source 12: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\pages\pgc\controller.dart` 与 `lib\pages\pgc\view.dart`
+- `PgcController.queryPgcFollow()` 在登录后拉取“我的订阅”。
+- `PgcPage` 会在推荐内容之前插入登录态可见的“最近追番 / 最近追剧”横向列表，并提供刷新与“查看全部”。
+- 这与用户截图中“登录后多出订阅类频道”的产品感觉是高度一致的，只是 PiliPlus 把它落在 PGC 页而不是首页统一频道条里。
+
+## 结论整理
+
+### 关于 `1080P / 4K / HDR` 是否能拿到
+- `1080P / 4K`：从接口层面看，完全有机会拿到，前提是账号、视频权限与真实设备链路满足条件。当前 WebOS 仓库的问题不是完全拿不到，而是默认只按 `qn=80` 请求，且没有把画质切换能力接到 UI。
+- `HDR / 杜比视界 / HDR Vivid`：安卓参考项目在“质量枚举”和“音轨解析”层已经承认这些能力，但当前 WebOS 仓库还没把这些高级档位的元信息完整接住，更没有完成真实 TV 上的播放验证，因此不能直接承诺首轮可播。
+
+### 关于首页入口应该怎么设计
+- `正在关注` 适合做首页登录态二级频道，但首版应优先展示“可播放的关注更新”，而不是完整复刻动态社区。
+- `订阅剧集` 适合做首页登录态二级频道，底层数据优先复用 `/x/space/bangumi/follow/list`，并在 UI 上统一成“订阅剧集”入口，内部再细分番剧 / 影视。
+- 不建议把这两项直接塞进左侧一级导航；更适合保持左侧导航克制，把它们作为首页内的内容频道。

@@ -10,13 +10,22 @@ import type {
   ApiEnvelope,
   FavoriteFolder,
   FavoriteItem,
+  FollowingChannelData,
+  FollowFeedItem,
+  FollowUpAccount,
   HistoryItem,
   HotKeyword,
   LaterItem,
   ParsedVideoCodec,
+  PgcEpisode,
+  PgcSeasonDetail,
+  PgcSeasonKind,
+  PgcSubscriptionItem,
   PlayAudioStream,
+  PlayAudioKind,
   PlayCompatibleSource,
   PlayQualityOption,
+  PlayQualityTier,
   PlaySource,
   PlayVideoStream,
   SearchDefaultWord,
@@ -139,6 +148,7 @@ type RawPlaySource = {
     quality?: Numeric;
     new_description?: string;
     display_desc?: string;
+    superscript?: string;
     format?: string;
     codecs?: string[];
     can_watch_qn_reason?: Numeric;
@@ -147,6 +157,13 @@ type RawPlaySource = {
   dash?: {
     video?: RawDashStream[];
     audio?: RawDashStream[];
+    dolby?: {
+      type?: Numeric;
+      audio?: RawDashStream | RawDashStream[] | null;
+    };
+    flac?: {
+      audio?: RawDashStream | null;
+    };
   };
 };
 
@@ -228,6 +245,97 @@ type RawFavoriteItem = {
   author?: string;
   duration?: Numeric;
   intro?: string;
+};
+
+type RawFollowingPortal = {
+  up_list?: {
+    items?: Array<{
+      mid?: Numeric;
+      uname?: string;
+      face?: string;
+      has_update?: boolean;
+    }>;
+  };
+};
+
+type RawDynamicArchive = {
+  bvid?: string;
+  cover?: string;
+  title?: string;
+  desc?: string;
+  duration_text?: string;
+};
+
+type RawDynamicFeedItem = {
+  id_str?: string;
+  type?: string;
+  modules?: {
+    module_author?: {
+      name?: string;
+      pub_ts?: Numeric;
+    };
+    module_dynamic?: {
+      desc?: {
+        text?: string;
+      };
+      major?: {
+        archive?: RawDynamicArchive;
+      };
+    };
+  };
+};
+
+type RawDynamicFeedResponse = {
+  items?: RawDynamicFeedItem[];
+};
+
+type RawPgcSubscriptionItem = {
+  season_id?: Numeric;
+  season_type?: Numeric;
+  season_type_name?: string;
+  title?: string;
+  cover?: string;
+  horizontal_cover_16_9?: string;
+  badge?: string;
+  progress?: string;
+  subtitle_25?: string;
+  subtitle?: string;
+  url?: string;
+  new_ep?: {
+    id?: Numeric;
+    index_show?: string;
+    title?: string;
+    long_title?: string;
+    cover?: string;
+    duration?: Numeric;
+  };
+};
+
+type RawPgcEpisode = {
+  id?: Numeric;
+  cid?: Numeric;
+  bvid?: string;
+  title?: string;
+  long_title?: string;
+  cover?: string;
+  duration?: Numeric;
+  badge?: string;
+  status?: Numeric;
+};
+
+type RawPgcSeasonDetail = {
+  season_id?: Numeric;
+  title?: string;
+  cover?: string;
+  evaluate?: string;
+  badge?: string;
+  share_sub_title?: string;
+  subtitle?: string;
+  type_name?: string;
+  newest_ep?: {
+    desc?: string;
+  };
+  episodes?: RawPgcEpisode[];
 };
 
 function normalizeCover(url: string) {
@@ -312,6 +420,60 @@ function parseVideoCodec(codecs: string | undefined): ParsedVideoCodec {
   return 'unknown';
 }
 
+function parseAudioKind(codecs: string | undefined): PlayAudioKind {
+  const normalized = String(codecs ?? '').trim().toLowerCase();
+  if (normalized.includes('mp4a')) {
+    return 'aac';
+  }
+  if (normalized.includes('ec-3') || normalized.includes('eac3')) {
+    return 'dolby';
+  }
+  if (normalized.includes('flac')) {
+    return 'flac';
+  }
+  return 'unknown';
+}
+
+function formatAudioKindLabel(kind: PlayAudioKind, codecs: string | undefined) {
+  switch (kind) {
+    case 'aac':
+      return 'AAC';
+    case 'dolby':
+      return '杜比音频';
+    case 'flac':
+      return 'FLAC';
+    default:
+      return String(codecs ?? '未知音频');
+  }
+}
+
+function parsePlayQualityTier(qn: number): PlayQualityTier {
+  switch (qn) {
+    case 129:
+      return 'hdr-vivid';
+    case 127:
+      return '8k';
+    case 126:
+      return 'dolby-vision';
+    case 125:
+      return 'hdr';
+    case 120:
+      return '4k';
+    case 112:
+      return '1080p-plus';
+    case 80:
+      return '1080p';
+    case 64:
+      return '720p';
+    case 32:
+      return '480p';
+    case 16:
+      return '360p';
+    default:
+      return 'unknown';
+  }
+}
+
 function parseFrameRate(value: string | undefined) {
   if (!value) {
     return 0;
@@ -350,6 +512,8 @@ function buildPlayQualities(data: RawPlaySource): PlayQualityOption[] {
       label: String(item.new_description ?? item.display_desc ?? item.format ?? `${item.quality ?? 0}P`),
       limitReason: Number(item.limit_watch_reason ?? item.can_watch_qn_reason ?? 0),
       codecs: Array.from(new Set((item.codecs ?? []).map(parseVideoCodec).filter((codec) => codec !== 'unknown'))),
+      tier: parsePlayQualityTier(Number(item.quality ?? 0)),
+      badge: item.superscript ? String(item.superscript) : undefined,
     }));
   }
 
@@ -358,6 +522,7 @@ function buildPlayQualities(data: RawPlaySource): PlayQualityOption[] {
     label: String(data.accept_description?.[index] ?? `${quality}P`),
     limitReason: 0,
     codecs: [],
+    tier: parsePlayQualityTier(quality),
   }));
 }
 
@@ -384,8 +549,21 @@ function buildVideoStreams(data: RawPlaySource, qualities: PlayQualityOption[]):
 }
 
 function buildAudioStreams(data: RawPlaySource): PlayAudioStream[] {
-  return (data.dash?.audio ?? []).map((stream) => {
+  const dolbyAudio = data.dash?.dolby?.audio;
+  const flacAudio = data.dash?.flac?.audio;
+  const rawStreams = [
+    ...(data.dash?.audio ?? []),
+    ...(Array.isArray(dolbyAudio)
+      ? dolbyAudio
+      : dolbyAudio
+        ? [dolbyAudio]
+        : []),
+    ...(flacAudio ? [flacAudio] : []),
+  ];
+
+  return rawStreams.map((stream) => {
     const urls = getDashCandidateUrls(stream);
+    const kind = parseAudioKind(stream.codecs);
     return {
       id: Number(stream.id ?? 0),
       url: urls[0] ?? '',
@@ -394,6 +572,8 @@ function buildAudioStreams(data: RawPlaySource): PlayAudioStream[] {
       segmentBase: parseSegmentBase(stream),
       bandwidth: Number(stream.bandwidth ?? 0),
       codecs: String(stream.codecs ?? ''),
+      kind,
+      label: formatAudioKindLabel(kind, stream.codecs),
     };
   }).filter((stream) => Boolean(stream.url));
 }
@@ -455,6 +635,79 @@ function mapVideoParts(rawParts: RawVideoPart[] | undefined): VideoPart[] {
   }));
 }
 
+function mapFollowUpAccount(item: {
+  mid?: Numeric;
+  uname?: string;
+  face?: string;
+  has_update?: boolean;
+}): FollowUpAccount {
+  return {
+    mid: Number(item.mid ?? 0),
+    name: String(item.uname ?? ''),
+    face: normalizeCover(String(item.face ?? '')),
+    hasUpdate: Boolean(item.has_update),
+  };
+}
+
+function mapDynamicFeedItem(item: RawDynamicFeedItem): FollowFeedItem | null {
+  const archive = item.modules?.module_dynamic?.major?.archive;
+  if (!archive?.bvid || !archive.cover || !archive.title) {
+    return null;
+  }
+
+  return {
+    id: String(item.id_str ?? archive.bvid),
+    bvid: String(archive.bvid),
+    title: String(archive.title),
+    cover: normalizeCover(String(archive.cover)),
+    ownerName: String(item.modules?.module_author?.name ?? ''),
+    duration: parseDuration(String(archive.duration_text ?? '')),
+    description: String(archive.desc ?? item.modules?.module_dynamic?.desc?.text ?? ''),
+    publishedAt: Number(item.modules?.module_author?.pub_ts ?? 0),
+    reason: '关注更新',
+  };
+}
+
+function resolvePgcSeasonKind(seasonType: number): PgcSeasonKind {
+  return seasonType === 2 ? 'cinema' : 'anime';
+}
+
+function mapPgcSubscriptionItem(item: RawPgcSubscriptionItem): PgcSubscriptionItem {
+  const seasonType = Number(item.season_type ?? 1);
+  const latestEpisodeCover = normalizeCover(String(item.new_ep?.cover ?? item.horizontal_cover_16_9 ?? item.cover ?? ''));
+  return {
+    seasonId: Number(item.season_id ?? 0),
+    title: String(item.title ?? ''),
+    cover: normalizeCover(String(item.horizontal_cover_16_9 ?? item.cover ?? '')),
+    badge: String(item.badge ?? ''),
+    subtitle: String(item.subtitle_25 ?? item.subtitle ?? item.season_type_name ?? ''),
+    progress: String(item.progress ?? item.new_ep?.index_show ?? ''),
+    seasonTypeLabel: String(item.season_type_name ?? (seasonType === 2 ? '影视' : '番剧')),
+    seasonKind: resolvePgcSeasonKind(seasonType),
+    latestEpisodeId: item.new_ep?.id ? Number(item.new_ep.id) : null,
+    latestEpisodeLabel: String(item.new_ep?.index_show ?? ''),
+    latestEpisodeTitle: String(item.new_ep?.title ?? item.new_ep?.long_title ?? item.title ?? ''),
+    latestEpisodeCover,
+    latestEpisodeDuration: Number(item.new_ep?.duration ?? 0),
+    url: String(item.url ?? ''),
+  };
+}
+
+function mapPgcEpisode(item: RawPgcEpisode): PgcEpisode {
+  const status = Number(item.status ?? 2);
+  return {
+    id: Number(item.id ?? 0),
+    cid: Number(item.cid ?? 0),
+    bvid: String(item.bvid ?? ''),
+    title: String(item.title ?? ''),
+    longTitle: String(item.long_title ?? ''),
+    cover: normalizeCover(String(item.cover ?? '')),
+    duration: Number(item.duration ?? 0),
+    badge: String(item.badge ?? ''),
+    isPlayable: status >= 2 && Boolean(item.bvid) && Boolean(item.cid),
+  };
+}
+
 export async function fetchRecommendedVideos(pageSize = 12, freshIndex = 1) {
   const params = await signWbi({
     version: 1,
@@ -480,6 +733,13 @@ export async function fetchPopularVideos(page = 1, pageSize = 12) {
     getBiliApiUrl(`/x/web-interface/popular?pn=${page}&ps=${pageSize}`),
   );
   return unwrapData(payload).list.map(mapVideoCard);
+}
+
+export async function fetchRankingVideos(pageSize = 12) {
+  const payload = await fetchJson<ApiEnvelope<{ list: RawVideoCard[] }>>(
+    getBiliApiUrl(`/x/web-interface/ranking/v2?rid=0&type=all`),
+  );
+  return unwrapData(payload).list.slice(0, pageSize).map(mapVideoCard);
 }
 
 export async function fetchSearchDefaultWord(): Promise<SearchDefaultWord> {
@@ -568,6 +828,64 @@ export async function fetchRelatedVideos(bvid: string) {
     getBiliApiUrl(`/x/web-interface/archive/related?bvid=${encodeURIComponent(bvid)}`),
   );
   return unwrapData(payload).map(mapVideoCard);
+}
+
+export async function fetchFollowingChannelData(): Promise<FollowingChannelData> {
+  const [portalPayload, feedPayload] = await Promise.all([
+    fetchJson<ApiEnvelope<RawFollowingPortal>>(
+      getBiliApiUrl('/x/polymer/web-dynamic/v1/portal?up_list_more=1&web_location=333.1365'),
+    ),
+    fetchJson<ApiEnvelope<RawDynamicFeedResponse>>(
+      getBiliApiUrl('/x/polymer/web-dynamic/v1/feed/all?type=video&web_location=333.1365'),
+    ),
+  ]);
+
+  const portalData = unwrapData(portalPayload);
+  const feedData = unwrapData(feedPayload);
+
+  return {
+    accounts: (portalData.up_list?.items ?? [])
+      .map(mapFollowUpAccount)
+      .filter((item) => item.mid > 0)
+      .slice(0, 12),
+    items: (feedData.items ?? [])
+      .map(mapDynamicFeedItem)
+      .filter((item): item is FollowFeedItem => Boolean(item))
+      .slice(0, 12),
+  };
+}
+
+export async function fetchPgcSubscriptions(type: PgcSeasonKind, vmid: number): Promise<PgcSubscriptionItem[]> {
+  const typeValue = type === 'cinema' ? 2 : 1;
+  const payload = await fetchJson<ApiEnvelope<{ list: RawPgcSubscriptionItem[] }>>(
+    getBiliApiUrl(`/x/space/bangumi/follow/list?type=${typeValue}&pn=1&ps=12&vmid=${vmid}`),
+  );
+  return (unwrapData(payload).list ?? []).map(mapPgcSubscriptionItem);
+}
+
+export async function fetchPgcSeasonDetail(seasonId: number): Promise<PgcSeasonDetail> {
+  const payload = await fetchJson<{
+    code: number;
+    message: string;
+    result: RawPgcSeasonDetail;
+  }>(
+    getBiliApiUrl(`/pgc/view/web/season?season_id=${seasonId}`),
+  );
+  if (payload.code !== 0) {
+    throw new Error(payload.message || 'PGC 详情加载失败');
+  }
+  const data = payload.result;
+  return {
+    seasonId: Number(data.season_id ?? seasonId),
+    title: String(data.title ?? ''),
+    cover: normalizeCover(String(data.cover ?? '')),
+    evaluate: String(data.evaluate ?? ''),
+    subtitle: String(data.share_sub_title ?? data.subtitle ?? ''),
+    badge: String(data.badge ?? ''),
+    typeName: String(data.type_name ?? '订阅剧集'),
+    newestEpisodeLabel: String(data.newest_ep?.desc ?? ''),
+    episodes: (data.episodes ?? []).map(mapPgcEpisode),
+  };
 }
 
 async function requestPlaySource(
@@ -711,6 +1029,13 @@ export async function fetchPlaySource(bvid: string, cid: number, quality = 80): 
       mode: 'durl',
       qualityLabel: pickQualityLabel(qualities, currentQuality, durlData.format),
       currentQuality,
+      requestedQuality: quality,
+      requestedQualityLabel: pickQualityLabel(qualities, quality),
+      qualityLimitReason: Number(
+        qualities.find((item) => item.qn === quality)?.limitReason
+        ?? qualities.find((item) => item.qn === currentQuality)?.limitReason
+        ?? 0,
+      ),
       durationMs: Number(durlData.timelength ?? 0),
       qualities,
       videoStreams: [],
@@ -745,6 +1070,13 @@ export async function fetchPlaySource(bvid: string, cid: number, quality = 80): 
     mode: videoStreams.length > 0 ? 'dash' : 'durl',
     qualityLabel,
     currentQuality,
+    requestedQuality: quality,
+    requestedQualityLabel: pickQualityLabel(qualities, quality),
+    qualityLimitReason: Number(
+      qualities.find((item) => item.qn === quality)?.limitReason
+      ?? qualities.find((item) => item.qn === currentQuality)?.limitReason
+      ?? 0,
+    ),
     durationMs: Number(dashData.timelength ?? 0),
     qualities,
     videoStreams,

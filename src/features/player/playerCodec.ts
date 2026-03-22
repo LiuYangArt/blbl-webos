@@ -235,8 +235,8 @@ function buildDashAttempts(
     ? null
     : orderedStreams.find((stream) => stream.codec === codecPreference);
   const warningMessages: string[] = [];
-  if (quality !== playSource.currentQuality) {
-    warningMessages.push(`当前接口未返回 ${playSource.qualityLabel} 的实际 DASH 分轨，本次按 ${qualityLabel} 分轨播放。`);
+  if (quality !== playSource.requestedQuality) {
+    warningMessages.push(`当前接口未返回 ${playSource.requestedQualityLabel} 的实际 DASH 分轨，本次按 ${qualityLabel} 分轨播放。`);
   }
   if (codecPreference !== 'auto' && !exactStream) {
     warningMessages.push(`当前分轨没有 ${getCodecLabel(codecPreference)} 编码，已切换到本次实际返回的可用编码。`);

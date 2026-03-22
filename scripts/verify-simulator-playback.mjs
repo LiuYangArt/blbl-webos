@@ -8,6 +8,10 @@ const ROOT = 'F:\\CodeProjects\\bilibili_webos';
 const HOST = '127.0.0.1';
 const POPULAR_API = 'https://api.bilibili.com/x/web-interface/popular?pn=1&ps=1';
 const IS_WINDOWS = process.platform === 'win32';
+const OVERRIDE_BVID = process.env.VERIFY_PLAYER_BVID?.trim() ?? '';
+const OVERRIDE_CID = Number(process.env.VERIFY_PLAYER_CID ?? 0);
+const OVERRIDE_TITLE = process.env.VERIFY_PLAYER_TITLE?.trim() ?? '';
+const OVERRIDE_PART = process.env.VERIFY_PLAYER_PART?.trim() ?? '';
 
 function getCommandName(name) {
   return IS_WINDOWS ? `${name}.cmd` : name;
@@ -93,6 +97,15 @@ async function pickFreePort() {
 }
 
 async function fetchSampleVideo() {
+  if (OVERRIDE_BVID && OVERRIDE_CID > 0 && OVERRIDE_TITLE) {
+    return {
+      bvid: OVERRIDE_BVID,
+      cid: OVERRIDE_CID,
+      title: OVERRIDE_TITLE,
+      part: OVERRIDE_PART,
+    };
+  }
+
   const response = await fetch(POPULAR_API);
   if (!response.ok) {
     throw new Error(`热门视频接口失败（${response.status}）`);
@@ -104,11 +117,12 @@ async function fetchSampleVideo() {
     throw new Error('未拿到可用于模拟器验证的视频样本');
   }
 
-  return {
-    bvid: String(item.bvid),
-    cid: Number(item.cid),
-    title: String(item.title),
-  };
+    return {
+      bvid: String(item.bvid),
+      cid: Number(item.cid),
+      title: String(item.title),
+      part: '',
+    };
 }
 
 async function createTelemetryServer(port) {
@@ -215,6 +229,7 @@ async function main() {
       VITE_BOOT_PLAYER_BVID: sample.bvid,
       VITE_BOOT_PLAYER_CID: String(sample.cid),
       VITE_BOOT_PLAYER_TITLE: sample.title,
+      VITE_BOOT_PLAYER_PART: sample.part ?? '',
       VITE_DEBUG_TELEMETRY_URL: telemetryUrl,
     };
 

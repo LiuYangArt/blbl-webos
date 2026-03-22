@@ -2,6 +2,8 @@ import type { MaterialSymbol } from 'material-symbols';
 
 export const TV_ICONS = {
   navHome: 'home',
+  navFollowing: 'rss_feed',
+  navSubscriptions: 'subscriptions',
   navHot: 'local_fire_department',
   navSearch: 'search',
   navHistory: 'history',

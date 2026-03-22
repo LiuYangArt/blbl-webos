@@ -4,10 +4,13 @@ import type { FavoriteFolder, VideoCardItem } from '../services/api/types';
 
 export type AppRoute =
   | { name: 'home' }
+  | { name: 'following' }
+  | { name: 'subscriptions' }
   | { name: 'hot' }
   | { name: 'search' }
   | { name: 'search-results'; keyword: string }
   | { name: 'video-detail'; bvid: string; title?: string }
+  | { name: 'pgc-detail'; seasonId: number; title?: string }
   | { name: 'player'; bvid: string; cid: number; title: string; part?: string }
   | { name: 'history' }
   | { name: 'login' }
@@ -18,6 +21,8 @@ export type AppRoute =
 
 export type RootNavKey =
   | 'home'
+  | 'following'
+  | 'subscriptions'
   | 'hot'
   | 'search'
   | 'history'
@@ -33,6 +38,8 @@ export const ROOT_NAV_ITEMS: Array<{
   route: AppRoute;
 }> = [
   { key: 'home', icon: TV_ICONS.navHome, label: '首页', route: { name: 'home' } },
+  { key: 'following', icon: TV_ICONS.navFollowing, label: '关注', route: { name: 'following' } },
+  { key: 'subscriptions', icon: TV_ICONS.navSubscriptions, label: '订阅', route: { name: 'subscriptions' } },
   { key: 'hot', icon: TV_ICONS.navHot, label: '热门', route: { name: 'hot' } },
   { key: 'search', icon: TV_ICONS.navSearch, label: '搜索', route: { name: 'search' } },
   { key: 'history', icon: TV_ICONS.navHistory, label: '历史', route: { name: 'history' } },
@@ -46,6 +53,10 @@ export function getActiveNav(route: AppRoute, isLoggedIn: boolean): RootNavKey |
   switch (route.name) {
     case 'home':
       return 'home';
+    case 'following':
+      return 'following';
+    case 'subscriptions':
+      return 'subscriptions';
     case 'hot':
       return 'hot';
     case 'search':
@@ -63,8 +74,11 @@ export function getActiveNav(route: AppRoute, isLoggedIn: boolean): RootNavKey |
     case 'login':
       return 'login';
     case 'video-detail':
+      return isLoggedIn ? 'following' : null;
+    case 'pgc-detail':
+      return isLoggedIn ? 'subscriptions' : null;
     case 'player':
-      return isLoggedIn ? 'profile' : null;
+      return null;
   }
 }
 
@@ -73,3 +87,7 @@ export type PlayerRoutePayload = Pick<VideoCardItem, 'bvid' | 'cid' | 'title'> &
   part?: string;
 };
 export type FavoriteRoutePayload = Pick<FavoriteFolder, 'id' | 'title'>;
+export type PgcDetailRoutePayload = {
+  seasonId: number;
+  title: string;
+};
