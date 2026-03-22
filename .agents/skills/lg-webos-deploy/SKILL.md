@@ -28,6 +28,7 @@ npm run webos:doctor
 npm run build:webos
 npm run webos:package
 npm run webos:install -- --device <deviceName>
+npm run webos:reinstall -- --device <deviceName>
 npm run webos:launch -- --device <deviceName>
 npm run webos:list -- --device <deviceName>
 npm run webos:remove -- --device <deviceName>
@@ -135,6 +136,31 @@ npm run webos:package
 npm run webos:install -- --device <deviceName>
 ```
 
+### 4.1 真机联调默认改用清洁重装
+
+如果这次目标是：
+
+- 验证播放器修复
+- 排查“电视上还是旧包”
+- 同版本号反复覆盖安装
+
+优先改用：
+
+```bash
+npm run webos:reinstall -- --device <deviceName>
+```
+
+它会先卸载旧包，再安装当前 IPK。
+
+经验上这能显著降低“CLI 显示安装成功，但电视仍跑旧前端产物”的概率。
+
+但这**不是绝对保证**。更稳的做法仍然是：
+
+1. 真机关键联调时优先 `remove -> install`
+2. 安装后等待几秒
+3. 直接到电视文件系统核对当前 `index-legacy-*.js`
+4. 如仍怀疑覆盖不彻底，再提升 `appinfo.json` 的 `version`
+
 ### 5. 启动 app
 
 ```bash
@@ -148,6 +174,14 @@ npm run webos:list -- --device <deviceName>
 ```
 
 确认列表中包含当前 app ID。
+
+如要确认电视真正跑到新包，不要只看 “Success”，还要继续核对：
+
+```bash
+npx -y -p node@16 node %APPDATA%\npm\node_modules\@webos-tools\cli\bin\ares-novacom.js --device <deviceName> --run "cat /media/developer/apps/usr/palm/applications/com.liuyang.app.bilibiliwebos/index.html | grep index-legacy"
+```
+
+把电视里的 `index-legacy-*.js` 和本地 `build/webos/index.html` 对上，再开始真机功能判断。
 
 ## 典型排障
 
@@ -182,6 +216,22 @@ npm run webos:list -- --device <deviceName>
 - `npm run webos:list -- --device <deviceName>` 是否能看到 app ID
 - `appinfo.json` 的 `id`、`main`、`icon` 是否正确
 - `build/webos` 是否包含 `index.html`、`appinfo.json`、图标和 assets
+
+### 安装成功但电视仍像旧版本
+
+这是本仓库已经踩过的真问题。
+
+优先按下面顺序排查：
+
+1. 先跑 `npm run webos:reinstall -- --device <deviceName>`
+2. 等 `8` 秒左右再查电视文件系统里的 `index-legacy-*.js`
+3. 如果电视仍是旧入口 hash，提升 `appinfo.json.version` 后重新 `package + reinstall`
+
+结论：
+
+- “每次安装前都先卸载”通常能解决大多数覆盖不彻底问题
+- 但要想**确认无误**，仍然必须以电视文件系统中的实际入口 JS 为准
+- 当 LG 安装层对同版本号包表现异常时，升版本比反复覆盖更稳
 
 ## 执行时的输出要求
 

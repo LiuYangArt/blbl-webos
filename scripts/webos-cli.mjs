@@ -179,6 +179,26 @@ const runCliWithNode16 = (name, args) => {
   run(getCommandName('npx'), ['-y', '-p', 'node@16', 'node', cliBin, ...args]);
 };
 
+const runCliWithNode16AllowFailure = (name, args) => {
+  ensureCliInstalled();
+  const cliBin = resolveCliBin(name);
+
+  if (!existsSync(cliBin)) {
+    throw new Error(`未找到 ${name}.js，请检查 @webos-tools/cli 安装是否完整`);
+  }
+
+  const result = runProcess(getCommandName('npx'), ['-y', '-p', 'node@16', 'node', cliBin, ...args], {
+    stdio: 'inherit',
+    shell: false,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return result.status ?? 0;
+};
+
 switch (action) {
   case 'doctor': {
     ensureCliInstalled();
@@ -200,6 +220,21 @@ switch (action) {
     if (!existsSync(packageFile)) {
       throw new Error('未找到 IPK 包，请先运行 npm run webos:package');
     }
+    runCliWithNode16('ares-install', ['--device', device, packageFile]);
+    break;
+  }
+  case 'reinstall': {
+    if (!existsSync(packageFile)) {
+      throw new Error('未找到 IPK 包，请先运行 npm run webos:package');
+    }
+
+    const removeStatus = runCliWithNode16AllowFailure('ares-install', ['--device', device, '--remove', appId]);
+    if (removeStatus === 0) {
+      console.log(`已先卸载旧包: ${appId}`);
+    } else {
+      console.log(`旧包卸载返回状态 ${removeStatus}，继续安装新包。`);
+    }
+
     runCliWithNode16('ares-install', ['--device', device, packageFile]);
     break;
   }
@@ -245,6 +280,6 @@ switch (action) {
     break;
   }
   default: {
-    console.log('Usage: node ./scripts/webos-cli.mjs <doctor|package|install|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--simulator-version 25] [--simulator-path <path>]');
+    console.log('Usage: node ./scripts/webos-cli.mjs <doctor|package|install|reinstall|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--simulator-version 25] [--simulator-path <path>]');
   }
 }

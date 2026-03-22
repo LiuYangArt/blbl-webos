@@ -12,3 +12,4 @@ output/
 src/generated/material-symbols-rounded-subset.css
 src/generated/material-symbols-rounded-subset.woff2
 public/app-icon-master*.png
+_dev/real-tv-debug/
