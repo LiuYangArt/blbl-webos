@@ -7,9 +7,14 @@ export type AppLaunchParams = {
   title?: string;
   part?: string;
   debugTelemetryUrl?: string;
+  mediaProxyOrigin?: string;
 };
 
 let cachedLaunchParams: AppLaunchParams | null | undefined;
+
+function readRawLaunchParams(): unknown {
+  return window.launchParams ?? window.PalmSystem?.launchParams ?? null;
+}
 
 function normalizeString(value: unknown) {
   const text = String(value ?? '').trim();
@@ -26,8 +31,18 @@ export function readLaunchParams(): AppLaunchParams | null {
     return cachedLaunchParams;
   }
 
-  const raw = window.launchParams;
+  const raw = readRawLaunchParams();
   if (!raw) {
+    cachedLaunchParams = null;
+    return cachedLaunchParams;
+  }
+
+  if (typeof raw === 'object') {
+    cachedLaunchParams = raw as AppLaunchParams;
+    return cachedLaunchParams;
+  }
+
+  if (typeof raw !== 'string') {
     cachedLaunchParams = null;
     return cachedLaunchParams;
   }
@@ -69,4 +84,8 @@ export function resolveInitialRoute(): AppRoute {
 
 export function readDebugTelemetryUrl() {
   return normalizeString(readLaunchParams()?.debugTelemetryUrl ?? import.meta.env.VITE_DEBUG_TELEMETRY_URL);
+}
+
+export function readMediaProxyOrigin() {
+  return normalizeString(readLaunchParams()?.mediaProxyOrigin ?? import.meta.env.VITE_MEDIA_PROXY_ORIGIN);
 }

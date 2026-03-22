@@ -2,9 +2,10 @@ export {};
 
 declare global {
   interface Window {
-    launchParams?: string;
+    launchParams?: string | Record<string, unknown>;
     PalmSystem?: {
       platformBack?: () => void;
+      launchParams?: string | Record<string, unknown>;
     };
     webOS?: {
       platformBack?: () => void;

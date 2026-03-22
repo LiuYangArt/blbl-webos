@@ -47,7 +47,7 @@ if (debugTelemetryUrl) {
   buildEnv.VITE_DEBUG_TELEMETRY_URL = debugTelemetryUrl;
 }
 
-console.log('build:webos 当前不注入任何外部媒体网关配置。');
+console.log('build:webos 正在整理 webOS 调试注入配置。');
 
 if (buildEnv.VITE_DEBUG_TELEMETRY_URL) {
   console.log(`build:webos 使用 telemetry: ${buildEnv.VITE_DEBUG_TELEMETRY_URL}`);

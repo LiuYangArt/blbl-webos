@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "verify:simulator-playback": "node ./scripts/verify-simulator-playback.mjs",
+    "webos:debug:player": "node ./scripts/webos-debug-player.mjs",
     "webos:doctor": "node ./scripts/webos-cli.mjs doctor",
     "webos:package": "npm run build:webos && node ./scripts/webos-cli.mjs package",
     "webos:install": "node ./scripts/webos-cli.mjs install",

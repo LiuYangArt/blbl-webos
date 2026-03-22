@@ -24,9 +24,10 @@ import {
   getCodecLabel,
   getReturnedCodecsForQuality,
 } from './playerCodec';
-import type { PlaybackAttempt, PlayerCodecCapability } from './playerCodec';
+import type { PlaybackAttempt, PlaybackSourceCandidate, PlayerCodecCapability } from './playerCodec';
 import { createDashManifestSource } from './playerDashManifest';
 import { reportPlayerDebugEvent } from './playerDebug';
+import { resolvePlaybackCandidateUrls } from './playerMediaProxy';
 import {
   readPlayerCodecMemory,
   readPlayerSettings,
@@ -71,6 +72,7 @@ type PlayerPageProps = {
 
 const CODEC_OPTIONS: VideoCodecPreference[] = ['auto', 'avc', 'hevc', 'av1'];
 const PLAYER_CHROME_HIDE_DELAY_MS = 3000;
+const PLAYER_LOAD_TIMEOUT_MS = 4500;
 const STRIP_PAGE_SIZE = 6;
 const PLAYER_CONTROL_SECTION_ID = 'player-controls';
 const PLAYER_SETTINGS_SECTION_ID = 'player-settings-drawer';
@@ -186,9 +188,13 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   }, [capability, codecMemory, codecPreference, play]);
 
   const currentAttempt = playbackPlan.attempts[0] ?? null;
-  const currentCandidate = currentAttempt?.candidates[activeCandidateIndex] ?? null;
+  const rawCurrentCandidate = currentAttempt?.candidates[activeCandidateIndex] ?? null;
+  const currentCandidate = useMemo(
+    () => resolvePlaybackCandidateUrls(rawCurrentCandidate, capability?.deviceClass),
+    [capability?.deviceClass, rawCurrentCandidate],
+  );
   const currentSourceUrl = currentCandidate?.videoUrl ?? '';
-  const currentCandidateHost = getUrlHost(currentSourceUrl);
+  const currentCandidateHost = getUrlHost(rawCurrentCandidate?.videoUrl ?? '');
   const declaredCodecs = useMemo(() => (
     play && currentAttempt ? getAvailableCodecsForQuality(play, currentAttempt.quality) : []
   ), [currentAttempt, play]);
@@ -504,6 +510,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     let manifestRevoke: (() => void) | null = null;
     let destroyPlayer: (() => Promise<void>) | null = null;
     let progressReported = false;
+    let loadWatchdogId: number | null = null;
     setPlaybackError(null);
 
     const getDebugSnapshot = () => ({
@@ -531,6 +538,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         return;
       }
       failed = true;
+      if (loadWatchdogId !== null) {
+        window.clearTimeout(loadWatchdogId);
+        loadWatchdogId = null;
+      }
 
       const nextResumePoint = Math.floor(video.currentTime || resumeProgressRef.current);
       resumeProgressRef.current = nextResumePoint;
@@ -558,6 +569,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         sourceTypeLabel: engineLabel,
         message,
         code,
+        details: buildAttemptDebugDetails(currentAttempt, rawCurrentCandidate, currentCandidate, activeCandidateIndex),
         ...getDebugSnapshot(),
       });
 
@@ -570,6 +582,11 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     };
 
     const handleLoadedMetadata = () => {
+      if (loadWatchdogId !== null) {
+        window.clearTimeout(loadWatchdogId);
+        loadWatchdogId = null;
+      }
+
       reportPlayerDebugEvent({
         type: 'loadedmetadata',
         bvid,
@@ -579,6 +596,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         codec: currentAttempt.codecLabel,
         mimeType: currentMimeType,
         sourceTypeLabel: engineLabel,
+        details: buildAttemptDebugDetails(currentAttempt, rawCurrentCandidate, currentCandidate, activeCandidateIndex),
         ...getDebugSnapshot(),
       });
 
@@ -637,12 +655,18 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
           codec: currentAttempt.codecLabel,
           mimeType: currentMimeType,
           sourceTypeLabel: engineLabel,
+          details: buildAttemptDebugDetails(currentAttempt, rawCurrentCandidate, currentCandidate, activeCandidateIndex),
           ...getDebugSnapshot(),
         });
       }
     };
 
     const handlePlay = () => {
+      if (loadWatchdogId !== null) {
+        window.clearTimeout(loadWatchdogId);
+        loadWatchdogId = null;
+      }
+
       setIsPlaying(true);
       markAttemptSuccess();
       reportPlayerDebugEvent({
@@ -654,6 +678,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         codec: currentAttempt.codecLabel,
         mimeType: currentMimeType,
         sourceTypeLabel: engineLabel,
+        details: buildAttemptDebugDetails(currentAttempt, rawCurrentCandidate, currentCandidate, activeCandidateIndex),
         ...getDebugSnapshot(),
       });
     };
@@ -684,8 +709,13 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       mimeType: currentMimeType,
       sourceTypeLabel: engineLabel,
       message: `准备加载 ${currentAttempt.mode === 'dash' ? 'DASH' : '兼容流'} 候选 #${activeCandidateIndex + 1}`,
+      details: buildAttemptDebugDetails(currentAttempt, rawCurrentCandidate, currentCandidate, activeCandidateIndex),
       ...getDebugSnapshot(),
     });
+
+    loadWatchdogId = window.setTimeout(() => {
+      finalizeFailure('媒体加载超时');
+    }, PLAYER_LOAD_TIMEOUT_MS);
 
     const bootPlayer = async () => {
       resetVideoElement(video);
@@ -728,6 +758,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('error', handleVideoError);
+      if (loadWatchdogId !== null) {
+        window.clearTimeout(loadWatchdogId);
+        loadWatchdogId = null;
+      }
       video.pause();
       if (destroyPlayer) {
         void destroyPlayer();
@@ -745,6 +779,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     currentSourceUrl,
     engineLabel,
     play,
+    rawCurrentCandidate,
     reloadNonce,
     setWatchProgress,
     title,
@@ -1443,8 +1478,50 @@ function buildEnvironmentDetails(
     compatibleSourceHosts: play.compatibleSources.map((source) => getUrlHost(source.url)),
     compatibleCandidateHosts: play.compatibleSources.flatMap((source) => source.candidateUrls.map(getUrlHost)),
     dashVideoHosts: play.videoStreams.flatMap((stream) => [stream.url, ...stream.backupUrls].map(getUrlHost)),
+    dashAudioHosts: play.audioStreams.flatMap((stream) => [stream.url, ...stream.backupUrls].map(getUrlHost)),
+    audioStreams: play.audioStreams.map((stream) => ({
+      id: stream.id,
+      codecs: stream.codecs,
+      bandwidth: stream.bandwidth,
+      kind: stream.kind,
+      host: getUrlHost(stream.url),
+      backupHosts: stream.backupUrls.map(getUrlHost),
+    })),
+    playbackAttempts: attempts.map((attempt) => ({
+      id: attempt.id,
+      mode: attempt.mode,
+      codec: attempt.codec,
+      quality: attempt.quality,
+      audioStreamId: attempt.audioStream?.id ?? null,
+      audioBandwidth: attempt.audioStream?.bandwidth ?? null,
+      audioHost: getUrlHost(attempt.audioStream?.url ?? ''),
+      firstVideoHost: getUrlHost(attempt.candidates[0]?.videoUrl ?? ''),
+      firstAudioHost: getUrlHost(attempt.candidates[0]?.audioUrl ?? ''),
+    })),
     playbackAttemptModes: attempts.map((attempt) => attempt.mode),
     playbackAttemptIds: attempts.map((attempt) => attempt.id),
     playbackWarning: warning,
+  };
+}
+
+function buildAttemptDebugDetails(
+  attempt: PlaybackAttempt,
+  rawCandidate: PlaybackSourceCandidate | null,
+  resolvedCandidate: PlaybackSourceCandidate | null,
+  candidateIndex: number,
+) {
+  return {
+    attemptId: attempt.id,
+    attemptMode: attempt.mode,
+    attemptCodec: attempt.codec,
+    attemptQuality: attempt.quality,
+    candidateIndex,
+    audioStreamId: attempt.audioStream?.id ?? null,
+    audioCodec: attempt.audioStream?.codecs ?? null,
+    audioBandwidth: attempt.audioStream?.bandwidth ?? null,
+    rawVideoHost: getUrlHost(rawCandidate?.videoUrl ?? ''),
+    rawAudioHost: getUrlHost(rawCandidate?.audioUrl ?? ''),
+    resolvedVideoHost: getUrlHost(resolvedCandidate?.videoUrl ?? ''),
+    resolvedAudioHost: getUrlHost(resolvedCandidate?.audioUrl ?? ''),
   };
 }

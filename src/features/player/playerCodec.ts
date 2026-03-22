@@ -106,6 +106,7 @@ function readNavigatorUserAgent(): string {
 
 function resolveDeviceClass(modelName: string, platformVersion: string, userAgent: string): string {
   const normalizedModel = modelName.toLowerCase();
+  const normalizedUserAgent = userAgent.toLowerCase();
 
   if (normalizedModel.includes('browser-dev') && isWebOsSimulatorUserAgent(userAgent)) {
     return 'webos-simulator';
@@ -120,6 +121,9 @@ function resolveDeviceClass(modelName: string, platformVersion: string, userAgen
     return 'webos-2021';
   }
   if (platformVersion.startsWith('6')) {
+    return 'webos-6';
+  }
+  if (normalizedUserAgent.includes('web0s') && normalizedUserAgent.includes('smarttv')) {
     return 'webos-6';
   }
   return 'webos-generic';
@@ -180,7 +184,7 @@ export function buildPlaybackAttempts(
     const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
     if (compatibleResolution.attempts.length > 0) {
       const warningMessages = [
-        'Simulator 当前优先使用兼容 MP4 线路，避免 DASH 分片在当前运行环境下触发大面积 403。',
+        'Simulator 当前优先使用兼容 MP4 线路；媒体请求会走本地代理补充必要请求头，避免 bilivideo 403。',
       ];
       if (compatibleResolution.warning) {
         warningMessages.push(compatibleResolution.warning);
@@ -226,7 +230,7 @@ function buildDashAttempts(
     };
   }
 
-  const audioStream = pickPreferredAudioStream(playSource.audioStreams);
+  const audioStream = pickPreferredAudioStream(playSource.audioStreams, capability);
   const preferredCodecs = codecPreference === 'auto'
     ? getAutoCodecPriority(capability.support, memory)
     : [codecPreference];
@@ -359,7 +363,6 @@ function getResolvedDashStreams(playSource: PlaySource): PlayVideoStream[] {
 
   return playSource.videoStreams.filter((stream) => stream.quality === highestAvailableQuality);
 }
-
 function buildDashCandidates(
   videoStream: PlayVideoStream,
   audioStream: PlayAudioStream | null,
@@ -456,27 +459,41 @@ function orderStreamsByCodec(
   return ordered;
 }
 
-function pickPreferredAudioStream(audioStreams: PlayAudioStream[]): PlayAudioStream | null {
+function pickPreferredAudioStream(
+  audioStreams: PlayAudioStream[],
+  capability: PlayerCodecCapability,
+): PlayAudioStream | null {
   if (audioStreams.length === 0) {
     return null;
   }
 
   const preferred = [...audioStreams].sort((left, right) => {
-    const rightScore = getAudioStreamScore(right);
-    const leftScore = getAudioStreamScore(left);
+    const rightScore = getAudioStreamScore(right, capability.deviceClass);
+    const leftScore = getAudioStreamScore(left, capability.deviceClass);
     if (rightScore !== leftScore) {
       return rightScore - leftScore;
     }
+
+    const rightHostScore = getMediaHostPreferenceScore(right.url);
+    const leftHostScore = getMediaHostPreferenceScore(left.url);
+    if (rightHostScore !== leftHostScore) {
+      return rightHostScore - leftHostScore;
+    }
+
+    if (shouldPreferStableAudioForDevice(capability.deviceClass)) {
+      return left.bandwidth - right.bandwidth;
+    }
+
     return right.bandwidth - left.bandwidth;
   });
 
   return preferred[0] ?? null;
 }
 
-function getAudioStreamScore(stream: PlayAudioStream): number {
+function getAudioStreamScore(stream: PlayAudioStream, deviceClass: string): number {
   const codecs = stream.codecs.toLowerCase();
   if (codecs.includes('mp4a')) {
-    return 3;
+    return shouldPreferStableAudioForDevice(deviceClass) ? 5 : 3;
   }
   if (codecs.includes('ec-3') || codecs.includes('eac3')) {
     return 2;
@@ -485,6 +502,32 @@ function getAudioStreamScore(stream: PlayAudioStream): number {
     return 1;
   }
   return 0;
+}
+
+function shouldPreferStableAudioForDevice(deviceClass: string) {
+  return deviceClass === 'webos-6' || deviceClass === 'webos-2021' || deviceClass === 'webos-generic';
+}
+
+function getMediaHostPreferenceScore(url: string) {
+  try {
+    const host = new URL(url).host.toLowerCase();
+    let score = 0;
+    if (host.includes('.bilivideo.com') || host.includes('.bilivideo.cn')) {
+      score += 20;
+    }
+    if (host.includes('upos-')) {
+      score += 8;
+    }
+    if (host.includes('mcdn')) {
+      score -= 30;
+    }
+    if (host.includes(':8082')) {
+      score -= 10;
+    }
+    return score;
+  } catch {
+    return 0;
+  }
 }
 
 function formatAudioCodecLabel(codecs: string): string {

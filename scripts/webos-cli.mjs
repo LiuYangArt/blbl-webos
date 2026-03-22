@@ -42,6 +42,30 @@ const getArg = (name, fallback) => {
   return fallback;
 };
 
+const buildLaunchParamsArgs = (value) => {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(normalized);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.entries(parsed).flatMap(([key, rawValue]) => {
+        if (rawValue === undefined || rawValue === null || rawValue === '') {
+          return [];
+        }
+        const serialized = typeof rawValue === 'string' ? rawValue : JSON.stringify(rawValue);
+        return ['--params', `${key}=${serialized}`];
+      });
+    }
+  } catch {
+    // 允许直接透传已有的 key=value 或 CLI 原生参数串。
+  }
+
+  return ['--params', normalized];
+};
+
 const getConfigValue = (name) => {
   if (!existsSync(devMenuConfigFile)) {
     return undefined;
@@ -61,6 +85,8 @@ const device = getArg('--device', process.env.WEBOS_DEVICE ?? getConfigValue('DE
 const simulatorVersion = getArg('--simulator-version', process.env.WEBOS_SIMULATOR_VERSION ?? getConfigValue('SIMULATOR_VERSION') ?? '25');
 const simulatorPath = getArg('--simulator-path', process.env.WEBOS_SIMULATOR_PATH ?? getConfigValue('SIMULATOR_PATH') ?? '');
 const simulatorParams = getArg('--params', '{}');
+const launchParams = getArg('--params', '');
+const simulatorMediaProxyPort = getArg('--media-proxy-port', process.env.WEBOS_SIMULATOR_MEDIA_PROXY_PORT ?? '19033');
 
 const run = (command, args, options = {}) => {
   const result = runProcess(command, args, {
@@ -178,7 +204,10 @@ switch (action) {
     break;
   }
   case 'launch': {
-    runCliWithNode16('ares-launch', ['--device', device, appId]);
+    const cliArgs = ['--device', device];
+    cliArgs.push(...buildLaunchParamsArgs(launchParams));
+    cliArgs.push(appId);
+    runCliWithNode16('ares-launch', cliArgs);
     break;
   }
   case 'list': {
@@ -201,6 +230,10 @@ switch (action) {
       throw new Error('未找到 build/webos，请先运行 npm run build:webos');
     }
 
+    runDetached(process.execPath, [resolve(root, 'scripts', 'simulator-media-proxy.mjs'), '--port', simulatorMediaProxyPort], {
+      cwd: root,
+    });
+
     const simulatorExecutable = resolveSimulatorExecutable(simulatorPath, simulatorVersion);
     runDetached(simulatorExecutable, [buildDir, simulatorParams], {
       cwd: simulatorPath,
@@ -208,9 +241,10 @@ switch (action) {
     console.log(`已启动 Simulator ${simulatorVersion}: ${simulatorExecutable}`);
     console.log(`应用目录: ${buildDir}`);
     console.log(`启动参数: ${simulatorParams}`);
+    console.log(`媒体代理: http://127.0.0.1:${simulatorMediaProxyPort}`);
     break;
   }
   default: {
-    console.log('Usage: node ./scripts/webos-cli.mjs <doctor|package|install|launch|list|remove|hosted|simulator> [--device tv] [--simulator-version 25] [--simulator-path <path>]');
+    console.log('Usage: node ./scripts/webos-cli.mjs <doctor|package|install|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--simulator-version 25] [--simulator-path <path>]');
   }
 }
