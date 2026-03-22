@@ -14,6 +14,8 @@ type FocusableElement = HTMLElement & {
     focusSection?: string;
     focusDefault?: string;
     focusGroup?: string;
+    focusActive?: string;
+    focusPressed?: string;
     focusLeft?: string;
     focusRight?: string;
     focusUp?: string;
@@ -53,11 +55,14 @@ const FOCUS_VISIBILITY_PADDING = {
   bottom: 32,
   left: 24,
 } as const;
+const FOCUS_PRESS_VISUAL_MS = 120;
 const sections = new Map<string, RegisteredSection>();
 const captures: FocusCapture[] = [];
+const pressedStateTimers = new WeakMap<FocusableElement, number>();
 
 let orderSeed = 0;
 let initialized = false;
+let activeFocusedElement: FocusableElement | null = null;
 
 function scheduleFocusWork(callback: () => void): void {
   window.setTimeout(callback, 0);
@@ -69,7 +74,26 @@ function ensureInitialized() {
   }
 
   document.addEventListener('focusin', handleFocusIn, true);
+  window.addEventListener('blur', clearActiveFocusMarker);
   initialized = true;
+}
+
+function clearActiveFocusMarker() {
+  if (!activeFocusedElement) {
+    return;
+  }
+
+  delete activeFocusedElement.dataset.focusActive;
+  activeFocusedElement = null;
+}
+
+function markActiveFocusedElement(element: FocusableElement) {
+  if (activeFocusedElement && activeFocusedElement !== element) {
+    delete activeFocusedElement.dataset.focusActive;
+  }
+
+  element.dataset.focusActive = 'true';
+  activeFocusedElement = element;
 }
 
 function handleFocusIn(event: FocusEvent) {
@@ -88,6 +112,7 @@ function handleFocusIn(event: FocusEvent) {
     return;
   }
 
+  markActiveFocusedElement(target);
   section.lastFocusedElement = target;
   section.lastFocusedId = target.dataset.focusId ?? null;
 }
@@ -296,6 +321,22 @@ function ensureElementVisible(element: FocusableElement) {
 
 function focusTarget(target: FocusTarget): FocusableElement | null {
   return focusElement(resolveTargetElement(target));
+}
+
+function flashPressedState(element: FocusableElement) {
+  const existingTimer = pressedStateTimers.get(element);
+  if (typeof existingTimer === 'number') {
+    window.clearTimeout(existingTimer);
+  }
+
+  element.dataset.focusPressed = 'true';
+
+  const nextTimer = window.setTimeout(() => {
+    delete element.dataset.focusPressed;
+    pressedStateTimers.delete(element);
+  }, FOCUS_PRESS_VISUAL_MS);
+
+  pressedStateTimers.set(element, nextTimer);
 }
 
 export function focusById(focusId: string): FocusableElement | null {
@@ -514,6 +555,12 @@ export function moveFocus(direction: Direction) {
 
 export function activateFocused() {
   const active = document.activeElement;
+  if (active instanceof HTMLElement && isFocusableElement(active)) {
+    flashPressedState(active);
+    active.click();
+    return;
+  }
+
   if (active instanceof HTMLElement) {
     active.click();
   }

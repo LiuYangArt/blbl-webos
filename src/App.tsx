@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { AppShell } from './components/AppShell';
+import { FocusOverlay } from './components/FocusOverlay';
 import { AppStoreProvider, useAppStore } from './app/AppStore';
 import { resolveInitialRoute } from './app/launchParams';
 import { PageBackHandlerProvider } from './app/PageBackHandler';
@@ -149,6 +150,7 @@ function AppContent() {
           })}
         </div>
       </AppShell>
+      <FocusOverlay />
     </PageBackHandlerProvider>
   );
 }

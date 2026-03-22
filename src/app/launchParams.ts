@@ -6,6 +6,7 @@ export type AppLaunchParams = {
   cid?: number | string;
   title?: string;
   part?: string;
+  debugFocus?: boolean | string | number;
   debugTelemetryUrl?: string;
   mediaProxyOrigin?: string;
 };
@@ -24,6 +25,22 @@ function normalizeString(value: unknown) {
 function normalizeNumber(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeBoolean(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized === '1'
+    || normalized === 'true'
+    || normalized === 'yes'
+    || normalized === 'on';
 }
 
 export function readLaunchParams(): AppLaunchParams | null {
@@ -88,4 +105,13 @@ export function readDebugTelemetryUrl() {
 
 export function readMediaProxyOrigin() {
   return normalizeString(readLaunchParams()?.mediaProxyOrigin ?? import.meta.env.VITE_MEDIA_PROXY_ORIGIN);
+}
+
+export function readDebugFocusEnabled() {
+  const search = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  return normalizeBoolean(
+    search?.get('debugFocus')
+    ?? readLaunchParams()?.debugFocus
+    ?? import.meta.env.VITE_DEBUG_FOCUS,
+  );
 }
