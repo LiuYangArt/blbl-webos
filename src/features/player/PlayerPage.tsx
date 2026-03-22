@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../app/AppStore';
 import { usePageBackHandler } from '../../app/PageBackHandler';
 import { useAsyncData } from '../../app/useAsyncData';
@@ -43,10 +43,20 @@ type PlayerNavigationTarget = {
 };
 
 type PlayerOverlayMode = 'none' | 'settings' | 'recommendations' | 'episodes';
+type PlayerStripMode = Exclude<PlayerOverlayMode, 'none' | 'settings'>;
 
 type PendingStripFocus = {
   sectionId: string;
   focusId: string;
+};
+
+type OverlayCaptureConfig = {
+  sectionId: string;
+  restoreTarget: string;
+};
+
+type StripOverlayConfig = OverlayCaptureConfig & {
+  focusPrefix: string;
 };
 
 type PlayerPageProps = {
@@ -65,6 +75,30 @@ const PLAYER_CONTROL_SECTION_ID = 'player-controls';
 const PLAYER_SETTINGS_SECTION_ID = 'player-settings-drawer';
 const PLAYER_RECOMMENDATIONS_SECTION_ID = 'player-recommendations-strip';
 const PLAYER_EPISODES_SECTION_ID = 'player-episodes-strip';
+const OVERLAY_CAPTURE_CONFIG: Record<Exclude<PlayerOverlayMode, 'none'>, OverlayCaptureConfig> = {
+  settings: {
+    sectionId: PLAYER_SETTINGS_SECTION_ID,
+    restoreTarget: 'player-open-settings',
+  },
+  recommendations: {
+    sectionId: PLAYER_RECOMMENDATIONS_SECTION_ID,
+    restoreTarget: 'player-open-recommendations',
+  },
+  episodes: {
+    sectionId: PLAYER_EPISODES_SECTION_ID,
+    restoreTarget: 'player-open-episodes',
+  },
+};
+const STRIP_OVERLAY_CONFIG: Record<PlayerStripMode, StripOverlayConfig> = {
+  recommendations: {
+    ...OVERLAY_CAPTURE_CONFIG.recommendations,
+    focusPrefix: 'player-recommendation-slot',
+  },
+  episodes: {
+    ...OVERLAY_CAPTURE_CONFIG.episodes,
+    focusPrefix: 'player-episode-slot',
+  },
+};
 
 export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: PlayerPageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -107,11 +141,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
   const progressKey = `${bvid}:${cid}`;
   const savedProgress = watchProgress[progressKey];
-  const play = playerData.status === 'success' ? playerData.data.play : null;
-  const related = playerData.status === 'success' ? playerData.data.related : [];
-  const detail = playerData.status === 'success' ? playerData.data.detail : null;
-  const deviceInfo = playerData.status === 'success' ? playerData.data.deviceInfo : null;
-  const capability = playerData.status === 'success' ? playerData.data.capability : null;
+  const playerDataValue = playerData.status === 'success' ? playerData.data : null;
+  const play = playerDataValue?.play ?? null;
+  const related = playerDataValue?.related ?? [];
+  const detail = playerDataValue?.detail ?? null;
+  const deviceInfo = playerDataValue?.deviceInfo ?? null;
+  const capability = playerDataValue?.capability ?? null;
   const codecMemory = useMemo(() => (
     capability ? readPlayerCodecMemory(capability.deviceKey) : {
       lastSuccessfulCodec: null,
@@ -186,6 +221,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const isSettingsOpen = overlayMode === 'settings';
   const isRecommendationsOpen = overlayMode === 'recommendations';
   const isEpisodesOpen = overlayMode === 'episodes';
+  const overlayCaptureConfig = getOverlayCaptureConfig(overlayMode);
 
   function revealPlayerChrome(focusControls: boolean): void {
     setOverlayMode('none');
@@ -217,13 +253,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   }
 
   function openRecommendationsOverlay(): void {
-    setRecommendationPage(0);
-    setPendingStripFocus({
-      sectionId: PLAYER_RECOMMENDATIONS_SECTION_ID,
-      focusId: buildStripFocusId('player-recommendation-slot', 0),
-    });
-    setOverlayMode('recommendations');
-    setIsChromeVisible(false);
+    openStripOverlay('recommendations', 0, 0);
   }
 
   function openEpisodesOverlay(): void {
@@ -231,20 +261,30 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     const pageSize = getPageItemCount(episodeEntries.length, targetPage, STRIP_PAGE_SIZE);
     const preferredSlot = currentEpisodeIndex >= 0 ? currentEpisodeIndex % STRIP_PAGE_SIZE : 0;
     const targetSlot = Math.min(preferredSlot, Math.max(0, pageSize - 1));
-
-    setEpisodePage(targetPage);
-    setPendingStripFocus({
-      sectionId: PLAYER_EPISODES_SECTION_ID,
-      focusId: buildStripFocusId('player-episode-slot', targetSlot),
-    });
-    setOverlayMode('episodes');
-    setIsChromeVisible(false);
+    openStripOverlay('episodes', targetPage, targetSlot);
   }
 
   function closeOverlayToChrome(): void {
     setOverlayMode('none');
     setIsChromeVisible(true);
     setChromeActivityTick((previous) => previous + 1);
+  }
+
+  function openStripOverlay(mode: PlayerStripMode, page: number, slot: number): void {
+    const config = STRIP_OVERLAY_CONFIG[mode];
+
+    if (mode === 'recommendations') {
+      setRecommendationPage(page);
+    } else {
+      setEpisodePage(page);
+    }
+
+    setPendingStripFocus({
+      sectionId: config.sectionId,
+      focusId: buildStripFocusId(config.focusPrefix, slot),
+    });
+    setOverlayMode(mode);
+    setIsChromeVisible(false);
   }
 
   usePageBackHandler(() => {
@@ -289,35 +329,19 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   }, [bvid, cid, playbackPlan.warning, currentAttempt?.id]);
 
   useEffect(() => {
-    const activeOverlaySectionId = (
-      overlayMode === 'settings'
-        ? PLAYER_SETTINGS_SECTION_ID
-        : overlayMode === 'recommendations'
-          ? PLAYER_RECOMMENDATIONS_SECTION_ID
-          : overlayMode === 'episodes'
-            ? PLAYER_EPISODES_SECTION_ID
-            : null
-    );
-
-    if (!activeOverlaySectionId) {
+    if (!overlayCaptureConfig) {
       return undefined;
     }
 
-    const restoreTarget = overlayMode === 'settings'
-      ? 'player-open-settings'
-      : overlayMode === 'episodes'
-        ? 'player-open-episodes'
-        : 'player-open-recommendations';
-
     captureFocus({
-      sectionId: activeOverlaySectionId,
-      restoreTarget,
+      sectionId: overlayCaptureConfig.sectionId,
+      restoreTarget: overlayCaptureConfig.restoreTarget,
     });
 
     return () => {
-      releaseFocus(activeOverlaySectionId);
+      releaseFocus(overlayCaptureConfig.sectionId);
     };
-  }, [overlayMode]);
+  }, [overlayCaptureConfig]);
 
   useEffect(() => {
     if (!pendingStripFocus) {
@@ -351,8 +375,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
           action,
           page: recommendationPage,
           totalItems: related.length,
-          sectionId: PLAYER_RECOMMENDATIONS_SECTION_ID,
-          focusPrefix: 'player-recommendation-slot',
+          sectionId: STRIP_OVERLAY_CONFIG.recommendations.sectionId,
+          focusPrefix: STRIP_OVERLAY_CONFIG.recommendations.focusPrefix,
           setPage: setRecommendationPage,
           setPendingFocus: setPendingStripFocus,
         });
@@ -368,8 +392,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
           action,
           page: episodePage,
           totalItems: episodeEntries.length,
-          sectionId: PLAYER_EPISODES_SECTION_ID,
-          focusPrefix: 'player-episode-slot',
+          sectionId: STRIP_OVERLAY_CONFIG.episodes.sectionId,
+          focusPrefix: STRIP_OVERLAY_CONFIG.episodes.focusPrefix,
           setPage: setEpisodePage,
           setPendingFocus: setPendingStripFocus,
         });
@@ -1007,87 +1031,105 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         ) : null}
 
         {isRecommendationsOpen ? (
-          <FocusSection
-            as="aside"
-            id={PLAYER_RECOMMENDATIONS_SECTION_ID}
-            group="overlay"
-            enterTo="last-focused"
-            defaultElement={buildStripFocusId('player-recommendation-slot', 0)}
-            className="player-strip"
+          <PlayerStripOverlay
+            sectionId={STRIP_OVERLAY_CONFIG.recommendations.sectionId}
+            defaultElement={buildStripFocusId(STRIP_OVERLAY_CONFIG.recommendations.focusPrefix, 0)}
+            badge="推荐视频"
+            title="按左右切换视频，按下翻到下一屏 6 个"
+            meta={formatPageMeta(recommendationPage, recommendationPageCount, related.length)}
           >
-            <div className="player-strip__header">
-              <div>
-                <span className="player-hero__badge">推荐视频</span>
-                <h2>按左右切换视频，按下翻到下一屏 6 个</h2>
-              </div>
-              <p>{formatPageMeta(recommendationPage, recommendationPageCount, related.length)}</p>
-            </div>
-            <div className="player-strip__grid">
-              {recommendationItems.map((item, index) => (
-                <MediaCard
-                  key={buildStripFocusId('player-recommendation-slot', index)}
-                  sectionId={PLAYER_RECOMMENDATIONS_SECTION_ID}
-                  focusId={buildStripFocusId('player-recommendation-slot', index)}
-                  defaultFocus={index === 0}
-                  item={item}
-                  onClick={() => onOpenPlayer({
-                    bvid: item.bvid,
-                    cid: item.cid,
-                    title: item.title,
-                  })}
-                />
-              ))}
-            </div>
-          </FocusSection>
+            {recommendationItems.map((item, index) => (
+              <MediaCard
+                key={buildStripFocusId(STRIP_OVERLAY_CONFIG.recommendations.focusPrefix, index)}
+                sectionId={STRIP_OVERLAY_CONFIG.recommendations.sectionId}
+                focusId={buildStripFocusId(STRIP_OVERLAY_CONFIG.recommendations.focusPrefix, index)}
+                defaultFocus={index === 0}
+                item={item}
+                onClick={() => onOpenPlayer({
+                  bvid: item.bvid,
+                  cid: item.cid,
+                  title: item.title,
+                })}
+              />
+            ))}
+          </PlayerStripOverlay>
         ) : null}
 
         {isEpisodesOpen ? (
-          <FocusSection
-            as="aside"
-            id={PLAYER_EPISODES_SECTION_ID}
-            group="overlay"
-            enterTo="last-focused"
-            defaultElement={buildStripFocusId('player-episode-slot', 0)}
-            className="player-strip"
+          <PlayerStripOverlay
+            sectionId={STRIP_OVERLAY_CONFIG.episodes.sectionId}
+            defaultElement={buildStripFocusId(STRIP_OVERLAY_CONFIG.episodes.focusPrefix, 0)}
+            badge="分P / 选集"
+            title="按左右切换分P，按下翻到下一屏 6 个"
+            meta={formatPageMeta(episodePage, episodePageCount, episodeEntries.length)}
           >
-            <div className="player-strip__header">
-              <div>
-                <span className="player-hero__badge">分P / 选集</span>
-                <h2>按左右切换分P，按下翻到下一屏 6 个</h2>
-              </div>
-              <p>{formatPageMeta(episodePage, episodePageCount, episodeEntries.length)}</p>
-            </div>
-            <div className="player-strip__grid">
-              {episodeItems.map((entry, index) => {
-                const isActiveEpisode = entry.cid === cid;
-                return (
-                  <FocusButton
-                    key={buildStripFocusId('player-episode-slot', index)}
-                    variant={isActiveEpisode ? 'primary' : 'glass'}
-                    className="player-strip-card"
-                    sectionId={PLAYER_EPISODES_SECTION_ID}
-                    focusId={buildStripFocusId('player-episode-slot', index)}
-                    defaultFocus={index === 0}
-                    onClick={() => onOpenPlayer({
-                      bvid,
-                      cid: entry.cid,
-                      title,
-                      part: entry.part,
-                    })}
-                  >
-                    <span className="player-strip-card__eyebrow">
-                      {isActiveEpisode ? '当前播放' : `P${entry.page}`}
-                    </span>
-                    <strong>{entry.part || `P${entry.page}`}</strong>
-                    <small>{formatDurationText(entry.duration)}</small>
-                  </FocusButton>
-                );
-              })}
-            </div>
-          </FocusSection>
+            {episodeItems.map((entry, index) => {
+              const isActiveEpisode = entry.cid === cid;
+              return (
+                <FocusButton
+                  key={buildStripFocusId(STRIP_OVERLAY_CONFIG.episodes.focusPrefix, index)}
+                  variant={isActiveEpisode ? 'primary' : 'glass'}
+                  className="player-strip-card"
+                  sectionId={STRIP_OVERLAY_CONFIG.episodes.sectionId}
+                  focusId={buildStripFocusId(STRIP_OVERLAY_CONFIG.episodes.focusPrefix, index)}
+                  defaultFocus={index === 0}
+                  onClick={() => onOpenPlayer({
+                    bvid,
+                    cid: entry.cid,
+                    title,
+                    part: entry.part,
+                  })}
+                >
+                  <span className="player-strip-card__eyebrow">
+                    {isActiveEpisode ? '当前播放' : `P${entry.page}`}
+                  </span>
+                  <strong>{entry.part || `P${entry.page}`}</strong>
+                  <small>{formatDurationText(entry.duration)}</small>
+                </FocusButton>
+              );
+            })}
+          </PlayerStripOverlay>
         ) : null}
       </FocusSection>
     </main>
+  );
+}
+
+type PlayerStripOverlayProps = {
+  sectionId: string;
+  defaultElement: string;
+  badge: string;
+  title: string;
+  meta: string;
+  children: ReactNode;
+};
+
+function PlayerStripOverlay({
+  sectionId,
+  defaultElement,
+  badge,
+  title,
+  meta,
+  children,
+}: PlayerStripOverlayProps) {
+  return (
+    <FocusSection
+      as="aside"
+      id={sectionId}
+      group="overlay"
+      enterTo="last-focused"
+      defaultElement={defaultElement}
+      className="player-strip"
+    >
+      <div className="player-strip__header">
+        <div>
+          <span className="player-hero__badge">{badge}</span>
+          <h2>{title}</h2>
+        </div>
+        <p>{meta}</p>
+      </div>
+      <div className="player-strip__grid">{children}</div>
+    </FocusSection>
   );
 }
 
@@ -1100,6 +1142,14 @@ function blurPlayerChromeFocus(): void {
   if (activeElement.dataset.focusSection === PLAYER_CONTROL_SECTION_ID) {
     activeElement.blur();
   }
+}
+
+function getOverlayCaptureConfig(mode: PlayerOverlayMode): OverlayCaptureConfig | null {
+  if (mode === 'none') {
+    return null;
+  }
+
+  return OVERLAY_CAPTURE_CONFIG[mode];
 }
 
 function getPageCount(totalItems: number, pageSize: number): number {
