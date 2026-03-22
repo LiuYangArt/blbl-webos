@@ -29,10 +29,12 @@ import { createDashManifestSource } from './playerDashManifest';
 import { reportPlayerDebugEvent } from './playerDebug';
 import { resolvePlaybackCandidateUrls } from './playerMediaProxy';
 import {
+  createDefaultPlayerCodecMemory,
+  recordPlayerAttemptFailure,
+  recordPlayerAttemptSuccess,
   readPlayerCodecMemory,
   readPlayerSettings,
   writePlayerCodecPreference,
-  writePlayerCodecResult,
   writePlayerQualityPreference,
 } from './playerSettings';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
@@ -153,10 +155,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const deviceInfo = playerDataValue?.deviceInfo ?? null;
   const capability = playerDataValue?.capability ?? null;
   const codecMemory = useMemo(() => (
-    capability ? readPlayerCodecMemory(capability.deviceKey) : {
-      lastSuccessfulCodec: null,
-      lastFailedCodec: null,
-    }
+    capability ? readPlayerCodecMemory(capability.deviceKey) : createDefaultPlayerCodecMemory()
   ), [capability]);
 
   const episodeEntries = useMemo<VideoPart[]>(() => {
@@ -497,9 +496,9 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       quality: play.qualityLabel,
       codec: playbackPlan.attempts[0]?.codecLabel ?? getCodecLabel(codecPreference),
       sourceTypeLabel: playbackPlan.attempts[0]?.mode === 'dash' ? 'Shaka Player + MSE' : 'HTML5 Video',
-      details: buildEnvironmentDetails(capability, deviceInfo, play, playbackPlan.attempts, playbackPlan.warning),
+      details: buildEnvironmentDetails(capability, deviceInfo, play, playbackPlan.attempts, playbackPlan.warning, codecMemory),
     });
-  }, [bvid, capability, cid, codecPreference, deviceInfo, play, playbackPlan]);
+  }, [bvid, capability, cid, codecMemory, codecPreference, deviceInfo, play, playbackPlan]);
 
   useEffect(() => {
     if (!play || !currentAttempt || !currentCandidate || !currentSourceUrl || !capability) {
@@ -533,9 +532,11 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         return;
       }
       recordedAttemptIdRef.current = currentAttempt.id;
-      writePlayerCodecResult(capability.deviceKey, {
-        lastSuccessfulCodec: currentAttempt.codec,
-        lastFailedCodec: null,
+      recordPlayerAttemptSuccess(capability.deviceKey, {
+        codec: currentAttempt.codec,
+        mode: currentAttempt.mode,
+        quality: currentAttempt.quality,
+        audioStreamId: currentAttempt.audioStream?.id ?? null,
       });
     };
 
@@ -562,6 +563,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
       const nextAttemptIndex = activeAttemptIndex + 1;
       if (nextAttemptIndex < playbackPlan.attempts.length) {
+        recordPlayerAttemptFailure(capability.deviceKey, {
+          codec: currentAttempt.codec,
+          mode: currentAttempt.mode,
+        });
         const nextAttempt = playbackPlan.attempts[nextAttemptIndex];
         setPlaybackNotice(`当前线路不可用，正在切换到 ${nextAttempt.qualityLabel} · ${nextAttempt.codecLabel} · ${nextAttempt.mode === 'dash' ? 'DASH' : '兼容流'}`);
         setActiveAttemptIndex(nextAttemptIndex);
@@ -570,8 +575,9 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         return;
       }
 
-      writePlayerCodecResult(capability.deviceKey, {
-        lastFailedCodec: currentAttempt.codec,
+      recordPlayerAttemptFailure(capability.deviceKey, {
+        codec: currentAttempt.codec,
+        mode: currentAttempt.mode,
       });
 
       reportPlayerDebugEvent({
@@ -1482,9 +1488,11 @@ function buildEnvironmentDetails(
   play: PlaySource,
   attempts: PlaybackAttempt[],
   warning: string | null,
+  codecMemory: ReturnType<typeof readPlayerCodecMemory>,
 ) {
   return {
     capability,
+    codecMemory,
     deviceInfo,
     userAgent: navigator.userAgent,
     playMode: play.mode,
@@ -1510,6 +1518,7 @@ function buildEnvironmentDetails(
       mode: attempt.mode,
       codec: attempt.codec,
       quality: attempt.quality,
+      candidateCount: attempt.candidates.length,
       audioStreamId: attempt.audioStream?.id ?? null,
       audioBandwidth: attempt.audioStream?.bandwidth ?? null,
       audioHost: getUrlHost(attempt.audioStream?.url ?? ''),

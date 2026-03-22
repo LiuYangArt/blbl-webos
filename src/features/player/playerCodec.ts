@@ -12,6 +12,12 @@ export type PlayerCodecSupport = Record<'avc' | 'hevc' | 'av1', boolean>;
 export type PlayerCodecMemory = {
   lastSuccessfulCodec: ParsedVideoCodec | null;
   lastFailedCodec: ParsedVideoCodec | null;
+  lastSuccessfulMode: 'dash' | 'compatible' | null;
+  lastFailedMode: 'dash' | 'compatible' | null;
+  lastSuccessfulQuality: number | null;
+  lastSuccessfulAudioStreamId: number | null;
+  modeSuccessCount: Record<'dash' | 'compatible', number>;
+  modeFailureCount: Record<'dash' | 'compatible', number>;
 };
 
 export type PlayerCodecCapability = {
@@ -198,8 +204,8 @@ export function buildPlaybackAttempts(
   }
 
   const dashResolution = buildDashAttempts(playSource, codecPreference, capability, memory);
+  const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
   if (dashResolution.attempts.length > 0) {
-    const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
     const shouldAppendCompatibleFallback = capability.deviceClass !== 'browser-dev'
       && capability.deviceClass !== 'webos-simulator'
       && compatibleResolution.attempts.length > 0;
@@ -209,10 +215,12 @@ export function buildPlaybackAttempts(
         '若 DASH 在当前电视设备上无法稳定起播，播放器会继续尝试兼容流直连。',
       ].filter(Boolean);
       return {
-        attempts: [
-          ...dashResolution.attempts,
-          ...compatibleResolution.attempts,
-        ],
+        attempts: orderPlaybackAttempts(
+          [...dashResolution.attempts, ...compatibleResolution.attempts],
+          playSource,
+          capability,
+          memory,
+        ),
         effectivePreference: dashResolution.effectivePreference,
         warning: warningMessages.join(' '),
       };
@@ -279,7 +287,13 @@ function buildDashAttempts(
       isCompatible: false,
       width: stream.width,
       height: stream.height,
-      candidates: buildDashCandidates(stream, audioStream),
+      candidates: buildDashCandidates(
+        stream,
+        audioStream,
+        capability.deviceClass,
+        memory,
+        playSource.compatibleSources.length > 0,
+      ),
       source: null,
       videoStream: stream,
       audioStream,
@@ -384,14 +398,18 @@ function getResolvedDashStreams(playSource: PlaySource): PlayVideoStream[] {
 function buildDashCandidates(
   videoStream: PlayVideoStream,
   audioStream: PlayAudioStream | null,
+  deviceClass: string,
+  memory: PlayerCodecMemory | undefined,
+  hasCompatibleFallback: boolean,
 ): PlaybackSourceCandidate[] {
   const rankedVideoUrls = rankCandidateUrls([videoStream.url, ...videoStream.backupUrls]);
+  const candidateLimit = getDashCandidateLimit(deviceClass, memory, hasCompatibleFallback);
   if (!audioStream) {
     return rankedVideoUrls.map((candidate, index) => ({
       id: `dash-video:${videoStream.id}:${index}`,
       videoUrl: candidate.url,
       audioUrl: null,
-    }));
+    })).slice(0, candidateLimit);
   }
 
   const rankedAudioUrls = rankCandidateUrls([audioStream.url, ...audioStream.backupUrls]);
@@ -410,12 +428,32 @@ function buildDashCandidates(
 
   return pairs
     .sort((left, right) => right.score - left.score)
-    .slice(0, 12)
+    .slice(0, candidateLimit)
     .map(({ id, videoUrl, audioUrl }) => ({
       id,
       videoUrl,
       audioUrl,
     }));
+}
+
+function getDashCandidateLimit(
+  deviceClass: string,
+  memory: PlayerCodecMemory | undefined,
+  hasCompatibleFallback: boolean,
+) {
+  if (deviceClass === 'browser-dev' || deviceClass === 'webos-simulator') {
+    return 12;
+  }
+
+  if (!isRealWebOsDevice(deviceClass)) {
+    return 8;
+  }
+
+  if (memory?.lastSuccessfulMode === 'compatible') {
+    return 2;
+  }
+
+  return hasCompatibleFallback ? 3 : 4;
 }
 
 function rankCandidateUrls(urls: string[]) {
@@ -475,6 +513,112 @@ function orderStreamsByCodec(
   }
 
   return ordered;
+}
+
+function orderPlaybackAttempts(
+  attempts: PlaybackAttempt[],
+  playSource: PlaySource,
+  capability: PlayerCodecCapability,
+  memory?: PlayerCodecMemory,
+): PlaybackAttempt[] {
+  return attempts
+    .map((attempt, index) => ({
+      attempt,
+      index,
+      score: getPlaybackAttemptScore(attempt, playSource, capability, memory),
+    }))
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+      return left.index - right.index;
+    })
+    .map((item) => item.attempt);
+}
+
+function getPlaybackAttemptScore(
+  attempt: PlaybackAttempt,
+  playSource: PlaySource,
+  capability: PlayerCodecCapability,
+  memory?: PlayerCodecMemory,
+) {
+  const realWebOs = isRealWebOsDevice(capability.deviceClass);
+  const bestDashQuality = Math.max(
+    0,
+    ...attemptsOfMode(playSource, 'dash').map((item) => item.quality),
+  );
+  const bestCompatibleQuality = Math.max(
+    0,
+    ...attemptsOfMode(playSource, 'compatible').map((item) => item.quality),
+  );
+  let score = attempt.mode === 'dash' ? 12 : 6;
+
+  if (attempt.codec === 'avc') {
+    score += 4;
+  } else if (attempt.codec === 'hevc') {
+    score += 2;
+  } else if (attempt.codec === 'av1') {
+    score += 1;
+  }
+
+  if (realWebOs && attempt.mode === 'dash' && attempt.codec === 'avc') {
+    score += 2;
+  }
+
+  if (memory?.lastSuccessfulMode === attempt.mode) {
+    score += 6;
+  }
+  if (memory?.lastFailedMode === attempt.mode) {
+    score -= 4;
+  }
+  if (memory?.lastSuccessfulCodec === attempt.codec) {
+    score += 3;
+  }
+  if (memory?.lastFailedCodec === attempt.codec) {
+    score -= 5;
+  }
+  if (memory?.lastSuccessfulQuality === attempt.quality) {
+    score += 2;
+  }
+  if (attempt.audioStream && memory?.lastSuccessfulAudioStreamId === attempt.audioStream.id) {
+    score += 2;
+  }
+
+  const modeSuccessCount = memory?.modeSuccessCount[attempt.mode] ?? 0;
+  const modeFailureCount = memory?.modeFailureCount[attempt.mode] ?? 0;
+  score += Math.min(modeSuccessCount, 4) * 4;
+  score -= Math.min(modeFailureCount, 4) * 3;
+
+  if (realWebOs && attempt.mode === 'compatible') {
+    const compatibleHelpsRequestedQuality = attempt.quality >= playSource.requestedQuality;
+    const compatibleBeatsDashFallback = bestCompatibleQuality >= bestDashQuality
+      && bestDashQuality > 0
+      && bestDashQuality < playSource.requestedQuality;
+
+    if (compatibleHelpsRequestedQuality) {
+      score += 4;
+    }
+    if (compatibleBeatsDashFallback) {
+      score += 10;
+    }
+  }
+
+  if (realWebOs && attempt.mode === 'dash' && attempt.quality < playSource.requestedQuality) {
+    score -= 8;
+  }
+
+  return score;
+}
+
+function attemptsOfMode(playSource: PlaySource, mode: 'dash' | 'compatible') {
+  if (mode === 'dash') {
+    return playSource.videoStreams;
+  }
+  return playSource.compatibleSources;
+}
+
+function isRealWebOsDevice(deviceClass: string) {
+  return deviceClass === 'webos-6' || deviceClass === 'webos-2021' || deviceClass === 'webos-generic';
 }
 
 function pickPreferredAudioStream(
