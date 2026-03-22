@@ -50,6 +50,30 @@
   - WBI 签名参数清洗
   - `wts` / `w_rid` 生成
   - 同日缓存与跨日刷新
+- `src/services/api/bilibili.test.ts`
+  - 首页推荐、详情页、关注页数据清洗
+  - DASH / durl 播放源解析
+  - 用户资料聚合映射
+- `src/platform/remote.test.ts`
+  - 遥控器按键到焦点动作的映射
+  - 输入框保护
+  - remote intent 拦截
+  - 按键防抖与释放恢复
+- `src/platform/webos.test.ts`
+  - `platformBack` 回退顺序
+  - 键盘显示状态
+  - 设备信息读取
+- `src/services/debug/runtimeDiagnostics.test.ts`
+  - 运行时诊断写入、截断、清空
+  - detail 规范化
+  - window 调试 API 暴露
+- `src/features/player/playerDebug.test.ts`
+  - 调试 telemetry 地址读取与缓存
+  - 上报请求构造
+- `src/features/player/playerShaka.test.ts`
+  - Shaka 错误格式化
+  - session 创建与销毁
+  - 不支持环境下的错误保护
 
 ## 运行方式
 
@@ -70,12 +94,12 @@ npm run test:watch
 
 ## 暂时没有优先补的测试
 
-下面这些不是“不该测”，而是当前阶段更适合继续通过真机验证和更明确的抽象后再补：
+下面这些不是“不该测”，而是当前阶段更适合继续通过真机验证或在抽象更稳定后再补：
 
-- 遥控器焦点引擎的复杂 DOM 导航路径
 - 播放器整页 UI 交互
-- webOS 真机专有能力封装
 - 依赖 B 站线上接口返回的集成链路
+- `AppStore` / 页面级组合状态的 React 交互测试
+- 真机部署脚本与 LG CLI 之间的 smoke test
 
 原因是这几类测试如果现在直接写，很容易和 DOM 结构、模拟环境或接口波动强耦合，维护成本会明显高于收益。
 
@@ -83,7 +107,7 @@ npm run test:watch
 
 后面如果继续补测试，优先级建议按这个顺序走：
 
-1. `src/platform/focus/engine.ts` 中可抽离的几何评分与 section 选择逻辑
-2. `src/services/api/*` 中更完整的响应清洗与异常分支
-3. `src/features/player/*` 中更多画质/编码/音轨回退组合
+1. `src/services/api/*` 中更完整的响应清洗与异常分支
+2. `src/features/player/*` 中更多画质/编码/音轨回退组合
+3. `AppStore`、页面栈与页面级交互状态测试
 4. 与真机脚本相关的 smoke test 或诊断脚本断言
