@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import legacy from '@vitejs/plugin-legacy';
 
@@ -51,6 +51,10 @@ export default defineConfig({
   },
   preview: {
     proxy,
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
   },
   build: {
     outDir: 'dist',

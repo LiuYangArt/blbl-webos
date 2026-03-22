@@ -83,6 +83,7 @@ F:\CodeProjects\bilibili_tv_android\MediaPlayback
 
 完成改动后至少运行：
 - `npm run lint`
+- `npm run test`
 - `npm run typecheck`
 - `npm run build`
 
