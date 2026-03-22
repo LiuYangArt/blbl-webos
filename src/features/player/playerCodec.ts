@@ -199,6 +199,24 @@ export function buildPlaybackAttempts(
 
   const dashResolution = buildDashAttempts(playSource, codecPreference, capability, memory);
   if (dashResolution.attempts.length > 0) {
+    const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
+    const shouldAppendCompatibleFallback = capability.deviceClass !== 'browser-dev'
+      && capability.deviceClass !== 'webos-simulator'
+      && compatibleResolution.attempts.length > 0;
+    if (shouldAppendCompatibleFallback) {
+      const warningMessages = [
+        dashResolution.warning,
+        '若 DASH 在当前电视设备上无法稳定起播，播放器会继续尝试兼容流直连。',
+      ].filter(Boolean);
+      return {
+        attempts: [
+          ...dashResolution.attempts,
+          ...compatibleResolution.attempts,
+        ],
+        effectivePreference: dashResolution.effectivePreference,
+        warning: warningMessages.join(' '),
+      };
+    }
     return dashResolution;
   }
 
@@ -474,8 +492,8 @@ function pickPreferredAudioStream(
       return rightScore - leftScore;
     }
 
-    const rightHostScore = getMediaHostPreferenceScore(right.url);
-    const leftHostScore = getMediaHostPreferenceScore(left.url);
+    const rightHostScore = getAudioStreamHostScore(right);
+    const leftHostScore = getAudioStreamHostScore(left);
     if (rightHostScore !== leftHostScore) {
       return rightHostScore - leftHostScore;
     }
@@ -492,16 +510,22 @@ function pickPreferredAudioStream(
 
 function getAudioStreamScore(stream: PlayAudioStream, deviceClass: string): number {
   const codecs = stream.codecs.toLowerCase();
+  let score = 0;
   if (codecs.includes('mp4a')) {
-    return shouldPreferStableAudioForDevice(deviceClass) ? 5 : 3;
+    score += shouldPreferStableAudioForDevice(deviceClass) ? 5 : 3;
   }
   if (codecs.includes('ec-3') || codecs.includes('eac3')) {
-    return 2;
+    score += 2;
   }
   if (codecs.includes('flac')) {
-    return 1;
+    score += 1;
   }
-  return 0;
+
+  if (shouldPreferStableAudioForDevice(deviceClass)) {
+    score += getStableAudioBandwidthScore(stream.bandwidth);
+  }
+
+  return score;
 }
 
 function shouldPreferStableAudioForDevice(deviceClass: string) {
@@ -524,10 +548,27 @@ function getMediaHostPreferenceScore(url: string) {
     if (host.includes(':8082')) {
       score -= 10;
     }
+    if (host.includes('alib')) {
+      score -= 12;
+    }
+    if (host.includes('estgoss')) {
+      score -= 4;
+    }
     return score;
   } catch {
     return 0;
   }
+}
+
+function getAudioStreamHostScore(stream: PlayAudioStream) {
+  const hosts = [stream.url, ...stream.backupUrls];
+  return hosts.reduce((total, url) => total + getMediaHostPreferenceScore(url), 0);
+}
+
+function getStableAudioBandwidthScore(bandwidth: number) {
+  const target = 128_000;
+  const distance = Math.abs(bandwidth - target);
+  return Math.round(12 - distance / 24_000);
 }
 
 function formatAudioCodecLabel(codecs: string): string {

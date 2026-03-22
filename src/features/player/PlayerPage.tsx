@@ -118,6 +118,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const [chromeActivityTick, setChromeActivityTick] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progressView, setProgressView] = useState({ current: 0, duration: 0 });
+  const [activeAttemptIndex, setActiveAttemptIndex] = useState(0);
   const [activeCandidateIndex, setActiveCandidateIndex] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [playbackNotice, setPlaybackNotice] = useState<string | null>(null);
@@ -187,7 +188,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     return buildPlaybackAttempts(play, codecPreference, capability, codecMemory);
   }, [capability, codecMemory, codecPreference, play]);
 
-  const currentAttempt = playbackPlan.attempts[0] ?? null;
+  const currentAttempt = playbackPlan.attempts[activeAttemptIndex] ?? null;
   const rawCurrentCandidate = currentAttempt?.candidates[activeCandidateIndex] ?? null;
   const currentCandidate = useMemo(
     () => resolvePlaybackCandidateUrls(rawCurrentCandidate, capability?.deviceClass),
@@ -233,6 +234,11 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const requestedQualityOption = play?.qualities.find((item) => item.qn === play.requestedQuality) ?? null;
   const currentQualityOption = play?.qualities.find((item) => item.qn === play.currentQuality) ?? null;
   const qualityAvailabilityNotice = play ? describeQualityAvailability(play) : null;
+
+  useEffect(() => {
+    setActiveAttemptIndex(0);
+    setActiveCandidateIndex(0);
+  }, [playbackPlan]);
 
   function revealPlayerChrome(focusControls: boolean): void {
     setOverlayMode('none');
@@ -554,6 +560,16 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         return;
       }
 
+      const nextAttemptIndex = activeAttemptIndex + 1;
+      if (nextAttemptIndex < playbackPlan.attempts.length) {
+        const nextAttempt = playbackPlan.attempts[nextAttemptIndex];
+        setPlaybackNotice(`当前线路不可用，正在切换到 ${nextAttempt.qualityLabel} · ${nextAttempt.codecLabel} · ${nextAttempt.mode === 'dash' ? 'DASH' : '兼容流'}`);
+        setActiveAttemptIndex(nextAttemptIndex);
+        setActiveCandidateIndex(0);
+        failed = false;
+        return;
+      }
+
       writePlayerCodecResult(capability.deviceKey, {
         lastFailedCodec: currentAttempt.codec,
       });
@@ -770,6 +786,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     };
   }, [
     activeCandidateIndex,
+    activeAttemptIndex,
     currentCandidate,
     bvid,
     capability,
@@ -778,6 +795,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     currentMimeType,
     currentSourceUrl,
     engineLabel,
+    playbackPlan,
     play,
     rawCurrentCandidate,
     reloadNonce,
