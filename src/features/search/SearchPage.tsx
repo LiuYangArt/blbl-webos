@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { DetailRoutePayload } from '../../app/routes';
+import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
 import { useAsyncData } from '../../app/useAsyncData';
 import { usePageBackHandler } from '../../app/PageBackHandler';
@@ -16,10 +16,10 @@ import { PageStatus } from '../shared/PageStatus';
 
 type SearchPageProps = {
   onSubmit: (keyword: string) => void;
-  onOpenDetail: (item: DetailRoutePayload) => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function SearchPage({ onSubmit, onOpenDetail }: SearchPageProps) {
+export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
   const { searchHistory, rememberSearch, removeSearchHistory } = useAppStore();
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -204,7 +204,7 @@ export function SearchPage({ onSubmit, onOpenDetail }: SearchPageProps) {
               sectionId="search-preview-grid"
               focusId={`search-preview-${index}`}
               item={item}
-              onClick={() => onOpenDetail(item)}
+              onClick={() => onOpenPlayer(item)}
             />
           ))}
         </div>

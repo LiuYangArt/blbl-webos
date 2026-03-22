@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { DetailRoutePayload } from '../../app/routes';
+import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
 import { useAsyncData } from '../../app/useAsyncData';
 import { usePageBackHandler } from '../../app/PageBackHandler';
@@ -13,10 +13,10 @@ import { PageStatus } from '../shared/PageStatus';
 type SearchResultsPageProps = {
   keyword: string;
   onSubmit: (keyword: string) => void;
-  onOpenDetail: (item: DetailRoutePayload) => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function SearchResultsPage({ keyword, onSubmit, onOpenDetail }: SearchResultsPageProps) {
+export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchResultsPageProps) {
   const { rememberSearch } = useAppStore();
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState(keyword);
@@ -115,7 +115,7 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenDetail }: SearchRes
         className="content-section"
         leaveFor={{ left: '@side-nav', up: '@search-results-actions' }}
       >
-        <SectionHeader title="视频结果" description="点击任意结果继续进入详情页。" actionLabel="详情跳转" />
+        <SectionHeader title="视频结果" description="点击任意结果直接进入全屏播放。" actionLabel="立即播放" />
         {items.length ? (
           <div className="media-grid">
             {items.slice(0, 18).map((item, index) => (
@@ -124,7 +124,7 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenDetail }: SearchRes
                 sectionId="search-results-grid"
                 focusId={`search-result-${index}`}
                 item={item}
-                onClick={() => onOpenDetail(item)}
+                onClick={() => onOpenPlayer(item)}
               />
             ))}
           </div>

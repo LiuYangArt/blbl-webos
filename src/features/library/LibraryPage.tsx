@@ -1,4 +1,5 @@
 import { useAppStore } from '../../app/AppStore';
+import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
@@ -15,7 +16,7 @@ type LibraryPageProps =
   | {
       mode: 'later';
       onLogin: () => void;
-      onOpenDetail: (item: { bvid: string; title: string }) => void;
+      onOpenPlayer: (item: PlayerRoutePayload) => void;
     }
   | {
       mode: 'favorites';
@@ -61,7 +62,7 @@ export function LibraryPage(props: LibraryPageProps) {
           className="content-section"
           leaveFor={{ left: '@side-nav' }}
         >
-          <SectionHeader title="稍后再看" description="首版先支持列表浏览和进入详情页，后续再补管理动作。" actionLabel={`${items.length} 条`} />
+          <SectionHeader title="稍后再看" description="首版先支持列表浏览和直接播放，管理动作后置。" actionLabel={`${items.length} 条`} />
           <div className="list-panel">
             {items.map((item, index) => (
               <div key={item.bvid} className="list-panel__row">
@@ -71,7 +72,7 @@ export function LibraryPage(props: LibraryPageProps) {
                   sectionId="later-list"
                   focusId={`later-item-${index}`}
                   defaultFocus={index === 0}
-                  onClick={() => props.onOpenDetail({ bvid: item.bvid, title: item.title })}
+                  onClick={() => props.onOpenPlayer(item)}
                 >
                   <img src={item.cover} alt="" className="history-card__cover" referrerPolicy="no-referrer" />
                   <div className="history-card__body">

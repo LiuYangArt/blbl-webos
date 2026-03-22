@@ -1,4 +1,4 @@
-import type { DetailRoutePayload } from '../../app/routes';
+import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
@@ -7,10 +7,10 @@ import { fetchPopularVideos } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
 type HotPageProps = {
-  onOpenDetail: (item: DetailRoutePayload) => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function HotPage({ onOpenDetail }: HotPageProps) {
+export function HotPage({ onOpenPlayer }: HotPageProps) {
   const hot = useAsyncData(() => fetchPopularVideos(1, 18), []);
 
   if (hot.status !== 'success') {
@@ -51,7 +51,7 @@ export function HotPage({ onOpenDetail }: HotPageProps) {
               sectionId="hot-grid"
               focusId={`hot-item-${index}`}
               item={item}
-              onClick={() => onOpenDetail(item)}
+              onClick={() => onOpenPlayer(item)}
             />
           ))}
         </div>

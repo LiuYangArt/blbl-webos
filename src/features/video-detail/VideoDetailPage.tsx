@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAppStore } from '../../app/AppStore';
-import type { DetailRoutePayload } from '../../app/routes';
+import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
@@ -13,10 +13,10 @@ type VideoDetailPageProps = {
   bvid: string;
   fallbackTitle?: string;
   onPlay: (entry: { cid: number; title: string; part?: string }) => void;
-  onOpenDetail: (item: DetailRoutePayload) => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: VideoDetailPageProps) {
+export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: VideoDetailPageProps) {
   const { watchProgress } = useAppStore();
   const detail = useAsyncData(async () => {
     const [video, related] = await Promise.all([
@@ -143,8 +143,8 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
       >
         <SectionHeader
           title="相关推荐"
-          description="从详情继续跳详情，保持首页 -> 详情 -> 播放 的主链路稳定。"
-          actionLabel="继续浏览"
+          description="点击相关推荐后直接切到新的全屏播放。"
+          actionLabel="直接播放"
         />
         <div className="media-grid">
           {related.slice(0, 6).map((item, index) => (
@@ -153,7 +153,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenDetail }: V
               sectionId="detail-related-grid"
               focusId={`detail-related-${index}`}
               item={item}
-              onClick={() => onOpenDetail(item)}
+              onClick={() => onOpenPlayer(item)}
             />
           ))}
         </div>

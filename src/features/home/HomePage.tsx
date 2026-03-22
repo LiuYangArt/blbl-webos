@@ -5,16 +5,16 @@ import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { FocusSection } from '../../platform/focus';
 import { fetchPopularVideos, fetchRecommendedVideos } from '../../services/api/bilibili';
-import type { DetailRoutePayload } from '../../app/routes';
+import type { PlayerRoutePayload } from '../../app/routes';
 import { PageStatus } from '../shared/PageStatus';
 
 type HomePageProps = {
-  onOpenDetail: (item: DetailRoutePayload) => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
   onOpenSearch: () => void;
   onOpenHot: () => void;
 };
 
-export function HomePage({ onOpenDetail, onOpenSearch, onOpenHot }: HomePageProps) {
+export function HomePage({ onOpenPlayer, onOpenSearch, onOpenHot }: HomePageProps) {
   const feed = useAsyncData(async () => {
     const [recommended, popular] = await Promise.all([
       fetchRecommendedVideos(9, 1),
@@ -55,9 +55,9 @@ export function HomePage({ onOpenDetail, onOpenSearch, onOpenHot }: HomePageProp
             sectionId="home-hero-actions"
             primaryFocusId="home-hero-primary"
             secondaryFocusId="home-hero-secondary"
-            primaryLabel="查看详情"
+            primaryLabel="立即播放"
             secondaryLabel="去搜索"
-            onPrimaryAction={() => onOpenDetail(hero)}
+            onPrimaryAction={() => onOpenPlayer(hero)}
             onSecondaryAction={onOpenSearch}
           />
         </FocusSection>
@@ -84,7 +84,7 @@ export function HomePage({ onOpenDetail, onOpenSearch, onOpenHot }: HomePageProp
               focusId={`home-recommend-${index}`}
               defaultFocus={!hero && index === 0}
               item={item}
-              onClick={() => onOpenDetail(item)}
+              onClick={() => onOpenPlayer(item)}
             />
           ))}
         </div>
@@ -106,7 +106,7 @@ export function HomePage({ onOpenDetail, onOpenSearch, onOpenHot }: HomePageProp
               sectionId="home-hot-grid"
               focusId={`home-hot-${index}`}
               item={item}
-              onClick={() => onOpenDetail(item)}
+              onClick={() => onOpenPlayer(item)}
             />
           ))}
         </div>

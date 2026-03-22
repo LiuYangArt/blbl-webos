@@ -3,7 +3,7 @@ import { AppShell } from './components/AppShell';
 import { AppStoreProvider, useAppStore } from './app/AppStore';
 import { resolveInitialRoute } from './app/launchParams';
 import { PageBackHandlerProvider } from './app/PageBackHandler';
-import { type AppRoute, getActiveNav } from './app/routes';
+import { type AppRoute, type PlayerRoutePayload, getActiveNav } from './app/routes';
 import { usePageStack } from './app/usePageStack';
 import { LoginPage } from './features/auth/LoginPage';
 import { HistoryPage } from './features/history/HistoryPage';
@@ -155,23 +155,33 @@ type RouteActions = {
   isLoggedIn: boolean;
 };
 
+function pushPlayer(actions: RouteActions, item: PlayerRoutePayload): void {
+  actions.push({
+    name: 'player',
+    bvid: item.bvid,
+    cid: item.cid,
+    title: item.title,
+    part: item.part,
+  });
+}
+
 function renderRoute(route: AppRoute, actions: RouteActions) {
   switch (route.name) {
     case 'home':
       return (
         <HomePage
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
           onOpenSearch={() => actions.replace({ name: 'search' })}
           onOpenHot={() => actions.replace({ name: 'hot' })}
         />
       );
     case 'hot':
-      return <HotPage onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })} />;
+      return <HotPage onOpenPlayer={(item) => pushPlayer(actions, item)} />;
     case 'search':
       return (
         <SearchPage
           onSubmit={(keyword) => actions.push({ name: 'search-results', keyword })}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
     case 'search-results':
@@ -179,7 +189,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
         <SearchResultsPage
           keyword={route.keyword}
           onSubmit={(keyword) => actions.replace({ name: 'search-results', keyword })}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
     case 'video-detail':
@@ -187,7 +197,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
         <VideoDetailPage
           bvid={route.bvid}
           fallbackTitle={route.title}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
           onPlay={(entry) => actions.push({
             name: 'player',
             bvid: route.bvid,
@@ -245,7 +255,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
         <LibraryPage
           mode="later"
           onLogin={() => actions.push({ name: 'login' })}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
     case 'favorites':
@@ -261,7 +271,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
         <FavoriteDetailPage
           mediaId={route.mediaId}
           title={route.title}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
   }

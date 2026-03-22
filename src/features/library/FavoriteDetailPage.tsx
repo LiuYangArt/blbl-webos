@@ -1,3 +1,4 @@
+import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
@@ -8,10 +9,10 @@ import { PageStatus } from '../shared/PageStatus';
 type FavoriteDetailPageProps = {
   mediaId: number;
   title: string;
-  onOpenDetail: (item: { bvid: string; title: string }) => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function FavoriteDetailPage({ mediaId, title, onOpenDetail }: FavoriteDetailPageProps) {
+export function FavoriteDetailPage({ mediaId, title, onOpenPlayer }: FavoriteDetailPageProps) {
   const detail = useAsyncData(() => fetchFavoriteFolderDetail(mediaId), [mediaId]);
 
   if (detail.status !== 'success') {
@@ -40,7 +41,7 @@ export function FavoriteDetailPage({ mediaId, title, onOpenDetail }: FavoriteDet
         className="content-section"
         leaveFor={{ left: '@side-nav' }}
       >
-        <SectionHeader title={title} description="先支持查看和播放，复杂管理动作后置。" actionLabel={`${items.length} 个视频`} />
+        <SectionHeader title={title} description="先支持直接播放，复杂管理动作后置。" actionLabel={`${items.length} 个视频`} />
         <div className="media-grid">
           {items.map((item, index) => (
             <MediaCard
@@ -59,7 +60,7 @@ export function FavoriteDetailPage({ mediaId, title, onOpenDetail }: FavoriteDet
                 danmakuCount: 0,
                 description: item.description,
               }}
-              onClick={() => onOpenDetail({ bvid: item.bvid, title: item.title })}
+              onClick={() => onOpenPlayer({ bvid: item.bvid, cid: item.cid, title: item.title })}
             />
           ))}
         </div>

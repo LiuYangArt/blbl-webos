@@ -69,4 +69,7 @@ export function getActiveNav(route: AppRoute, isLoggedIn: boolean): RootNavKey |
 }
 
 export type DetailRoutePayload = Pick<VideoCardItem, 'bvid' | 'title'>;
+export type PlayerRoutePayload = Pick<VideoCardItem, 'bvid' | 'cid' | 'title'> & {
+  part?: string;
+};
 export type FavoriteRoutePayload = Pick<FavoriteFolder, 'id' | 'title'>;
