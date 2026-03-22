@@ -41,12 +41,12 @@ export function getBiliSearchUrl(pathWithQuery: string) {
 
 export async function fetchJson<T extends JsonRecord | ApiEnvelope<unknown>>(url: string, init?: RequestInit) {
   const response = await fetch(url, {
+    ...init,
     credentials: 'include',
     headers: {
       accept: 'application/json, text/plain, */*',
       ...init?.headers,
     },
-    ...init,
   });
 
   if (!response.ok) {

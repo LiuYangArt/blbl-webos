@@ -36,6 +36,20 @@
 - `src/features/player/playerSettings.test.ts`
   - 播放偏好持久化
   - 设备播放记忆统计与上限
+- `src/platform/focus/engine.test.ts`
+  - 默认焦点进入
+  - 同区几何寻路
+  - 显式方向跳转
+  - overlay 焦点捕获与释放恢复
+  - 按下态点击反馈
+- `src/app/routes.test.ts`
+  - 页面到主导航高亮的映射
+- `src/services/api/http.test.ts`
+  - 请求封装、错误格式化、`unwrapData`
+- `src/services/api/wbi.test.ts`
+  - WBI 签名参数清洗
+  - `wts` / `w_rid` 生成
+  - 同日缓存与跨日刷新
 
 ## 运行方式
 
@@ -70,6 +84,6 @@ npm run test:watch
 后面如果继续补测试，优先级建议按这个顺序走：
 
 1. `src/platform/focus/engine.ts` 中可抽离的几何评分与 section 选择逻辑
-2. `src/services/api/*` 的响应清洗与异常分支
+2. `src/services/api/*` 中更完整的响应清洗与异常分支
 3. `src/features/player/*` 中更多画质/编码/音轨回退组合
 4. 与真机脚本相关的 smoke test 或诊断脚本断言
