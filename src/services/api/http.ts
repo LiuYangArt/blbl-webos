@@ -12,9 +12,19 @@ export class BiliApiError extends Error {
     public readonly code: number,
     public readonly payload?: unknown,
   ) {
-    super(message);
+    super(normalizeBiliApiMessage(code, message));
     this.name = 'BiliApiError';
   }
+}
+
+function normalizeBiliApiMessage(code: number, message: string) {
+  const trimmed = message.trim();
+
+  if (code === -352 || trimmed === '-352') {
+    return '风控校验失败（-352）';
+  }
+
+  return trimmed || '接口返回失败';
 }
 
 export function getBiliApiUrl(pathWithQuery: string) {
@@ -44,6 +54,11 @@ export async function fetchJson<T extends JsonRecord | ApiEnvelope<unknown>>(url
   }
 
   return response.json() as Promise<T>;
+}
+
+export function formatDisplayError(error: unknown, context?: string) {
+  const detail = error instanceof Error ? error.message : '请求失败';
+  return context ? `${context}失败：${detail}` : detail;
 }
 
 export function unwrapData<T>(payload: ApiEnvelope<T>) {

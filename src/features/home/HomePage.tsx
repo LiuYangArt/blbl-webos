@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAsyncData } from '../../app/useAsyncData';
 import type { DetailRoutePayload, PgcDetailRoutePayload, PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
 import { FocusButton } from '../../components/FocusButton';
-import { HeroBanner } from '../../components/HeroBanner';
 import { HomeChannelTabs } from '../../components/HomeChannelTabs';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { FocusSection, focusById } from '../../platform/focus';
 import {
   fetchFollowingChannelData,
   fetchPgcSubscriptions,
@@ -15,6 +14,9 @@ import {
   fetchRankingVideos,
   fetchRecommendedVideos,
 } from '../../services/api/bilibili';
+import { BiliApiError } from '../../services/api/http';
+import { appendRuntimeDiagnostic } from '../../services/debug/runtimeDiagnostics';
+import { readHomePublicFeedCache, writeHomePublicFeedCache } from './homeFeedCache';
 import { readJsonStorage, writeJsonStorage } from '../../services/storage/local';
 import type {
   FollowingChannelData,
@@ -40,9 +42,9 @@ type AsyncOptional<T> = {
 };
 
 type HomeFeedData = {
-  recommended: VideoCardItem[];
-  popular: VideoCardItem[];
-  ranking: VideoCardItem[];
+  recommended: AsyncOptional<VideoCardItem[]>;
+  popular: AsyncOptional<VideoCardItem[]>;
+  ranking: AsyncOptional<VideoCardItem[]>;
   following: AsyncOptional<FollowingChannelData>;
   subscriptions: {
     anime: AsyncOptional<PgcSubscriptionItem[]>;
@@ -51,6 +53,8 @@ type HomeFeedData = {
 };
 
 const HOME_CHANNEL_STORAGE_KEY = 'bilibili_webos.home_channel';
+const HOME_RECOMMEND_FETCH_COUNT = 24;
+const HOME_RECOMMEND_AUTO_LOAD_THRESHOLD = 6;
 
 const PUBLIC_CHANNELS: Array<{ key: HomeChannelKey; label: string; hint: string }> = [
   { key: 'personalized', label: '个性推荐', hint: '优先看推荐与首页主内容' },
@@ -63,6 +67,10 @@ const AUTH_CHANNELS: Array<{ key: HomeChannelKey; label: string; hint: string }>
   { key: 'following', label: '正在关注', hint: '只看关注区最近更新的视频' },
   { key: 'subscriptions', label: '订阅剧集', hint: '最近追番和追剧入口' },
 ];
+const EMPTY_VIDEO_OPTIONAL: AsyncOptional<VideoCardItem[]> = {
+  data: [],
+  error: null,
+};
 
 export function HomePage({
   isLoggedIn,
@@ -78,6 +86,18 @@ export function HomePage({
   const [activeChannel, setActiveChannel] = useState<HomeChannelKey>(() => (
     readJsonStorage<HomeChannelKey>(HOME_CHANNEL_STORAGE_KEY, 'personalized')
   ));
+  const [personalizedItems, setPersonalizedItems] = useState<VideoCardItem[]>([]);
+  const [nextRecommendFreshIndex, setNextRecommendFreshIndex] = useState(2);
+  const [isLoadingMorePersonalized, setIsLoadingMorePersonalized] = useState(false);
+  const [hasMorePersonalized, setHasMorePersonalized] = useState(true);
+  const [personalizedLoadMoreError, setPersonalizedLoadMoreError] = useState<string | null>(null);
+  const [pendingPersonalizedFocusId, setPendingPersonalizedFocusId] = useState<string | null>(null);
+  const initialPersonalizedPrefetchDoneRef = useRef(false);
+  const initialHomeSnapshotRef = useRef({
+    activeChannel,
+    isAuthenticated,
+    viewerMid,
+  });
 
   const tabs = useMemo(() => (
     isAuthenticated
@@ -96,30 +116,242 @@ export function HomePage({
     writeJsonStorage(HOME_CHANNEL_STORAGE_KEY, activeChannel);
   }, [activeChannel]);
 
-  const feed = useAsyncData<HomeFeedData>(async () => {
-    const [recommended, popular, ranking, following, animeSubscriptions, cinemaSubscriptions] = await Promise.all([
-      fetchRecommendedVideos(9, 1),
-      fetchPopularVideos(1, 6),
-      fetchRankingVideos(6),
-      loadOptional(
-        async () => (isAuthenticated ? fetchFollowingChannelData() : emptyFollowingChannelData()),
-        emptyFollowingChannelData(),
-      ),
-      loadOptional(async () => (isAuthenticated && viewerMid ? fetchPgcSubscriptions('anime', viewerMid) : []), []),
-      loadOptional(async () => (isAuthenticated && viewerMid ? fetchPgcSubscriptions('cinema', viewerMid) : []), []),
-    ]);
+  useEffect(() => {
+    appendRuntimeDiagnostic('home', 'mounted', {
+      ...initialHomeSnapshotRef.current,
+    });
 
-    return {
-      recommended,
-      popular,
-      ranking,
-      following,
-      subscriptions: {
-        anime: animeSubscriptions,
-        cinema: cinemaSubscriptions,
-      },
+    return () => {
+      appendRuntimeDiagnostic('home', 'unmounted');
     };
+  }, []);
+
+  useEffect(() => {
+    appendRuntimeDiagnostic('home', 'channel-changed', {
+      activeChannel,
+      isAuthenticated,
+    });
+  }, [activeChannel, isAuthenticated]);
+
+  const feed = useAsyncData<HomeFeedData>(async () => {
+    const requestId = createRequestId();
+    const startedAt = Date.now();
+    const freshPublicCache = readHomePublicFeedCache();
+    const stalePublicCache = freshPublicCache ?? readHomePublicFeedCache({ allowStale: true });
+
+    appendRuntimeDiagnostic('home', 'feed-load-start', {
+      requestId,
+      activeChannel,
+      isAuthenticated,
+      viewerMid,
+      cacheState: freshPublicCache ? 'fresh-hit' : stalePublicCache ? 'stale-available' : 'miss',
+    });
+
+    try {
+      const [recommended, popular, ranking, following, animeSubscriptions, cinemaSubscriptions] = await Promise.all([
+        freshPublicCache
+          ? Promise.resolve(createCachedOptional(freshPublicCache.data.recommended))
+          : loadOptional(() => fetchRecommendedVideos(HOME_RECOMMEND_FETCH_COUNT, 1), [], '首页推荐', requestId),
+        freshPublicCache
+          ? Promise.resolve(createCachedOptional(freshPublicCache.data.popular))
+          : loadOptional(() => fetchPopularVideos(1, 12), [], '首页热门', requestId),
+        freshPublicCache
+          ? Promise.resolve(createCachedOptional(freshPublicCache.data.ranking))
+          : loadOptional(() => fetchRankingVideos(12), [], '首页排行', requestId),
+        loadOptional(
+          async () => (isAuthenticated ? fetchFollowingChannelData() : emptyFollowingChannelData()),
+          emptyFollowingChannelData(),
+          isAuthenticated ? '关注更新' : '关注更新（未登录跳过）',
+          requestId,
+        ),
+        loadOptional(
+          async () => (isAuthenticated && viewerMid ? fetchPgcSubscriptions('anime', viewerMid) : []),
+          [],
+          isAuthenticated && viewerMid ? '订阅番剧' : '订阅番剧（未登录跳过）',
+          requestId,
+        ),
+        loadOptional(
+          async () => (isAuthenticated && viewerMid ? fetchPgcSubscriptions('cinema', viewerMid) : []),
+          [],
+          isAuthenticated && viewerMid ? '订阅影视' : '订阅影视（未登录跳过）',
+          requestId,
+        ),
+      ]);
+
+      if (freshPublicCache) {
+        appendRuntimeDiagnostic('home-cache', 'public-feed-hit', {
+          requestId,
+          ageMs: freshPublicCache.ageMs,
+          recommendedCount: freshPublicCache.data.recommended.length,
+          popularCount: freshPublicCache.data.popular.length,
+          rankingCount: freshPublicCache.data.ranking.length,
+        });
+      }
+
+      const mergedRecommended = mergePublicFeedSection('首页推荐', recommended, stalePublicCache?.data.recommended, requestId);
+      const mergedPopular = mergePublicFeedSection('首页热门', popular, stalePublicCache?.data.popular, requestId);
+      const mergedRanking = mergePublicFeedSection('首页排行', ranking, stalePublicCache?.data.ranking, requestId);
+
+      if (
+        mergedRecommended.data.length === 0
+        && mergedPopular.data.length === 0
+        && mergedRanking.data.length === 0
+      ) {
+        throw new Error(buildHomePublicFeedError([mergedRecommended.error, mergedPopular.error, mergedRanking.error]));
+      }
+
+      const storedCache = writeHomePublicFeedCache({
+        recommended: mergedRecommended.data,
+        popular: mergedPopular.data,
+        ranking: mergedRanking.data,
+      });
+
+      if (storedCache) {
+        appendRuntimeDiagnostic('home-cache', 'public-feed-write', {
+          requestId,
+          recommendedCount: storedCache.data.recommended.length,
+          popularCount: storedCache.data.popular.length,
+          rankingCount: storedCache.data.ranking.length,
+        });
+      }
+
+      appendRuntimeDiagnostic('home', 'feed-load-success', {
+        requestId,
+        durationMs: Date.now() - startedAt,
+        recommendedCount: mergedRecommended.data.length,
+        popularCount: mergedPopular.data.length,
+        rankingCount: mergedRanking.data.length,
+        recommendedError: mergedRecommended.error,
+        popularError: mergedPopular.error,
+        rankingError: mergedRanking.error,
+        followingCount: following.data.items.length,
+        animeCount: animeSubscriptions.data.length,
+        cinemaCount: cinemaSubscriptions.data.length,
+      });
+
+      return {
+        recommended: mergedRecommended,
+        popular: mergedPopular,
+        ranking: mergedRanking,
+        following,
+        subscriptions: {
+          anime: animeSubscriptions,
+          cinema: cinemaSubscriptions,
+        },
+      };
+    } catch (error) {
+      appendRuntimeDiagnostic('home', 'feed-load-error', {
+        requestId,
+        durationMs: Date.now() - startedAt,
+        ...extractErrorDiagnostic(error),
+      }, 'error');
+      throw error;
+    }
   }, [isAuthenticated, viewerMid]);
+
+  const recommendedFeed = feed.status === 'success' ? feed.data.recommended : EMPTY_VIDEO_OPTIONAL;
+  const personalizedBaseKey = useMemo(
+    () => `${recommendedFeed.data[0]?.bvid ?? 'empty'}:${recommendedFeed.data.length}:${isAuthenticated ? 'auth' : 'guest'}`,
+    [isAuthenticated, recommendedFeed.data],
+  );
+
+  useEffect(() => {
+    if (feed.status !== 'success') {
+      return;
+    }
+
+    setPersonalizedItems(recommendedFeed.data);
+    setNextRecommendFreshIndex(2);
+    setIsLoadingMorePersonalized(false);
+    setHasMorePersonalized(recommendedFeed.data.length > 0);
+    setPersonalizedLoadMoreError(null);
+    setPendingPersonalizedFocusId(null);
+    initialPersonalizedPrefetchDoneRef.current = false;
+  }, [feed.status, personalizedBaseKey, recommendedFeed.data]);
+
+  useEffect(() => {
+    if (!pendingPersonalizedFocusId) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      if (focusById(pendingPersonalizedFocusId)) {
+        setPendingPersonalizedFocusId(null);
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [pendingPersonalizedFocusId, personalizedItems.length]);
+
+  const loadMorePersonalized = useCallback(async (trigger: 'initial' | 'prefetch' | 'manual') => {
+    if (isLoadingMorePersonalized || !hasMorePersonalized) {
+      return;
+    }
+
+    const requestId = createRequestId();
+    const startedAt = Date.now();
+    const previousCount = personalizedItems.length;
+    setIsLoadingMorePersonalized(true);
+    setPersonalizedLoadMoreError(null);
+
+    appendRuntimeDiagnostic('home-recommend', 'load-more-start', {
+      requestId,
+      trigger,
+      freshIndex: nextRecommendFreshIndex,
+      previousCount,
+    });
+
+    try {
+      const nextBatch = await fetchRecommendedVideos(HOME_RECOMMEND_FETCH_COUNT, nextRecommendFreshIndex);
+      const mergedItems = mergeUniqueVideoCards(personalizedItems, nextBatch);
+      const addedCount = mergedItems.length - personalizedItems.length;
+
+      appendRuntimeDiagnostic('home-recommend', 'load-more-success', {
+        requestId,
+        trigger,
+        freshIndex: nextRecommendFreshIndex,
+        durationMs: Date.now() - startedAt,
+        fetchedCount: nextBatch.length,
+        addedCount,
+        totalCount: mergedItems.length,
+      });
+
+      setPersonalizedItems(mergedItems);
+      setNextRecommendFreshIndex((current) => current + 1);
+      setHasMorePersonalized(nextBatch.length > 0 && addedCount > 0);
+
+      if (addedCount > 0 && trigger === 'manual') {
+        setPendingPersonalizedFocusId(`home-personalized-${previousCount}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '加载更多推荐失败';
+      setPersonalizedLoadMoreError(message);
+      appendRuntimeDiagnostic('home-recommend', 'load-more-error', {
+        requestId,
+        trigger,
+        freshIndex: nextRecommendFreshIndex,
+        durationMs: Date.now() - startedAt,
+        ...extractErrorDiagnostic(error),
+      }, 'error');
+    } finally {
+      setIsLoadingMorePersonalized(false);
+    }
+  }, [hasMorePersonalized, isLoadingMorePersonalized, nextRecommendFreshIndex, personalizedItems]);
+
+  useEffect(() => {
+    if (activeChannel !== 'personalized' || feed.status !== 'success') {
+      return;
+    }
+
+    if (initialPersonalizedPrefetchDoneRef.current || personalizedItems.length === 0) {
+      return;
+    }
+
+    initialPersonalizedPrefetchDoneRef.current = true;
+    void loadMorePersonalized('initial');
+  }, [activeChannel, feed.status, loadMorePersonalized, personalizedItems.length]);
 
   if (feed.status !== 'success') {
     if (feed.status === 'error') {
@@ -136,30 +368,9 @@ export function HomePage({
   }
 
   const { recommended, popular, ranking, following, subscriptions } = feed.data;
-  const hero = recommended[0] ?? popular[0] ?? ranking[0];
 
   return (
-    <main className="page-shell">
-      {hero ? (
-        <FocusSection
-          as="section"
-          id="home-hero-actions"
-          group="content"
-          leaveFor={{ left: '@side-nav', down: '@home-channel-tabs' }}
-        >
-          <HeroBanner
-            item={hero}
-            sectionId="home-hero-actions"
-            primaryFocusId="home-hero-primary"
-            secondaryFocusId="home-hero-secondary"
-            primaryLabel="立即播放"
-            secondaryLabel="去搜索"
-            onPrimaryAction={() => onOpenPlayer(hero)}
-            onSecondaryAction={onOpenSearch}
-          />
-        </FocusSection>
-      ) : null}
-
+    <main className="page-shell page-shell--home">
       <HomeChannelTabs
         tabs={tabs}
         activeKey={activeChannel}
@@ -180,6 +391,11 @@ export function HomePage({
         onOpenPgcDetail,
         onOpenSearch,
         onOpenHot,
+        personalizedItems,
+        hasMorePersonalized,
+        isLoadingMorePersonalized,
+        personalizedLoadMoreError,
+        onLoadMorePersonalized: loadMorePersonalized,
       })}
     </main>
   );
@@ -187,9 +403,9 @@ export function HomePage({
 
 function renderChannelContent(params: {
   activeChannel: HomeChannelKey;
-  recommended: VideoCardItem[];
-  popular: VideoCardItem[];
-  ranking: VideoCardItem[];
+  recommended: AsyncOptional<VideoCardItem[]>;
+  popular: AsyncOptional<VideoCardItem[]>;
+  ranking: AsyncOptional<VideoCardItem[]>;
   following: AsyncOptional<FollowingChannelData>;
   subscriptions: {
     anime: AsyncOptional<PgcSubscriptionItem[]>;
@@ -200,6 +416,11 @@ function renderChannelContent(params: {
   onOpenPgcDetail: (item: PgcDetailRoutePayload) => void;
   onOpenSearch: () => void;
   onOpenHot: () => void;
+  personalizedItems: VideoCardItem[];
+  hasMorePersonalized: boolean;
+  isLoadingMorePersonalized: boolean;
+  personalizedLoadMoreError: string | null;
+  onLoadMorePersonalized: (trigger: 'initial' | 'prefetch' | 'manual') => void;
 }) {
   const {
     activeChannel,
@@ -213,10 +434,16 @@ function renderChannelContent(params: {
     onOpenPgcDetail,
     onOpenSearch,
     onOpenHot,
+    personalizedItems,
+    hasMorePersonalized,
+    isLoadingMorePersonalized,
+    personalizedLoadMoreError,
+    onLoadMorePersonalized,
   } = params;
 
   switch (activeChannel) {
-    case 'personalized':
+    case 'personalized': {
+      const autoLoadStartIndex = Math.max(0, personalizedItems.length - HOME_RECOMMEND_AUTO_LOAD_THRESHOLD);
       return (
         <FocusSection
           as="section"
@@ -228,23 +455,69 @@ function renderChannelContent(params: {
         >
           <SectionHeader
             title="个性推荐"
-            description="延续首页主推荐流，首版先保留最直接的播放入口。"
-            actionLabel={`${Math.max(0, recommended.length - 1)} 条`}
+            description="首页直接展示推荐视频列表，继续向下会自动补更多内容。"
+            actionLabel={`${personalizedItems.length} 条`}
           />
-          <div className="media-grid">
-            {recommended.slice(1, 7).map((item, index) => (
-              <MediaCard
-                key={item.bvid}
-                sectionId="home-channel-content"
-                focusId={`home-personalized-${index}`}
-                defaultFocus={index === 0}
-                item={item}
-                onClick={() => onOpenPlayer(item)}
-              />
-            ))}
-          </div>
+          {recommended.error && personalizedItems.length === 0 ? (
+            <>
+              <InlineChannelNotice title="个性推荐暂时不可用" description={recommended.error} />
+              <div className="page-inline-actions">
+                <FocusButton
+                  variant="ghost"
+                  size="sm"
+                  className="page-inline-link"
+                  sectionId="home-channel-content"
+                  focusId="home-personalized-hot"
+                  defaultFocus
+                  onClick={onOpenHot}
+                >
+                  先看热门视频
+                </FocusButton>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="media-grid">
+                {personalizedItems.map((item, index) => (
+                  <MediaCard
+                    key={item.bvid}
+                    sectionId="home-channel-content"
+                    focusId={`home-personalized-${index}`}
+                    defaultFocus={index === 0}
+                    item={item}
+                    onFocus={() => {
+                      if (hasMorePersonalized && index >= autoLoadStartIndex) {
+                        void onLoadMorePersonalized('prefetch');
+                      }
+                    }}
+                    onClick={() => onOpenPlayer(item)}
+                  />
+                ))}
+              </div>
+              {isLoadingMorePersonalized ? (
+                <p className="page-helper-text">正在加载更多推荐...</p>
+              ) : null}
+              {personalizedLoadMoreError ? (
+                <div className="page-inline-actions">
+                  <FocusButton
+                    variant="ghost"
+                    size="sm"
+                    className="page-inline-link"
+                    sectionId="home-channel-content"
+                    focusId="home-personalized-retry-load-more"
+                    onClick={() => void onLoadMorePersonalized('manual')}
+                  >
+                    重试加载更多推荐
+                  </FocusButton>
+                </div>
+              ) : !hasMorePersonalized ? (
+                <p className="page-helper-text">已经到底了，稍后再来刷新推荐。</p>
+              ) : null}
+            </>
+          )}
         </FocusSection>
       );
+    }
     case 'following':
       return (
         <FocusSection
@@ -425,19 +698,23 @@ function renderChannelContent(params: {
           className="content-section"
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
         >
-          <SectionHeader title="热门视频" description="首版继续复用可稳定直播的热门内容。" actionLabel={`${popular.length} 条`} />
-          <div className="media-grid">
-            {popular.slice(0, 6).map((item, index) => (
-              <MediaCard
-                key={item.bvid}
-                sectionId="home-channel-content"
-                focusId={`home-hot-${index}`}
-                defaultFocus={index === 0}
-                item={item}
-                onClick={() => onOpenPlayer(item)}
-              />
-            ))}
-          </div>
+          <SectionHeader title="热门视频" description="首版继续复用可稳定直播的热门内容。" actionLabel={`${popular.data.length} 条`} />
+          {popular.error && popular.data.length === 0 ? (
+            <InlineChannelNotice title="热门内容暂时不可用" description={popular.error} />
+          ) : (
+            <div className="media-grid">
+              {popular.data.slice(0, 6).map((item, index) => (
+                <MediaCard
+                  key={item.bvid}
+                  sectionId="home-channel-content"
+                  focusId={`home-hot-${index}`}
+                  defaultFocus={index === 0}
+                  item={item}
+                  onClick={() => onOpenPlayer(item)}
+                />
+              ))}
+            </div>
+          )}
           <div className="page-inline-actions">
             <FocusButton
               variant="ghost"
@@ -462,19 +739,38 @@ function renderChannelContent(params: {
           className="content-section"
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
         >
-          <SectionHeader title="排行" description="先接全站排行，后续再分区。" actionLabel={`${ranking.length} 条`} />
-          <div className="media-grid">
-            {ranking.map((item, index) => (
-              <MediaCard
-                key={item.bvid}
-                sectionId="home-channel-content"
-                focusId={`home-ranking-${index}`}
-                defaultFocus={index === 0}
-                item={item}
-                onClick={() => onOpenPlayer(item)}
-              />
-            ))}
-          </div>
+          <SectionHeader title="排行" description="先接全站排行，后续再分区。" actionLabel={`${ranking.data.length} 条`} />
+          {ranking.error && ranking.data.length === 0 ? (
+            <>
+              <InlineChannelNotice title="排行暂时不可用" description={ranking.error} />
+              <div className="page-inline-actions">
+                <FocusButton
+                  variant="ghost"
+                  size="sm"
+                  className="page-inline-link"
+                  sectionId="home-channel-content"
+                  focusId="home-ranking-hot"
+                  defaultFocus
+                  onClick={onOpenHot}
+                >
+                  先看热门视频
+                </FocusButton>
+              </div>
+            </>
+          ) : (
+            <div className="media-grid">
+              {ranking.data.map((item, index) => (
+                <MediaCard
+                  key={item.bvid}
+                  sectionId="home-channel-content"
+                  focusId={`home-ranking-${index}`}
+                  defaultFocus={index === 0}
+                  item={item}
+                  onClick={() => onOpenPlayer(item)}
+                />
+              ))}
+            </div>
+          )}
         </FocusSection>
       );
     case 'live':
@@ -570,16 +866,125 @@ function emptyFollowingChannelData(): FollowingChannelData {
   };
 }
 
-async function loadOptional<T>(loader: () => Promise<T>, fallback: T): Promise<AsyncOptional<T>> {
+async function loadOptional<T>(
+  loader: () => Promise<T>,
+  fallback: T,
+  label: string,
+  requestId: string,
+): Promise<AsyncOptional<T>> {
+  const startedAt = Date.now();
+  appendRuntimeDiagnostic('home-request', 'request-start', {
+    requestId,
+    label,
+    required: false,
+  });
+
   try {
+    const data = await loader();
+    appendRuntimeDiagnostic('home-request', 'request-success', {
+      requestId,
+      label,
+      required: false,
+      durationMs: Date.now() - startedAt,
+    });
+
     return {
-      data: await loader(),
+      data,
       error: null,
     };
   } catch (error) {
+    appendRuntimeDiagnostic('home-request', 'request-error', {
+      requestId,
+      label,
+      required: false,
+      durationMs: Date.now() - startedAt,
+      ...extractErrorDiagnostic(error),
+    }, 'warn');
+
     return {
       data: fallback,
       error: error instanceof Error ? error.message : '请求失败',
     };
   }
+}
+
+function createCachedOptional<T>(data: T): AsyncOptional<T> {
+  return {
+    data,
+    error: null,
+  };
+}
+
+function mergePublicFeedSection(
+  label: string,
+  live: AsyncOptional<VideoCardItem[]>,
+  cached: VideoCardItem[] | undefined,
+  requestId: string,
+): AsyncOptional<VideoCardItem[]> {
+  if (live.data.length > 0 || !live.error) {
+    return live;
+  }
+
+  if (!cached || cached.length === 0) {
+    return live;
+  }
+
+  appendRuntimeDiagnostic('home-cache', 'public-feed-fallback', {
+    requestId,
+    label,
+    cachedCount: cached.length,
+    error: live.error,
+  }, 'warn');
+
+  return {
+    data: cached,
+    error: null,
+  };
+}
+
+function mergeUniqueVideoCards(current: VideoCardItem[], incoming: VideoCardItem[]) {
+  const seen = new Set(current.map((item) => `${item.bvid}:${item.cid}`));
+  const merged = [...current];
+
+  for (const item of incoming) {
+    const key = `${item.bvid}:${item.cid}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(item);
+  }
+
+  return merged;
+}
+
+function buildHomePublicFeedError(errors: Array<string | null>) {
+  const message = errors.find((item) => item && item.trim()) ?? '公开推荐流暂时不可用';
+  return `首页公共内容失败：${message}`;
+}
+
+function extractErrorDiagnostic(error: unknown) {
+  if (error instanceof BiliApiError) {
+    return {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      errorName: error.name,
+      errorMessage: error.message,
+    };
+  }
+
+  return {
+    errorName: 'UnknownError',
+    errorMessage: '请求失败',
+  };
+}
+
+function createRequestId() {
+  return `home-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }

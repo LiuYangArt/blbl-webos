@@ -148,6 +148,27 @@ const capture = (command, args) => {
   return result.stdout.trim();
 };
 
+const quotePowerShellArg = (value) => `'${String(value).replace(/'/g, "''")}'`;
+
+const captureWithPowerShell = (command, args) => {
+  const invocation = ['&', quotePowerShellArg(command), ...args.map(quotePowerShellArg)].join(' ');
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', invocation], {
+    encoding: 'utf8',
+    shell: false,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.trim();
+    throw new Error(stderr || `${command} failed with exit code ${result.status ?? 1}`);
+  }
+
+  return result.stdout.trim();
+};
+
 const globalNpmRoot = isWindows
   ? resolve(process.env.APPDATA ?? resolve(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'), 'npm', 'node_modules')
   : capture(getCommandName('npm'), ['root', '-g']);
@@ -220,6 +241,10 @@ const captureCliWithNode16 = (name, args) => {
 
   if (!existsSync(cliBin)) {
     throw new Error(`未找到 ${name}.js，请检查 @webos-tools/cli 安装是否完整`);
+  }
+
+  if (isWindows) {
+    return captureWithPowerShell('npx', ['-y', '-p', 'node@16', 'node', cliBin, ...args]);
   }
 
   return capture(getCommandName('npx'), ['-y', '-p', 'node@16', 'node', cliBin, ...args]);

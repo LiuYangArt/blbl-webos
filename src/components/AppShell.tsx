@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { AppRoute, RootNavKey } from '../app/routes';
+import { isWebOSAvailable } from '../platform/webos';
 import { SideNavRail } from './SideNavRail';
 
 type AppShellProps = {
@@ -19,9 +20,15 @@ export function AppShell({
   onNavigate,
   immersive = false,
 }: AppShellProps) {
+  const shellClassName = [
+    'tv-app-shell',
+    isWebOSAvailable() ? 'tv-app-shell--webos' : '',
+    immersive ? 'tv-app-shell--immersive' : '',
+  ].filter(Boolean).join(' ');
+
   if (immersive) {
     return (
-      <div className="tv-app-shell tv-app-shell--immersive">
+      <div className={shellClassName}>
         <div className="tv-app-main tv-app-main--immersive">
           <div className="tv-page-content tv-page-content--immersive">{children}</div>
         </div>
@@ -30,7 +37,7 @@ export function AppShell({
   }
 
   return (
-    <div className="tv-app-shell">
+    <div className={shellClassName}>
       <SideNavRail activeNav={activeNav} onNavigate={onNavigate} isLoggedIn={isLoggedIn} />
       <div className="tv-app-main">
         <header className="tv-topbar" aria-hidden="true">

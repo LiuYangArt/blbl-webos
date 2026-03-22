@@ -22,6 +22,7 @@ import { SubscriptionsPage } from './features/subscriptions/SubscriptionsPage';
 import { VideoDetailPage } from './features/video-detail/VideoDetailPage';
 import { focusFirst, isFocusableElement, readFocusGroup } from './platform/focus';
 import { attachRemoteControl } from './platform/remote';
+import { appendRuntimeDiagnostic } from './services/debug/runtimeDiagnostics';
 import { platformBack } from './platform/webos';
 
 function markBootMounted() {
@@ -42,6 +43,7 @@ function AppContent() {
   const pageStack = usePageStack<AppRoute>(initialRoute);
   const { current: currentPage, pop, push, replace } = pageStack;
   const backHandlerRef = useRef<(() => boolean) | null>(null);
+  const lastRouteKeyRef = useRef<string>('');
 
   const focusKey = useMemo(() => {
     switch (currentPage.name) {
@@ -63,6 +65,16 @@ function AppContent() {
   useEffect(() => {
     void refreshAuth();
   }, [refreshAuth]);
+
+  useEffect(() => {
+    const currentRouteKey = summarizeRoute(currentPage);
+    appendRuntimeDiagnostic('route', 'route-visible', {
+      current: currentRouteKey,
+      previous: lastRouteKeyRef.current || null,
+      stackDepth: pageStack.depth,
+    });
+    lastRouteKeyRef.current = currentRouteKey;
+  }, [currentPage, pageStack.depth]);
 
   useEffect(() => {
     const active = document.activeElement;
@@ -153,6 +165,23 @@ function AppContent() {
       <FocusOverlay />
     </PageBackHandlerProvider>
   );
+}
+
+function summarizeRoute(route: AppRoute) {
+  switch (route.name) {
+    case 'player':
+      return `player:${route.bvid}:${route.cid}`;
+    case 'video-detail':
+      return `video-detail:${route.bvid}`;
+    case 'pgc-detail':
+      return `pgc-detail:${route.seasonId}`;
+    case 'search-results':
+      return `search-results:${route.keyword}`;
+    case 'favorite-detail':
+      return `favorite-detail:${route.mediaId}`;
+    default:
+      return route.name;
+  }
 }
 
 type RouteActions = {

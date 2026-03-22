@@ -6,6 +6,7 @@ import type {
   FocusSectionConfig,
   FocusTarget,
 } from './types';
+import { isWebOSAvailable } from '../webos';
 
 type FocusableElement = HTMLElement & {
   dataset: DOMStringMap & {
@@ -315,7 +316,7 @@ function ensureElementVisible(element: FocusableElement) {
   element.scrollIntoView({
     block: 'nearest',
     inline: 'nearest',
-    behavior: 'smooth',
+    behavior: isWebOSAvailable() ? 'auto' : 'smooth',
   });
 }
 

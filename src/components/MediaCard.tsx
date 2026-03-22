@@ -1,3 +1,4 @@
+import type { ButtonHTMLAttributes } from 'react';
 import type { VideoCardItem } from '../services/api/types';
 import { FocusButton } from './FocusButton';
 
@@ -11,7 +12,7 @@ type MediaCardProps = {
   focusRight?: string;
   focusUp?: string;
   focusDown?: string;
-};
+} & Pick<ButtonHTMLAttributes<HTMLButtonElement>, 'onFocus'>;
 
 export function MediaCard({
   item,
@@ -23,6 +24,7 @@ export function MediaCard({
   focusRight,
   focusUp,
   focusDown,
+  onFocus,
 }: MediaCardProps) {
   return (
     <FocusButton
@@ -36,6 +38,7 @@ export function MediaCard({
       focusUp={focusUp}
       focusDown={focusDown}
       onClick={onClick}
+      onFocus={onFocus}
     >
       <div className="media-card__poster" aria-hidden="true">
         {item.cover ? <img src={item.cover} alt="" referrerPolicy="no-referrer" /> : null}
