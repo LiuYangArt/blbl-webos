@@ -8,6 +8,7 @@ type AppShellProps = {
   profileName?: string;
   isLoggedIn: boolean;
   onNavigate: (route: AppRoute) => void;
+  immersive?: boolean;
 };
 
 export function AppShell({
@@ -16,7 +17,18 @@ export function AppShell({
   profileName,
   isLoggedIn,
   onNavigate,
+  immersive = false,
 }: AppShellProps) {
+  if (immersive) {
+    return (
+      <div className="tv-app-shell tv-app-shell--immersive">
+        <div className="tv-app-main tv-app-main--immersive">
+          <div className="tv-page-content tv-page-content--immersive">{children}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="tv-app-shell">
       <SideNavRail activeNav={activeNav} onNavigate={onNavigate} isLoggedIn={isLoggedIn} />

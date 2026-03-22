@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../app/AppStore';
 import { usePageBackHandler } from '../../app/PageBackHandler';
-import type { DetailRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { PlayerControlBar } from '../../components/PlayerControlBar';
-import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection, captureFocus, releaseFocus } from '../../platform/focus';
+import { FocusSection, captureFocus, focusById, focusSection, releaseFocus } from '../../platform/focus';
+import { REMOTE_INTENT_EVENT, type RemoteIntentDetail } from '../../platform/remote';
 import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
-import { fetchPlaySource, fetchRelatedVideos } from '../../services/api/bilibili';
-import type { PlayAudioStream, PlaySource, VideoCodecPreference } from '../../services/api/types';
+import { fetchPlaySource, fetchRelatedVideos, fetchVideoDetail } from '../../services/api/bilibili';
+import type {
+  PlayAudioStream,
+  PlaySource,
+  VideoCodecPreference,
+  VideoPart,
+} from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
 import {
   buildPlaybackAttempts,
@@ -31,43 +35,71 @@ import {
 } from './playerSettings';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
 
+type PlayerNavigationTarget = {
+  bvid: string;
+  cid: number;
+  title: string;
+  part?: string;
+};
+
+type PlayerOverlayMode = 'none' | 'settings' | 'recommendations' | 'episodes';
+
+type PendingStripFocus = {
+  sectionId: string;
+  focusId: string;
+};
+
 type PlayerPageProps = {
   bvid: string;
   cid: number;
   title: string;
   part?: string;
   onBack: () => void;
-  onOpenDetail: (item: DetailRoutePayload) => void;
+  onOpenPlayer: (item: PlayerNavigationTarget) => void;
 };
 
 const CODEC_OPTIONS: VideoCodecPreference[] = ['auto', 'avc', 'hevc', 'av1'];
+const PLAYER_CHROME_HIDE_DELAY_MS = 3000;
+const STRIP_PAGE_SIZE = 6;
+const PLAYER_CONTROL_SECTION_ID = 'player-controls';
+const PLAYER_SETTINGS_SECTION_ID = 'player-settings-drawer';
+const PLAYER_RECOMMENDATIONS_SECTION_ID = 'player-recommendations-strip';
+const PLAYER_EPISODES_SECTION_ID = 'player-episodes-strip';
 
-export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: PlayerPageProps) {
+export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: PlayerPageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastPersistedProgressRef = useRef(-1);
   const resumeProgressRef = useRef(0);
   const savedProgressRef = useRef(0);
   const recordedAttemptIdRef = useRef('');
   const reportedEnvironmentKeyRef = useRef('');
+  const chromeFocusTimeoutRef = useRef<number | null>(null);
   const [codecPreference, setCodecPreference] = useState<VideoCodecPreference>(() => readPlayerSettings().codecPreference);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [overlayMode, setOverlayMode] = useState<PlayerOverlayMode>('none');
+  const [isChromeVisible, setIsChromeVisible] = useState(false);
+  const [chromeActivityTick, setChromeActivityTick] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progressView, setProgressView] = useState({ current: 0, duration: 0 });
   const [activeCandidateIndex, setActiveCandidateIndex] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [playbackNotice, setPlaybackNotice] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [recommendationPage, setRecommendationPage] = useState(0);
+  const [episodePage, setEpisodePage] = useState(0);
+  const [pendingStripFocus, setPendingStripFocus] = useState<PendingStripFocus | null>(null);
   const { setWatchProgress, watchProgress } = useAppStore();
 
   const playerData = useAsyncData(async () => {
-    const [play, related, deviceInfo] = await Promise.all([
+    const [play, related, detail, deviceInfo] = await Promise.all([
       fetchPlaySource(bvid, cid),
       fetchRelatedVideos(bvid),
+      fetchVideoDetail(bvid),
       readDeviceInfo(),
     ]);
     return {
       play,
       related,
+      detail,
       deviceInfo,
       capability: buildPlayerCodecCapability(deviceInfo),
     };
@@ -77,6 +109,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   const savedProgress = watchProgress[progressKey];
   const play = playerData.status === 'success' ? playerData.data.play : null;
   const related = playerData.status === 'success' ? playerData.data.related : [];
+  const detail = playerData.status === 'success' ? playerData.data.detail : null;
   const deviceInfo = playerData.status === 'success' ? playerData.data.deviceInfo : null;
   const capability = playerData.status === 'success' ? playerData.data.capability : null;
   const codecMemory = useMemo(() => (
@@ -85,6 +118,24 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       lastFailedCodec: null,
     }
   ), [capability]);
+
+  const episodeEntries = useMemo<VideoPart[]>(() => {
+    if (!detail) {
+      return [];
+    }
+    if (detail.parts.length > 0) {
+      return detail.parts;
+    }
+    return [{
+      cid: detail.cid,
+      page: 1,
+      part: '正片',
+      duration: detail.duration,
+    }];
+  }, [detail]);
+
+  const currentEpisodeIndex = episodeEntries.findIndex((entry) => entry.cid === cid);
+  const currentEpisodePage = currentEpisodeIndex >= 0 ? Math.floor(currentEpisodeIndex / STRIP_PAGE_SIZE) : 0;
 
   const playbackPlan = useMemo(() => {
     if (!play || !capability) {
@@ -121,14 +172,95 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     }
     return codecs;
   }, [currentAttempt?.mode, returnedCodecs]);
+
+  const recommendationPageCount = getPageCount(related.length, STRIP_PAGE_SIZE);
+  const episodePageCount = getPageCount(episodeEntries.length, STRIP_PAGE_SIZE);
+  const recommendationItems = getPagedItems(related, recommendationPage, STRIP_PAGE_SIZE);
+  const episodeItems = getPagedItems(episodeEntries, episodePage, STRIP_PAGE_SIZE);
   const isWebOS = isWebOSAvailable();
   const engineLabel = currentAttempt?.mode === 'dash' ? 'Shaka Player + MSE' : 'HTML5 Video';
   const playbackModeLabel = currentAttempt?.mode === 'dash' ? 'App 内生成 DASH 清单' : '兼容流直连';
   const currentMimeType = currentAttempt?.videoStream?.mimeType ?? 'video/mp4';
-  usePageBackHandler(isSettingsOpen ? () => {
-    setIsSettingsOpen(false);
+  const shouldShowPlayerChrome = overlayMode === 'none' && isChromeVisible;
+
+  const isSettingsOpen = overlayMode === 'settings';
+  const isRecommendationsOpen = overlayMode === 'recommendations';
+  const isEpisodesOpen = overlayMode === 'episodes';
+
+  function revealPlayerChrome(focusControls: boolean): void {
+    setOverlayMode('none');
+    setIsChromeVisible(true);
+    setChromeActivityTick((previous) => previous + 1);
+
+    if (!focusControls) {
+      return;
+    }
+
+    if (chromeFocusTimeoutRef.current !== null) {
+      window.clearTimeout(chromeFocusTimeoutRef.current);
+    }
+
+    chromeFocusTimeoutRef.current = window.setTimeout(() => {
+      focusSection(PLAYER_CONTROL_SECTION_ID);
+      chromeFocusTimeoutRef.current = null;
+    }, 0);
+  }
+
+  function hidePlayerChrome(): void {
+    setIsChromeVisible(false);
+    blurPlayerChromeFocus();
+  }
+
+  function openSettingsOverlay(): void {
+    setOverlayMode('settings');
+    setIsChromeVisible(false);
+  }
+
+  function openRecommendationsOverlay(): void {
+    setRecommendationPage(0);
+    setPendingStripFocus({
+      sectionId: PLAYER_RECOMMENDATIONS_SECTION_ID,
+      focusId: buildStripFocusId('player-recommendation-slot', 0),
+    });
+    setOverlayMode('recommendations');
+    setIsChromeVisible(false);
+  }
+
+  function openEpisodesOverlay(): void {
+    const targetPage = currentEpisodePage;
+    const pageSize = getPageItemCount(episodeEntries.length, targetPage, STRIP_PAGE_SIZE);
+    const preferredSlot = currentEpisodeIndex >= 0 ? currentEpisodeIndex % STRIP_PAGE_SIZE : 0;
+    const targetSlot = Math.min(preferredSlot, Math.max(0, pageSize - 1));
+
+    setEpisodePage(targetPage);
+    setPendingStripFocus({
+      sectionId: PLAYER_EPISODES_SECTION_ID,
+      focusId: buildStripFocusId('player-episode-slot', targetSlot),
+    });
+    setOverlayMode('episodes');
+    setIsChromeVisible(false);
+  }
+
+  function closeOverlayToChrome(): void {
+    setOverlayMode('none');
+    setIsChromeVisible(true);
+    setChromeActivityTick((previous) => previous + 1);
+  }
+
+  usePageBackHandler(() => {
+    if (overlayMode !== 'none') {
+      closeOverlayToChrome();
+      return true;
+    }
+
+    if (shouldShowPlayerChrome) {
+      hidePlayerChrome();
+      return true;
+    }
+
+    onBack();
     return true;
-  } : null);
+  });
 
   useEffect(() => {
     savedProgressRef.current = savedProgress?.progress ?? 0;
@@ -148,21 +280,153 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
     setPlaybackNotice(playbackPlan.warning);
     setProgressView({ current: 0, duration: 0 });
     setReloadNonce(0);
+    setOverlayMode('none');
+    setIsChromeVisible(false);
+    setChromeActivityTick(0);
+    setRecommendationPage(0);
+    setEpisodePage(0);
+    setPendingStripFocus(null);
   }, [bvid, cid, playbackPlan.warning, currentAttempt?.id]);
 
   useEffect(() => {
-    if (isSettingsOpen) {
-      captureFocus({
-        sectionId: 'player-settings-drawer',
-        restoreTarget: 'player-open-settings',
-      });
-      return () => {
-        releaseFocus('player-settings-drawer');
-      };
+    const activeOverlaySectionId = (
+      overlayMode === 'settings'
+        ? PLAYER_SETTINGS_SECTION_ID
+        : overlayMode === 'recommendations'
+          ? PLAYER_RECOMMENDATIONS_SECTION_ID
+          : overlayMode === 'episodes'
+            ? PLAYER_EPISODES_SECTION_ID
+            : null
+    );
+
+    if (!activeOverlaySectionId) {
+      return undefined;
     }
 
-    releaseFocus('player-settings-drawer');
-  }, [isSettingsOpen]);
+    const restoreTarget = overlayMode === 'settings'
+      ? 'player-open-settings'
+      : overlayMode === 'episodes'
+        ? 'player-open-episodes'
+        : 'player-open-recommendations';
+
+    captureFocus({
+      sectionId: activeOverlaySectionId,
+      restoreTarget,
+    });
+
+    return () => {
+      releaseFocus(activeOverlaySectionId);
+    };
+  }, [overlayMode]);
+
+  useEffect(() => {
+    if (!pendingStripFocus) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      const focused = focusById(pendingStripFocus.focusId);
+      if (!focused) {
+        focusSection(pendingStripFocus.sectionId);
+      }
+      setPendingStripFocus(null);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [episodeItems, pendingStripFocus, recommendationItems]);
+
+  useEffect(() => {
+    const handleRemoteIntent = (event: Event) => {
+      const remoteEvent = event as CustomEvent<RemoteIntentDetail>;
+      const { action } = remoteEvent.detail;
+
+      if (action === 'back') {
+        return;
+      }
+
+      if (isRecommendationsOpen) {
+        const handled = paginateStripByRemote({
+          action,
+          page: recommendationPage,
+          totalItems: related.length,
+          sectionId: PLAYER_RECOMMENDATIONS_SECTION_ID,
+          focusPrefix: 'player-recommendation-slot',
+          setPage: setRecommendationPage,
+          setPendingFocus: setPendingStripFocus,
+        });
+
+        if (handled) {
+          remoteEvent.preventDefault();
+        }
+        return;
+      }
+
+      if (isEpisodesOpen) {
+        const handled = paginateStripByRemote({
+          action,
+          page: episodePage,
+          totalItems: episodeEntries.length,
+          sectionId: PLAYER_EPISODES_SECTION_ID,
+          focusPrefix: 'player-episode-slot',
+          setPage: setEpisodePage,
+          setPendingFocus: setPendingStripFocus,
+        });
+
+        if (handled) {
+          remoteEvent.preventDefault();
+        }
+        return;
+      }
+
+      if (overlayMode !== 'none') {
+        return;
+      }
+
+      if (!shouldShowPlayerChrome) {
+        revealPlayerChrome(true);
+        remoteEvent.preventDefault();
+        return;
+      }
+
+      setChromeActivityTick((previous) => previous + 1);
+    };
+
+    window.addEventListener(REMOTE_INTENT_EVENT, handleRemoteIntent as EventListener);
+    return () => {
+      window.removeEventListener(REMOTE_INTENT_EVENT, handleRemoteIntent as EventListener);
+    };
+  }, [
+    episodeEntries.length,
+    episodePage,
+    isEpisodesOpen,
+    isRecommendationsOpen,
+    overlayMode,
+    recommendationPage,
+    related.length,
+    shouldShowPlayerChrome,
+  ]);
+
+  useEffect(() => {
+    if (!isPlaying || !isChromeVisible || overlayMode !== 'none' || playbackError) {
+      return undefined;
+    }
+
+    const hideTimer = window.setTimeout(() => {
+      hidePlayerChrome();
+    }, PLAYER_CHROME_HIDE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(hideTimer);
+    };
+  }, [chromeActivityTick, isChromeVisible, isPlaying, overlayMode, playbackError]);
+
+  useEffect(() => () => {
+    if (chromeFocusTimeoutRef.current !== null) {
+      window.clearTimeout(chromeFocusTimeoutRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!play || !capability) {
@@ -267,7 +531,9 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       const fallbackMessage = currentAttempt.mode === 'dash'
         ? '当前 DASH 线路在此设备上未能稳定播放，请优先尝试 AVC 编码。'
         : '当前兼容流暂时无法播放，请稍后重试。';
+      setIsPlaying(false);
       setPlaybackError(message || fallbackMessage);
+      setIsChromeVisible(true);
     };
 
     const handleLoadedMetadata = () => {
@@ -302,6 +568,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
           setPlaybackError(message);
         }
         setIsPlaying(false);
+        setIsChromeVisible(true);
       });
     };
 
@@ -358,7 +625,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
       });
     };
 
-    const handlePause = () => setIsPlaying(false);
+    const handlePause = () => {
+      setIsPlaying(false);
+      setIsChromeVisible(true);
+    };
 
     const handleVideoError = () => {
       const mediaError = video.error;
@@ -458,7 +728,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
         />
       );
     }
-    return <PageStatus title="正在准备播放源" description="正在解析 DASH 轨道、编码信息和相关推荐。" />;
+    return <PageStatus title="正在准备播放源" description="正在解析播放器全屏播放所需的数据和轨道。" />;
   }
 
   if (!currentAttempt) {
@@ -476,12 +746,16 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
   const progressPercent = progressView.duration ? Math.min(100, (progressView.current / progressView.duration) * 100) : 0;
 
   return (
-    <main className="page-shell">
+    <main className="player-page">
       <FocusSection
         as="section"
         id="player-shell"
         group="content"
-        className="player-hero"
+        className={[
+          'player-hero',
+          shouldShowPlayerChrome ? 'player-hero--chrome-visible' : '',
+          overlayMode !== 'none' ? 'player-hero--overlay-open' : '',
+        ].filter(Boolean).join(' ')}
       >
         <div className="player-hero__video">
           <video
@@ -493,56 +767,71 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
           />
         </div>
 
-        <div className="player-hero__top">
-          <div className="player-hero__title-group">
-            <span className="player-hero__badge">正在播放</span>
-            <h1>{title}</h1>
-            <p>
-              {part ? `${part} · ` : ''}
-              {currentAttempt.qualityLabel}
-              {' · '}
-              {currentAttempt.codecLabel}
-              {' · '}
-              {currentAttempt.mode === 'dash' ? 'DASH' : '兼容流'}
-            </p>
-            {playbackNotice ? <small className="player-hero__notice">{playbackNotice}</small> : null}
-            {playbackError ? <small className="player-hero__error">{playbackError}</small> : null}
-          </div>
-        </div>
-
-        <div className="player-hero__bottom">
-          <div className="player-progress">
-            <div className="player-progress__meta">
-              <span>{formatSeconds(progressView.current)} / {formatSeconds(progressView.duration)}</span>
-              <span>{savedProgress?.progress ? '已同步本地播放记录' : '首次播放'}</span>
+        {shouldShowPlayerChrome ? (
+          <>
+            <div className="player-hero__top">
+              <div className="player-hero__title-group">
+                <span className="player-hero__badge">正在播放</span>
+                <h1>{title}</h1>
+                <p>
+                  {part ? `${part} · ` : ''}
+                  {currentAttempt.qualityLabel}
+                  {' · '}
+                  {currentAttempt.codecLabel}
+                  {' · '}
+                  {currentAttempt.mode === 'dash' ? 'DASH' : '兼容流'}
+                </p>
+                {playbackNotice ? <small className="player-hero__notice">{playbackNotice}</small> : null}
+                {playbackError ? <small className="player-hero__error">{playbackError}</small> : null}
+              </div>
             </div>
-            <div className="player-progress__track">
-              <div className="player-progress__value" style={{ width: `${progressPercent}%` }} />
-            </div>
-          </div>
 
-          <PlayerControlBar
-            sectionId="player-controls"
-            isPlaying={isPlaying}
-            onBack={onBack}
-            onReplay={() => seekVideo(videoRef.current, -10)}
-            onTogglePlay={() => togglePlay(videoRef.current)}
-            onForward={() => seekVideo(videoRef.current, 10)}
-            onRefresh={() => {
-              const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
-              resumeProgressRef.current = currentTime;
-              setPlaybackNotice('正在按当前策略重新加载播放器');
-              setActiveCandidateIndex(0);
-              setReloadNonce((previous) => previous + 1);
-            }}
-            onOpenSettings={() => setIsSettingsOpen((previous) => !previous)}
-          />
-        </div>
+            <div className="player-hero__bottom">
+              <div className="player-progress">
+                <div className="player-progress__meta">
+                  <span>{formatSeconds(progressView.current)} / {formatSeconds(progressView.duration)}</span>
+                  <span>{savedProgress?.progress ? '已同步本地播放记录' : '首次播放'}</span>
+                </div>
+                <div className="player-progress__track">
+                  <div className="player-progress__value" style={{ width: `${progressPercent}%` }} />
+                </div>
+              </div>
+
+              <PlayerControlBar
+                sectionId={PLAYER_CONTROL_SECTION_ID}
+                disabled={!shouldShowPlayerChrome}
+                isPlaying={isPlaying}
+                onBack={onBack}
+                onReplay={() => seekVideo(videoRef.current, -10)}
+                onTogglePlay={() => {
+                  togglePlay(videoRef.current);
+                  setChromeActivityTick((previous) => previous + 1);
+                }}
+                onForward={() => seekVideo(videoRef.current, 10)}
+                onRestartFromBeginning={() => {
+                  restartVideo(videoRef.current);
+                  setChromeActivityTick((previous) => previous + 1);
+                }}
+                onRefresh={() => {
+                  const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
+                  resumeProgressRef.current = currentTime;
+                  setPlaybackNotice('正在按当前策略重新加载播放器');
+                  setActiveCandidateIndex(0);
+                  setReloadNonce((previous) => previous + 1);
+                  revealPlayerChrome(false);
+                }}
+                onOpenEpisodes={openEpisodesOverlay}
+                onOpenSettings={openSettingsOverlay}
+                onOpenRecommendations={openRecommendationsOverlay}
+              />
+            </div>
+          </>
+        ) : null}
 
         {isSettingsOpen ? (
           <FocusSection
             as="aside"
-            id="player-settings-drawer"
+            id={PLAYER_SETTINGS_SECTION_ID}
             group="overlay"
             enterTo="default-element"
             className="player-settings-drawer"
@@ -563,7 +852,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                     disabled={!selectableCodecs.has(option)}
                     variant={codecPreference === option ? 'primary' : 'ghost'}
                     size="sm"
-                    sectionId="player-settings-drawer"
+                    sectionId={PLAYER_SETTINGS_SECTION_ID}
                     focusId={`player-codec-${option}`}
                     defaultFocus={(codecPreference === option && selectableCodecs.has(option)) || (index === 0 && !selectableCodecs.has(codecPreference))}
                     onClick={() => {
@@ -579,7 +868,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                           ?? `已切换到 ${getCodecLabel(effectivePreference)} 策略，正在重载播放器`,
                       );
                       setActiveCandidateIndex(0);
-                      setIsSettingsOpen(false);
+                      setOverlayMode('none');
+                      setIsChromeVisible(true);
                       setReloadNonce((previous) => previous + 1);
                     }}
                   >
@@ -672,13 +962,15 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                 <FocusButton
                   variant="glass"
                   size="sm"
-                  sectionId="player-settings-drawer"
+                  sectionId={PLAYER_SETTINGS_SECTION_ID}
                   focusId="player-reload-current-strategy"
                   onClick={() => {
                     const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
                     resumeProgressRef.current = currentTime;
                     setPlaybackNotice('正在按当前策略重新加载');
                     setActiveCandidateIndex(0);
+                    setOverlayMode('none');
+                    setIsChromeVisible(true);
                     setReloadNonce((previous) => previous + 1);
                   }}
                 >
@@ -687,7 +979,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                 <FocusButton
                   variant="ghost"
                   size="sm"
-                  sectionId="player-settings-drawer"
+                  sectionId={PLAYER_SETTINGS_SECTION_ID}
                   focusId="player-reset-auto-strategy"
                   onClick={() => {
                     const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
@@ -695,7 +987,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
                     setCodecPreference('auto');
                     setPlaybackNotice('已恢复自动策略，正在重新尝试');
                     setActiveCandidateIndex(0);
-                    setIsSettingsOpen(false);
+                    setOverlayMode('none');
+                    setIsChromeVisible(true);
                     setReloadNonce((previous) => previous + 1);
                   }}
                 >
@@ -712,35 +1005,164 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenDetail }: Pla
             </div>
           </FocusSection>
         ) : null}
-      </FocusSection>
 
-      <FocusSection
-        as="section"
-        id="player-related-grid"
-        group="content"
-        enterTo="last-focused"
-        className="content-section"
-        leaveFor={{ left: '@side-nav', up: '@player-controls' }}
-      >
-        <SectionHeader
-          title="相关推荐"
-          description="播放器已经切到电视端自包含播放链路，下面继续验证页面跳转与返回。"
-          actionLabel={`默认策略 ${getCodecLabel(playbackPlan.effectivePreference)}`}
-        />
-        <div className="media-grid">
-          {related.slice(0, 6).map((item, index) => (
-            <MediaCard
-              key={item.bvid}
-              sectionId="player-related-grid"
-              focusId={`player-related-${index}`}
-              item={item}
-              onClick={() => onOpenDetail(item)}
-            />
-          ))}
-        </div>
+        {isRecommendationsOpen ? (
+          <FocusSection
+            as="aside"
+            id={PLAYER_RECOMMENDATIONS_SECTION_ID}
+            group="overlay"
+            enterTo="last-focused"
+            defaultElement={buildStripFocusId('player-recommendation-slot', 0)}
+            className="player-strip"
+          >
+            <div className="player-strip__header">
+              <div>
+                <span className="player-hero__badge">推荐视频</span>
+                <h2>按左右切换视频，按下翻到下一屏 6 个</h2>
+              </div>
+              <p>{formatPageMeta(recommendationPage, recommendationPageCount, related.length)}</p>
+            </div>
+            <div className="player-strip__grid">
+              {recommendationItems.map((item, index) => (
+                <MediaCard
+                  key={buildStripFocusId('player-recommendation-slot', index)}
+                  sectionId={PLAYER_RECOMMENDATIONS_SECTION_ID}
+                  focusId={buildStripFocusId('player-recommendation-slot', index)}
+                  defaultFocus={index === 0}
+                  item={item}
+                  onClick={() => onOpenPlayer({
+                    bvid: item.bvid,
+                    cid: item.cid,
+                    title: item.title,
+                  })}
+                />
+              ))}
+            </div>
+          </FocusSection>
+        ) : null}
+
+        {isEpisodesOpen ? (
+          <FocusSection
+            as="aside"
+            id={PLAYER_EPISODES_SECTION_ID}
+            group="overlay"
+            enterTo="last-focused"
+            defaultElement={buildStripFocusId('player-episode-slot', 0)}
+            className="player-strip"
+          >
+            <div className="player-strip__header">
+              <div>
+                <span className="player-hero__badge">分P / 选集</span>
+                <h2>按左右切换分P，按下翻到下一屏 6 个</h2>
+              </div>
+              <p>{formatPageMeta(episodePage, episodePageCount, episodeEntries.length)}</p>
+            </div>
+            <div className="player-strip__grid">
+              {episodeItems.map((entry, index) => {
+                const isActiveEpisode = entry.cid === cid;
+                return (
+                  <FocusButton
+                    key={buildStripFocusId('player-episode-slot', index)}
+                    variant={isActiveEpisode ? 'primary' : 'glass'}
+                    className="player-strip-card"
+                    sectionId={PLAYER_EPISODES_SECTION_ID}
+                    focusId={buildStripFocusId('player-episode-slot', index)}
+                    defaultFocus={index === 0}
+                    onClick={() => onOpenPlayer({
+                      bvid,
+                      cid: entry.cid,
+                      title,
+                      part: entry.part,
+                    })}
+                  >
+                    <span className="player-strip-card__eyebrow">
+                      {isActiveEpisode ? '当前播放' : `P${entry.page}`}
+                    </span>
+                    <strong>{entry.part || `P${entry.page}`}</strong>
+                    <small>{formatDurationText(entry.duration)}</small>
+                  </FocusButton>
+                );
+              })}
+            </div>
+          </FocusSection>
+        ) : null}
       </FocusSection>
     </main>
   );
+}
+
+function blurPlayerChromeFocus(): void {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) {
+    return;
+  }
+
+  if (activeElement.dataset.focusSection === PLAYER_CONTROL_SECTION_ID) {
+    activeElement.blur();
+  }
+}
+
+function getPageCount(totalItems: number, pageSize: number): number {
+  return Math.max(1, Math.ceil(totalItems / pageSize));
+}
+
+function getPageItemCount(totalItems: number, page: number, pageSize: number): number {
+  const start = page * pageSize;
+  return Math.max(0, Math.min(pageSize, totalItems - start));
+}
+
+function getPagedItems<T>(items: T[], page: number, pageSize: number): T[] {
+  const start = page * pageSize;
+  return items.slice(start, start + pageSize);
+}
+
+function buildStripFocusId(prefix: string, slot: number): string {
+  return `${prefix}-${slot}`;
+}
+
+function getActiveStripSlot(sectionId: string): number {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement) || activeElement.dataset.focusSection !== sectionId) {
+    return 0;
+  }
+
+  const focusId = activeElement.dataset.focusId ?? '';
+  const match = focusId.match(/-(\d+)$/);
+  const slot = match ? Number(match[1]) : 0;
+  return Number.isFinite(slot) ? slot : 0;
+}
+
+function paginateStripByRemote(input: {
+  action: RemoteIntentDetail['action'];
+  page: number;
+  totalItems: number;
+  sectionId: string;
+  focusPrefix: string;
+  setPage: (nextPage: number) => void;
+  setPendingFocus: (value: PendingStripFocus | null) => void;
+}): boolean {
+  if (input.action !== 'up' && input.action !== 'down') {
+    return false;
+  }
+
+  const pageCount = getPageCount(input.totalItems, STRIP_PAGE_SIZE);
+  const currentSlot = getActiveStripSlot(input.sectionId);
+  const nextPage = input.action === 'down'
+    ? Math.min(pageCount - 1, input.page + 1)
+    : Math.max(0, input.page - 1);
+
+  if (nextPage === input.page) {
+    return true;
+  }
+
+  const nextPageItemCount = getPageItemCount(input.totalItems, nextPage, STRIP_PAGE_SIZE);
+  const nextSlot = Math.min(currentSlot, Math.max(0, nextPageItemCount - 1));
+  input.setPage(nextPage);
+  input.setPendingFocus({
+    sectionId: input.sectionId,
+    focusId: buildStripFocusId(input.focusPrefix, nextSlot),
+  });
+  return true;
 }
 
 function getDurationSeconds(video: HTMLVideoElement, durationMs: number): number {
@@ -751,11 +1173,22 @@ function togglePlay(video: HTMLVideoElement | null): void {
   if (!video) {
     return;
   }
+
   if (video.paused) {
     void video.play();
-  } else {
-    video.pause();
+    return;
   }
+
+  video.pause();
+}
+
+function restartVideo(video: HTMLVideoElement | null): void {
+  if (!video) {
+    return;
+  }
+
+  video.currentTime = 0;
+  void video.play();
 }
 
 function seekVideo(video: HTMLVideoElement | null, seconds: number): void {
@@ -778,6 +1211,20 @@ function formatSeconds(totalSeconds: number): string {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatDurationText(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return '00:00';
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatPageMeta(page: number, pageCount: number, total: number): string {
+  return `第 ${page + 1} / ${pageCount} 屏 · 共 ${total} 项`;
 }
 
 function loadDirectVideoSource(video: HTMLVideoElement, sourceUrl: string): void {

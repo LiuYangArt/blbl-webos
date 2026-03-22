@@ -2,6 +2,7 @@ export { FocusSection } from './FocusSection';
 export {
   activateFocused,
   captureFocus,
+  focusById,
   focusFirst,
   focusSection,
   isFocusableElement,

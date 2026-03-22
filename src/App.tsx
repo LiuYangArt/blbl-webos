@@ -120,6 +120,7 @@ function AppContent() {
   }, []);
 
   const activeNav = getActiveNav(currentPage, auth.status === 'authenticated');
+  const isImmersiveRoute = currentPage.name === 'player';
 
   return (
     <PageBackHandlerProvider
@@ -131,6 +132,7 @@ function AppContent() {
         activeNav={activeNav}
         profileName={auth.profile?.name}
         isLoggedIn={auth.status === 'authenticated'}
+        immersive={isImmersiveRoute}
         onNavigate={(route) => replace(route)}
       >
         <div className="app-page">
@@ -203,7 +205,13 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
           title={route.title}
           part={route.part}
           onBack={() => actions.pop()}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPlayer={(item) => actions.replace({
+            name: 'player',
+            bvid: item.bvid,
+            cid: item.cid,
+            title: item.title,
+            part: item.part,
+          })}
         />
       );
     case 'history':

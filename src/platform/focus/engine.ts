@@ -298,6 +298,10 @@ function focusTarget(target: FocusTarget): FocusableElement | null {
   return focusElement(resolveTargetElement(target));
 }
 
+export function focusById(focusId: string): FocusableElement | null {
+  return focusTarget(focusId);
+}
+
 function getCandidateScore(current: FocusRect, next: FocusRect, direction: Direction): number | null {
   let mainAxisDistance = 0;
   let crossAxisDistance = 0;
