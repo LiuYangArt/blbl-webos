@@ -7,7 +7,9 @@ const buildDir = resolve(root, 'build', 'webos');
 const devMenuConfigFile = resolve(root, '_dev', 'dev-menu.config.bat');
 const appInfo = JSON.parse(readFileSync(resolve(root, 'appinfo.json'), 'utf8'));
 const appId = appInfo.id;
+const appMain = appInfo.main ?? 'index.html';
 const packageFile = resolve(root, `${appInfo.id}_${appInfo.version}_all.ipk`);
+const installedAppMainFile = `/media/developer/apps/usr/palm/applications/${appId}/${appMain}`;
 
 const [, , action, ...restArgs] = process.argv;
 const isWindows = process.platform === 'win32';
@@ -87,6 +89,7 @@ const simulatorPath = getArg('--simulator-path', process.env.WEBOS_SIMULATOR_PAT
 const simulatorParams = getArg('--params', '{}');
 const launchParams = getArg('--params', '');
 const simulatorMediaProxyPort = getArg('--media-proxy-port', process.env.WEBOS_SIMULATOR_MEDIA_PROXY_PORT ?? '19033');
+const installWaitMsRaw = getArg('--wait-ms', process.env.WEBOS_INSTALL_WAIT_MS ?? '8000');
 
 const run = (command, args, options = {}) => {
   const result = runProcess(command, args, {
@@ -113,6 +116,18 @@ const runDetached = (command, args, options = {}) => {
   });
 
   child.unref();
+};
+
+const sleep = (ms) => new Promise((resolveSleep) => {
+  setTimeout(resolveSleep, ms);
+});
+
+const parseWaitMs = (value) => {
+  const waitMs = Number(value);
+  if (!Number.isFinite(waitMs) || waitMs < 0) {
+    throw new Error(`--wait-ms 必须是大于等于 0 的毫秒数，当前收到: ${value}`);
+  }
+  return waitMs;
 };
 
 const capture = (command, args) => {
@@ -199,6 +214,106 @@ const runCliWithNode16AllowFailure = (name, args) => {
   return result.status ?? 0;
 };
 
+const captureCliWithNode16 = (name, args) => {
+  ensureCliInstalled();
+  const cliBin = resolveCliBin(name);
+
+  if (!existsSync(cliBin)) {
+    throw new Error(`未找到 ${name}.js，请检查 @webos-tools/cli 安装是否完整`);
+  }
+
+  return capture(getCommandName('npx'), ['-y', '-p', 'node@16', 'node', cliBin, ...args]);
+};
+
+const ensureBuildPrepared = () => {
+  if (!existsSync(buildDir)) {
+    throw new Error('未找到 build/webos，请先运行 npm run build:webos');
+  }
+};
+
+const ensurePackageReady = () => {
+  if (!existsSync(packageFile)) {
+    throw new Error('未找到 IPK 包，请先运行 npm run webos:package');
+  }
+};
+
+const extractEntryScriptName = (html, sourceLabel) => {
+  const match = html.match(/(?:assets\/)?(index(?:-legacy)?-[^"'\s>]+\.js)/u);
+  if (!match?.[1]) {
+    throw new Error(`${sourceLabel} 中未找到 index 入口脚本`);
+  }
+  return match[1];
+};
+
+const getLocalEntryScriptName = () => {
+  ensureBuildPrepared();
+  const localAppMainFile = resolve(buildDir, appMain);
+  if (!existsSync(localAppMainFile)) {
+    throw new Error(`本地构建产物缺少入口文件: ${localAppMainFile}`);
+  }
+
+  const html = readFileSync(localAppMainFile, 'utf8');
+  return extractEntryScriptName(html, `本地入口文件 ${localAppMainFile}`);
+};
+
+const getInstalledEntryScriptName = () => {
+  try {
+    const html = captureCliWithNode16('ares-novacom', ['--device', device, '--run', `cat ${installedAppMainFile}`]);
+    return extractEntryScriptName(html, `电视入口文件 ${installedAppMainFile}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `无法读取电视上的已安装入口文件（device=${device}）。请先确认电视已唤醒、Developer Mode 会话仍有效，且设备 IP/端口可连通。原始错误: ${message}`,
+    );
+  }
+};
+
+const verifyInstalledEntry = () => {
+  const localEntry = getLocalEntryScriptName();
+  console.log(`本地入口: ${localEntry}`);
+  const installedEntry = getInstalledEntryScriptName();
+  console.log(`电视入口: ${installedEntry}`);
+
+  if (localEntry !== installedEntry) {
+    throw new Error(
+      `电视安装内容仍不是当前构建。本地入口=${localEntry}，电视入口=${installedEntry}。请优先升 appinfo.json 版本后重新 package + reinstall。`,
+    );
+  }
+
+  console.log('电视实际入口与本地构建一致。');
+  return { localEntry, installedEntry };
+};
+
+const packageApp = () => {
+  ensureBuildPrepared();
+  runCliWithNode16('ares-package', ['--no-minify', buildDir]);
+};
+
+const installPackage = () => {
+  ensurePackageReady();
+  runCliWithNode16('ares-install', ['--device', device, packageFile]);
+};
+
+const reinstallPackage = () => {
+  ensurePackageReady();
+
+  const removeStatus = runCliWithNode16AllowFailure('ares-install', ['--device', device, '--remove', appId]);
+  if (removeStatus === 0) {
+    console.log(`已先卸载旧包: ${appId}`);
+  } else {
+    console.log(`旧包卸载返回状态 ${removeStatus}，继续安装新包。`);
+  }
+
+  runCliWithNode16('ares-install', ['--device', device, packageFile]);
+};
+
+const launchApp = () => {
+  const cliArgs = ['--device', device];
+  cliArgs.push(...buildLaunchParamsArgs(launchParams));
+  cliArgs.push(appId);
+  runCliWithNode16('ares-launch', cliArgs);
+};
+
 switch (action) {
   case 'doctor': {
     ensureCliInstalled();
@@ -207,42 +322,41 @@ switch (action) {
     console.log(`ares-package: ${existsSync(resolveCliBin('ares-package')) ? 'ok' : 'missing'}`);
     console.log(`ares-install: ${existsSync(resolveCliBin('ares-install')) ? 'ok' : 'missing'}`);
     console.log(`ares-launch: ${existsSync(resolveCliBin('ares-launch')) ? 'ok' : 'missing'}`);
+    console.log(`ares-novacom: ${existsSync(resolveCliBin('ares-novacom')) ? 'ok' : 'missing'}`);
     break;
   }
   case 'package': {
-    if (!existsSync(buildDir)) {
-      throw new Error('未找到 build/webos，请先运行 npm run build:webos');
-    }
-    runCliWithNode16('ares-package', ['--no-minify', buildDir]);
+    packageApp();
     break;
   }
   case 'install': {
-    if (!existsSync(packageFile)) {
-      throw new Error('未找到 IPK 包，请先运行 npm run webos:package');
-    }
-    runCliWithNode16('ares-install', ['--device', device, packageFile]);
+    installPackage();
     break;
   }
   case 'reinstall': {
-    if (!existsSync(packageFile)) {
-      throw new Error('未找到 IPK 包，请先运行 npm run webos:package');
-    }
-
-    const removeStatus = runCliWithNode16AllowFailure('ares-install', ['--device', device, '--remove', appId]);
-    if (removeStatus === 0) {
-      console.log(`已先卸载旧包: ${appId}`);
-    } else {
-      console.log(`旧包卸载返回状态 ${removeStatus}，继续安装新包。`);
-    }
-
-    runCliWithNode16('ares-install', ['--device', device, packageFile]);
+    reinstallPackage();
     break;
   }
   case 'launch': {
-    const cliArgs = ['--device', device];
-    cliArgs.push(...buildLaunchParamsArgs(launchParams));
-    cliArgs.push(appId);
-    runCliWithNode16('ares-launch', cliArgs);
+    launchApp();
+    break;
+  }
+  case 'verify-installed-entry': {
+    verifyInstalledEntry();
+    break;
+  }
+  case 'deploy': {
+    const installWaitMs = parseWaitMs(installWaitMsRaw);
+    packageApp();
+    reinstallPackage();
+
+    if (installWaitMs > 0) {
+      console.log(`等待电视完成写盘与索引刷新: ${installWaitMs}ms`);
+      await sleep(installWaitMs);
+    }
+
+    verifyInstalledEntry();
+    launchApp();
     break;
   }
   case 'list': {
@@ -254,16 +368,12 @@ switch (action) {
     break;
   }
   case 'hosted': {
-    if (!existsSync(buildDir)) {
-      throw new Error('未找到 build/webos，请先运行 npm run build:webos');
-    }
+    ensureBuildPrepared();
     runCliWithNode16('ares-launch', ['-H', buildDir, '-d', device]);
     break;
   }
   case 'simulator': {
-    if (!existsSync(buildDir)) {
-      throw new Error('未找到 build/webos，请先运行 npm run build:webos');
-    }
+    ensureBuildPrepared();
 
     runDetached(process.execPath, [resolve(root, 'scripts', 'simulator-media-proxy.mjs'), '--port', simulatorMediaProxyPort], {
       cwd: root,
@@ -280,6 +390,8 @@ switch (action) {
     break;
   }
   default: {
-    console.log('Usage: node ./scripts/webos-cli.mjs <doctor|package|install|reinstall|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--simulator-version 25] [--simulator-path <path>]');
+    console.log(
+      'Usage: node ./scripts/webos-cli.mjs <doctor|package|install|reinstall|verify-installed-entry|deploy|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--wait-ms 8000] [--simulator-version 25] [--simulator-path <path>]',
+    );
   }
 }

@@ -17,6 +17,8 @@
     "webos:package": "npm run build:webos && node ./scripts/webos-cli.mjs package",
     "webos:install": "node ./scripts/webos-cli.mjs install",
     "webos:reinstall": "node ./scripts/webos-cli.mjs reinstall",
+    "webos:verify-install": "node ./scripts/webos-cli.mjs verify-installed-entry",
+    "webos:deploy": "npm run build:webos && node ./scripts/webos-cli.mjs deploy",
     "webos:launch": "node ./scripts/webos-cli.mjs launch",
     "webos:list": "node ./scripts/webos-cli.mjs list",
     "webos:remove": "node ./scripts/webos-cli.mjs remove",

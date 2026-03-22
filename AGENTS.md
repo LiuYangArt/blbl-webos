@@ -89,7 +89,8 @@ F:\CodeProjects\bilibili_tv_android\MediaPlayback
 涉及 webOS 打包/真机联调时再运行：
 - `npm run build:webos`
 - `npm run webos:package`
-- `npm run webos:install -- --device <deviceName>`
+- `npm run webos:reinstall -- --device <deviceName>`
+- `npm run webos:verify-install -- --device <deviceName>`
 - `npm run webos:launch -- --device <deviceName>`
 
 ## webOS 部署规则
@@ -97,6 +98,11 @@ F:\CodeProjects\bilibili_tv_android\MediaPlayback
 - 真实设备部署时，优先使用仓库脚本，不要直接调用裸 `ares-package`、`ares-install`、`ares-launch`
 - `scripts/webos-cli.mjs` 已封装 Node 16 兼容层；除非明确验证通过，不要改回当前系统 Node 直接执行 LG CLI
 - webOS 打包默认走 `--no-minify`，除非确认 LG CLI 已兼容当前产物，否则不要恢复默认 minify
+- 真机部署相关命令必须串行执行，不允许并行跑 `package`、`reinstall`、`verify-install`、`list`、`launch`
+- 真机默认优先使用 `npm run webos:deploy -- --device <deviceName>`，不要手工临时拼一串命令
+- 如果必须手动拆步骤，固定顺序是：`webos:package -> webos:reinstall -> 等 8 秒 -> webos:verify-install -> webos:launch`
+- 每次 `reinstall` 后，必须核对电视上的实际入口 JS hash；CLI 显示成功不等于电视已经运行新包
+- 如果 `webos:verify-install` 发现电视仍是旧入口，或电视表现明显像旧代码，直接提升 `appinfo.json.version` 后重新打包部署，不要反复覆盖同版本 IPK
 - 设备名、IP、passphrase、私钥属于本机开发环境配置，不写入仓库业务代码
 - 更完整的打包、安装、启动、排障流程，统一参考仓库 Skill：`.agents/skills/lg-webos-deploy/SKILL.md`
 

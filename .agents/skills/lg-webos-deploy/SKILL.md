@@ -1,6 +1,6 @@
 ---
 name: lg-webos-deploy
-description: Use this skill when you need to package, install, launch, relaunch, remove, or verify the LG webOS TV app from this repository on a real TV. It is specific to this repo's bilibili_webos project and should not be used for unrelated feature development.
+description: Use when you need to package, reinstall, verify the actual installed bundle, launch, or troubleshoot the LG webOS TV app on a real TV for this repository.
 ---
 
 # LG webOS TV 打包与部署技能
@@ -9,30 +9,123 @@ description: Use this skill when you need to package, install, launch, relaunch,
 
 只在以下场景使用：
 - 把本仓库的 webOS app 打包成 IPK
-- 安装到 LG 电视
-- 启动、重装、卸载、核对安装状态
+- 安装、重装、启动、卸载 LG 电视上的 app
+- 核对电视实际安装内容是不是当前构建
 - 首次接入新电视设备
-- 排查 webOS CLI 与 Node 版本兼容问题
+- 排查 webOS CLI、Node 版本、旧包残留问题
 
 不用于：
 - 普通前端功能开发
 - 与 LG webOS 部署无关的调试
-- Android TV 或其他平台的发布流程
+- Android TV 或其他平台发布流程
 
 ## 仓库内标准命令
 
-优先使用本仓库脚本，不要直接调用裸 `ares-install` / `ares-launch`。
+优先使用本仓库脚本，不要直接调用裸 `ares-package`、`ares-install`、`ares-launch`。
 
 ```bash
 npm run webos:doctor
-npm run build:webos
 npm run webos:package
-npm run webos:install -- --device <deviceName>
 npm run webos:reinstall -- --device <deviceName>
+npm run webos:verify-install -- --device <deviceName>
+npm run webos:deploy -- --device <deviceName>
 npm run webos:launch -- --device <deviceName>
 npm run webos:list -- --device <deviceName>
 npm run webos:remove -- --device <deviceName>
 ```
+
+## 默认做法
+
+真机联调时，默认直接执行：
+
+```bash
+npm run webos:deploy -- --device <deviceName>
+```
+
+这条命令会串行执行：
+
+1. `build:webos`
+2. `package`
+3. `reinstall`
+4. 等待电视写盘与索引刷新
+5. `verify-install`
+6. `launch`
+
+只有在你明确要拆步骤排查时，才手动分开执行。
+
+## 绝对规则
+
+### 1. 真机部署命令必须串行
+
+以下命令禁止并行执行：
+
+- `webos:package`
+- `webos:reinstall`
+- `webos:verify-install`
+- `webos:list`
+- `webos:launch`
+
+原因：
+
+- `webos:reinstall` 依赖刚刚生成的 IPK 文件
+- 如果 `package` 和 `reinstall` 并行跑，`reinstall` 很可能在新 IPK 生成前就开始执行
+- 即使 CLI 某一步显示成功，整个安装状态也会变得不可信
+
+结论：
+
+- 真机部署相关命令一律串行执行
+- 需要稳定流程时优先 `webos:deploy`
+
+### 2. 不要把 CLI 的 `Success` 当成最终真相
+
+`ares-install` 成功，不等于电视一定运行了新前端代码。
+
+真机判断前，必须执行：
+
+```bash
+npm run webos:verify-install -- --device <deviceName>
+```
+
+它会直接比对：
+
+- 本地 `build/webos/index.html` 里的入口 JS
+- 电视文件系统里已安装 app 的入口 JS
+
+只有两边一致，才允许继续判断“修复有没有生效”。
+
+### 3. 如果电视仍像旧包，先升版本，不要反复猜
+
+当出现下面任一现象时：
+
+- `verify-install` 显示电视入口 hash 与本地不一致
+- 电视表现明显像旧代码
+- 同版本号反复 `reinstall` 后仍不稳定
+
+直接处理：
+
+1. 提升 `appinfo.json.version`
+2. 重新执行 `npm run webos:deploy -- --device <deviceName>`
+
+不要继续反复覆盖同版本包。
+
+## 这次为什么明明有 Skill 还是会失败
+
+不是 Skill 完全没用，而是之前少了两道关键护栏：
+
+1. 没把“真机命令必须串行”写成硬规则
+2. 没把“核对电视实际入口 JS hash”做成正式脚本命令
+
+结果就是：
+
+- 人或 Agent 很容易把 `package` 和 `reinstall` 并行跑
+- 也容易在 CLI 显示成功后，误以为电视已经装上新包
+
+本次仓库已经补上：
+
+- `npm run webos:verify-install`
+- `npm run webos:deploy`
+
+以后优先走这两个入口。
 
 ## 关键经验
 
@@ -42,7 +135,7 @@ npm run webos:remove -- --device <deviceName>
 - `@webos-tools/cli` 在当前机器的 `Node 25` 下可能出现异常
 - 典型报错：`isDate is not a function`
 
-因此本仓库的 `scripts/webos-cli.mjs` 已经固定通过：
+因此本仓库的 `scripts/webos-cli.mjs` 已固定通过：
 
 ```bash
 npx -p node@16 node <ares-xxx.js>
@@ -51,8 +144,8 @@ npx -p node@16 node <ares-xxx.js>
 来执行 LG CLI。
 
 结论：
-- 以后优先跑仓库脚本
-- 不要重新退回裸命令，除非你明确在兼容版本的 Node 环境中
+- 优先跑仓库脚本
+- 不要退回裸命令，除非明确验证过兼容版本的 Node 环境
 
 ### 2. 打包时禁用 minify
 
@@ -62,15 +155,15 @@ npx -p node@16 node <ares-xxx.js>
 Failed to minify code
 ```
 
-因此仓库包装脚本已经统一改为：
+因此仓库打包脚本统一使用：
 
 ```bash
 ares-package --no-minify
 ```
 
-不要把这一步改回默认 minify，除非确认 LG CLI 已兼容当前构建产物。
+不要恢复默认 minify，除非确认 LG CLI 已兼容当前产物。
 
-## 首次连接新电视的步骤
+## 首次连接新电视
 
 ### 前置条件
 
@@ -87,16 +180,9 @@ npm install -g @webos-tools/cli
 
 ### 设备接入
 
-先添加设备：
-
 ```bash
 ares-setup-device -a <deviceName> -i "username=prisoner" -i "host=<tv-ip>" -i "port=9922"
 ares-setup-device -f <deviceName>
-```
-
-再拉取 key：
-
-```bash
 ares-novacom --device <deviceName> --getkey
 ```
 
@@ -110,7 +196,7 @@ ares-novacom --device <deviceName> --run "uname -a"
 
 如果能返回 Linux 系统信息，说明连接可用。
 
-## 标准部署流程
+## 手动拆步骤时的标准顺序
 
 ### 1. 先确认工具链
 
@@ -118,70 +204,33 @@ ares-novacom --device <deviceName> --run "uname -a"
 npm run webos:doctor
 ```
 
-### 2. 构建并准备 webOS bundle
-
-```bash
-npm run build:webos
-```
-
-### 3. 打包 IPK
+### 2. 打包 IPK
 
 ```bash
 npm run webos:package
 ```
 
-### 4. 安装到电视
-
-```bash
-npm run webos:install -- --device <deviceName>
-```
-
-### 4.1 真机联调默认改用清洁重装
-
-如果这次目标是：
-
-- 验证播放器修复
-- 排查“电视上还是旧包”
-- 同版本号反复覆盖安装
-
-优先改用：
+### 3. 清洁重装到电视
 
 ```bash
 npm run webos:reinstall -- --device <deviceName>
 ```
 
-它会先卸载旧包，再安装当前 IPK。
+### 4. 等待电视完成写盘与索引刷新
 
-经验上这能显著降低“CLI 显示安装成功，但电视仍跑旧前端产物”的概率。
+默认等待 `8` 秒左右。
 
-但这**不是绝对保证**。更稳的做法仍然是：
+### 5. 核对电视实际安装内容
 
-1. 真机关键联调时优先 `remove -> install`
-2. 安装后等待几秒
-3. 直接到电视文件系统核对当前 `index-legacy-*.js`
-4. 如仍怀疑覆盖不彻底，再提升 `appinfo.json` 的 `version`
+```bash
+npm run webos:verify-install -- --device <deviceName>
+```
 
-### 5. 启动 app
+### 6. 启动 app
 
 ```bash
 npm run webos:launch -- --device <deviceName>
 ```
-
-### 6. 验证是否已安装
-
-```bash
-npm run webos:list -- --device <deviceName>
-```
-
-确认列表中包含当前 app ID。
-
-如要确认电视真正跑到新包，不要只看 “Success”，还要继续核对：
-
-```bash
-npx -y -p node@16 node %APPDATA%\npm\node_modules\@webos-tools\cli\bin\ares-novacom.js --device <deviceName> --run "cat /media/developer/apps/usr/palm/applications/com.liuyang.app.bilibiliwebos/index.html | grep index-legacy"
-```
-
-把电视里的 `index-legacy-*.js` 和本地 `build/webos/index.html` 对上，再开始真机功能判断。
 
 ## 典型排障
 
@@ -203,11 +252,11 @@ npx -y -p node@16 node %APPDATA%\npm\node_modules\@webos-tools\cli\bin\ares-nova
 
 ### 报错：`Cannot parse privateKey: Encrypted OpenSSH private key detected, but no passphrase given`
 
-说明 CLI 已拿到 key，但没有把 passphrase 用在后续连接上。
+说明 CLI 已拿到 key，但后续连接没有正确使用 passphrase。
 
 处理方向：
 - 重新执行 `ares-novacom --getkey`
-- 检查 `%APPDATA%\.webos\tv\novacom-devices.json` 中对应设备项是否有 `passphrase`
+- 检查 `%APPDATA%\\.webos\\tv\\novacom-devices.json` 中对应设备项是否有 `passphrase`
 - 确认设备名、IP、key 文件名一致
 
 ### 安装成功但无法启动
@@ -223,14 +272,14 @@ npx -y -p node@16 node %APPDATA%\npm\node_modules\@webos-tools\cli\bin\ares-nova
 
 优先按下面顺序排查：
 
-1. 先跑 `npm run webos:reinstall -- --device <deviceName>`
-2. 等 `8` 秒左右再查电视文件系统里的 `index-legacy-*.js`
-3. 如果电视仍是旧入口 hash，提升 `appinfo.json.version` 后重新 `package + reinstall`
+1. 先跑 `npm run webos:verify-install -- --device <deviceName>`
+2. 如果 hash 不一致，直接提升 `appinfo.json.version`
+3. 再执行 `npm run webos:deploy -- --device <deviceName>`
 
 结论：
 
-- “每次安装前都先卸载”通常能解决大多数覆盖不彻底问题
-- 但要想**确认无误**，仍然必须以电视文件系统中的实际入口 JS 为准
+- `reinstall` 能降低旧包残留概率，但不是最终保证
+- 真正可信的依据仍然是电视文件系统中的实际入口 JS
 - 当 LG 安装层对同版本号包表现异常时，升版本比反复覆盖更稳
 
 ## 执行时的输出要求
@@ -239,6 +288,7 @@ npx -y -p node@16 node %APPDATA%\npm\node_modules\@webos-tools\cli\bin\ares-nova
 - 目标设备名
 - 使用的 app ID
 - IPK 路径
+- 本地入口 JS 与电视入口 JS 是否一致
 - 安装是否成功
 - 启动是否成功
 - 如失败，给出具体报错与下一步处理建议
