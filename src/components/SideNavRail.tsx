@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AppRoute, RootNavKey } from '../app/routes';
 import { ROOT_NAV_ITEMS } from '../app/routes';
 import { FocusSection } from '../platform/focus';
+import { BilibiliBrandMark } from './BilibiliBrandMark';
 import { TvIconButton } from './TvIconButton';
 
 type SideNavRailProps = {
@@ -37,7 +38,9 @@ export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailPr
       }}
     >
       <div className="side-nav-rail__brand">
-        <span className="side-nav-rail__logo">bi</span>
+        <span className="side-nav-rail__logo" aria-hidden="true">
+          <BilibiliBrandMark />
+        </span>
         <div className="side-nav-rail__brand-copy">
           <strong>Bilibili</strong>
           <p>webOS 客厅版</p>
@@ -73,14 +76,6 @@ export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailPr
           );
         })}
       </FocusSection>
-
-      <div className="side-nav-rail__footer" aria-hidden="true">
-        <div className="side-nav-rail__avatar">{isLoggedIn ? 'UP' : 'TV'}</div>
-        <div className="side-nav-rail__footer-copy">
-          <strong>{isLoggedIn ? '账号内容已接入' : '游客模式'}</strong>
-          <p>{isLoggedIn ? '历史 / 收藏 / 稍后再看' : '扫码后同步你的内容'}</p>
-        </div>
-      </div>
     </aside>
   );
 }

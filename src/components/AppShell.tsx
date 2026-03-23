@@ -43,7 +43,10 @@ export function AppShell({
       <div className="tv-app-main">
         <header className="tv-topbar" aria-hidden="true">
           <div className="tv-topbar__status-group">
-            <TopbarProfilePill label={profileName ?? '游客模式'} />
+            <TopbarProfilePill
+              title={profileName ?? '游客模式'}
+              badge={isLoggedIn ? 'UP' : 'TV'}
+            />
           </div>
         </header>
         <div className="tv-page-content" data-focus-scroll-root="true">{children}</div>

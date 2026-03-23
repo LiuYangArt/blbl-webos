@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { TV_ICONS } from '../../app/iconRegistry';
+import { BilibiliBrandMark } from '../../components/BilibiliBrandMark';
 import { FollowingSummaryChips } from '../../components/FollowingSummaryChips';
 import { FocusButton } from '../../components/FocusButton';
 import { HeroBanner } from '../../components/HeroBanner';
@@ -426,13 +427,15 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
 
         <ShowcaseCard
           title="导航项与导航容器"
-          usedIn="用于：左侧 SideNavRail 的品牌区、导航项、footer 信息。"
+          usedIn="用于：左侧 SideNavRail 的品牌区与导航项。"
           source="TvIconButton + side-nav-rail 样式"
         >
           <div className="ui-debug-nav-stage">
             <aside className="side-nav-rail ui-debug-nav-rail" aria-label="导航预览">
               <div className="side-nav-rail__brand">
-                <span className="side-nav-rail__logo">bi</span>
+                <span className="side-nav-rail__logo" aria-hidden="true">
+                  <BilibiliBrandMark />
+                </span>
                 <div className="side-nav-rail__brand-copy">
                   <strong>Bilibili</strong>
                   <p>webOS 客厅版</p>
@@ -471,13 +474,6 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                   className="side-nav-item"
                 />
               </div>
-              <div className="side-nav-rail__footer" aria-hidden="true">
-                <div className="side-nav-rail__avatar">UP</div>
-                <div className="side-nav-rail__footer-copy">
-                  <strong>账号内容已接入</strong>
-                  <p>历史 / 收藏 / 稍后再看</p>
-                </div>
-              </div>
             </aside>
           </div>
         </ShowcaseCard>
@@ -500,12 +496,12 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
         <div className="ui-debug-showcase-grid">
           <ShowcaseCard
             title="顶栏账号胶囊"
-            usedIn="用于：AppShell 右上角账号状态展示，比如游客模式、登录昵称。"
+            usedIn="用于：AppShell 右上角账号摘要展示，统一收纳昵称与登录态说明。"
             source="TopbarProfilePill"
           >
             <div className="ui-debug-shell-row">
-              <TopbarProfilePill label="liuyangart" />
-              <TopbarProfilePill label="游客模式" />
+              <TopbarProfilePill title="liuyangart" badge="UP" />
+              <TopbarProfilePill title="游客模式" badge="TV" />
             </div>
           </ShowcaseCard>
 

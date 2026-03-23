@@ -1,7 +1,15 @@
 type TopbarProfilePillProps = {
-  label: string;
+  title: string;
+  badge: string;
 };
 
-export function TopbarProfilePill({ label }: TopbarProfilePillProps) {
-  return <span className="tv-topbar__profile">{label}</span>;
+export function TopbarProfilePill({ title, badge }: TopbarProfilePillProps) {
+  return (
+    <div className="tv-topbar__profile">
+      <span className="tv-topbar__profile-badge" aria-hidden="true">{badge}</span>
+      <span className="tv-topbar__profile-copy">
+        <strong>{title}</strong>
+      </span>
+    </div>
+  );
 }
