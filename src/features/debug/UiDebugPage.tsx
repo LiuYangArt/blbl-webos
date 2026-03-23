@@ -744,8 +744,6 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                 <PlayerSettingsDrawer
                   sectionId="ui-debug-player-drawer"
                   badge="播放设置"
-                  title="设置抽屉"
-                  description="这里保留真实的 chip、说明文案和 info row 结构，方便逐条指认。"
                   qualityOptions={[
                     {
                       key: 'ui-debug-quality-1080',

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { FocusButton } from '../../components/FocusButton';
+import { buildGridFocusMap, buildRowTargets, type FocusLinks } from './playerFocusGrid';
 
 export type PlayerSettingsAction = {
   key: string;
@@ -20,8 +21,6 @@ export type PlayerSettingsInfoRow = {
 type PlayerSettingsDrawerProps = {
   sectionId: string;
   badge: string;
-  title: string;
-  description: ReactNode;
   qualityOptions?: PlayerSettingsAction[];
   qualityHint?: ReactNode;
   codecOptions?: PlayerSettingsAction[];
@@ -31,7 +30,7 @@ type PlayerSettingsDrawerProps = {
   planText?: ReactNode;
 };
 
-function renderActionButton(sectionId: string, action: PlayerSettingsAction) {
+function renderActionButton(sectionId: string, action: PlayerSettingsAction, links?: FocusLinks) {
   return (
     <FocusButton
       key={action.key}
@@ -42,6 +41,10 @@ function renderActionButton(sectionId: string, action: PlayerSettingsAction) {
       className={action.className}
       disabled={action.disabled}
       defaultFocus={action.defaultFocus}
+      focusLeft={links?.left}
+      focusRight={links?.right}
+      focusUp={links?.up}
+      focusDown={links?.down}
       onClick={action.onClick}
     >
       {action.label}
@@ -52,8 +55,6 @@ function renderActionButton(sectionId: string, action: PlayerSettingsAction) {
 export function PlayerSettingsDrawer({
   sectionId,
   badge,
-  title,
-  description,
   qualityOptions = [],
   qualityHint,
   codecOptions = [],
@@ -62,19 +63,55 @@ export function PlayerSettingsDrawer({
   actionOptions = [],
   planText,
 }: PlayerSettingsDrawerProps) {
+  const qualityIds = qualityOptions.map((action) => action.key);
+  const codecIds = codecOptions.map((action) => action.key);
+  const actionIds = actionOptions.map((action) => action.key);
+  const qualityColumns = Math.min(2, Math.max(1, qualityIds.length));
+  const codecColumns = Math.min(4, Math.max(1, codecIds.length));
+  const actionColumns = Math.min(2, Math.max(1, actionIds.length));
+  let qualityDownTargets: string[] = [];
+  if (codecIds.length) {
+    qualityDownTargets = buildRowTargets(codecIds, codecColumns, 'first', qualityColumns);
+  } else if (actionIds.length) {
+    qualityDownTargets = buildRowTargets(actionIds, actionColumns, 'first', qualityColumns);
+  }
+
+  const codecUpTargets = qualityIds.length
+    ? buildRowTargets(qualityIds, qualityColumns, 'last', codecColumns)
+    : [];
+  const codecDownTargets = actionIds.length
+    ? buildRowTargets(actionIds, actionColumns, 'first', codecColumns)
+    : [];
+
+  let actionUpTargets: string[] = [];
+  if (codecIds.length) {
+    actionUpTargets = buildRowTargets(codecIds, codecColumns, 'last', actionColumns);
+  } else if (qualityIds.length) {
+    actionUpTargets = buildRowTargets(qualityIds, qualityColumns, 'last', actionColumns);
+  }
+
+  const qualityFocusMap = buildGridFocusMap(qualityIds, qualityColumns, {
+    downByColumn: qualityDownTargets,
+  });
+  const codecFocusMap = buildGridFocusMap(codecIds, codecColumns, {
+    upByColumn: codecUpTargets,
+    downByColumn: codecDownTargets,
+  });
+  const actionFocusMap = buildGridFocusMap(actionIds, actionColumns, {
+    upByColumn: actionUpTargets,
+  });
+
   return (
     <>
       <div className="player-settings-drawer__header">
-        <span className="player-hero__badge">{badge}</span>
-        <h2>{title}</h2>
-        <p>{description}</p>
+        <span className="player-settings-drawer__eyebrow">{badge}</span>
       </div>
 
       {qualityOptions.length ? (
         <div className="player-settings-drawer__section">
           <span className="player-settings-drawer__label">画质</span>
           <div className="player-settings-drawer__chips">
-            {qualityOptions.map((action) => renderActionButton(sectionId, action))}
+            {qualityOptions.map((action) => renderActionButton(sectionId, action, qualityFocusMap[action.key]))}
           </div>
           {qualityHint ? <p className="player-settings-drawer__hint">{qualityHint}</p> : null}
         </div>
@@ -84,7 +121,7 @@ export function PlayerSettingsDrawer({
         <div className="player-settings-drawer__section">
           <span className="player-settings-drawer__label">编码偏好</span>
           <div className="player-settings-drawer__chips">
-            {codecOptions.map((action) => renderActionButton(sectionId, action))}
+            {codecOptions.map((action) => renderActionButton(sectionId, action, codecFocusMap[action.key]))}
           </div>
         </div>
       ) : null}
@@ -108,7 +145,7 @@ export function PlayerSettingsDrawer({
         <div className="player-settings-drawer__section">
           <span className="player-settings-drawer__label">快捷操作</span>
           <div className="player-settings-drawer__actions">
-            {actionOptions.map((action) => renderActionButton(sectionId, action))}
+            {actionOptions.map((action) => renderActionButton(sectionId, action, actionFocusMap[action.key]))}
           </div>
         </div>
       ) : null}

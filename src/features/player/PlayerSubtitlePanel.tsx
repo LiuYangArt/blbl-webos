@@ -7,6 +7,7 @@ import type {
   PlayerSubtitleFontSize,
   PlayerSubtitleStyleSettings,
 } from './playerSettings';
+import { buildGridFocusMap, buildRowTargets, type FocusLinks } from './playerFocusGrid';
 
 type PlayerSubtitlePanelProps = {
   sectionId: string;
@@ -55,23 +56,63 @@ export function PlayerSubtitlePanel({
   onBottomOffsetChange,
   onBackgroundOpacityChange,
 }: PlayerSubtitlePanelProps) {
+  const displayIds = ['player-subtitle-enabled-on', 'player-subtitle-enabled-off'] as const;
+  const trackIds = tracks.map((track) => `player-subtitle-track-${track.id}`);
+  const fontIds = FONT_SIZE_OPTIONS.map((option) => `player-subtitle-font-${option.value}`);
+  const bottomIds = BOTTOM_OFFSET_OPTIONS.map((option) => `player-subtitle-bottom-${option.value}`);
+  const backgroundIds = BACKGROUND_OPACITY_OPTIONS.map((option) => `player-subtitle-background-${option.value}`);
+  const displayTargets = [...displayIds];
+  const displayDownTargets = trackIds.length
+    ? buildRowTargets(trackIds, 2, 'first', displayIds.length)
+    : buildRowTargets(fontIds, 3, 'first', displayIds.length);
+  const trackUpTargets = buildRowTargets(displayTargets, 2, 'first', 2);
+  const trackDownTargets = buildRowTargets(fontIds, 3, 'first', 2);
+  let fontUpTargets: string[] = [];
+  if (trackIds.length) {
+    fontUpTargets = buildRowTargets(trackIds, 2, 'last', fontIds.length);
+  } else {
+    fontUpTargets = buildRowTargets(displayTargets, 2, 'first', fontIds.length);
+  }
+  const bottomUpTargets = buildRowTargets(fontIds, 3, 'first', bottomIds.length);
+  const bottomDownTargets = buildRowTargets(backgroundIds, 3, 'first', bottomIds.length);
+  const backgroundUpTargets = buildRowTargets(bottomIds, 3, 'first', backgroundIds.length);
+
+  const displayFocusMap = buildGridFocusMap(displayTargets, 2, {
+    downByColumn: displayDownTargets,
+  });
+  const trackFocusMap = buildGridFocusMap(trackIds, 2, {
+    upByColumn: trackUpTargets,
+    downByColumn: trackDownTargets,
+  });
+  const fontFocusMap = buildGridFocusMap(fontIds, 3, {
+    upByColumn: fontUpTargets,
+    downByColumn: buildRowTargets(bottomIds, 3, 'first', fontIds.length),
+  });
+  const bottomFocusMap = buildGridFocusMap(bottomIds, 3, {
+    upByColumn: bottomUpTargets,
+    downByColumn: bottomDownTargets,
+  });
+  const backgroundFocusMap = buildGridFocusMap(backgroundIds, 3, {
+    upByColumn: backgroundUpTargets,
+  });
+
   return (
     <FocusButtonSection sectionId={sectionId}>
       <div className="player-subtitle-panel__header">
-        <span className="player-hero__badge">CC 字幕</span>
-        <h2>字幕与样式</h2>
-        <p>默认会优先选择可用字幕。关闭后会记住你的偏好。</p>
+        <span className="player-settings-drawer__eyebrow">CC 字幕</span>
       </div>
 
       <div className="player-subtitle-panel__section">
         <span className="player-subtitle-panel__label">显示</span>
-        <div className="player-subtitle-panel__chips">
+        <div className="player-subtitle-panel__chips player-subtitle-panel__chips--display">
           <FocusButton
             variant={subtitleEnabled ? 'primary' : 'ghost'}
             size="sm"
             sectionId={sectionId}
-            focusId="player-subtitle-enabled-on"
+            focusId={displayIds[0]}
             defaultFocus={subtitleEnabled}
+            focusRight={displayFocusMap[displayIds[0]]?.right}
+            focusDown={displayFocusMap[displayIds[0]]?.down}
             onClick={() => onToggleEnabled(true)}
           >
             开启字幕
@@ -80,8 +121,10 @@ export function PlayerSubtitlePanel({
             variant={!subtitleEnabled ? 'primary' : 'ghost'}
             size="sm"
             sectionId={sectionId}
-            focusId="player-subtitle-enabled-off"
+            focusId={displayIds[1]}
             defaultFocus={!subtitleEnabled}
+            focusLeft={displayFocusMap[displayIds[1]]?.left}
+            focusDown={displayFocusMap[displayIds[1]]?.down}
             onClick={() => onToggleEnabled(false)}
           >
             关闭字幕
@@ -100,8 +143,12 @@ export function PlayerSubtitlePanel({
                 variant={isSelected ? 'primary' : 'ghost'}
                 size="sm"
                 sectionId={sectionId}
-                focusId={`player-subtitle-track-${track.id}`}
+                focusId={trackIds[index]}
                 defaultFocus={index === 0 && activeTrackId === null}
+                focusLeft={trackFocusMap[trackIds[index]]?.left}
+                focusRight={trackFocusMap[trackIds[index]]?.right}
+                focusUp={trackFocusMap[trackIds[index]]?.up}
+                focusDown={trackFocusMap[trackIds[index]]?.down}
                 onClick={() => onSelectTrack(track.id)}
               >
                 {track.langDoc || track.lang || `轨道 ${index + 1}`}
@@ -121,6 +168,7 @@ export function PlayerSubtitlePanel({
         focusPrefix="player-subtitle-font"
         currentValue={styleSettings.fontSize}
         options={FONT_SIZE_OPTIONS}
+        focusMap={fontFocusMap}
         onChange={onFontSizeChange}
       />
 
@@ -130,6 +178,7 @@ export function PlayerSubtitlePanel({
         focusPrefix="player-subtitle-bottom"
         currentValue={styleSettings.bottomOffset}
         options={BOTTOM_OFFSET_OPTIONS}
+        focusMap={bottomFocusMap}
         onChange={onBottomOffsetChange}
       />
 
@@ -139,6 +188,7 @@ export function PlayerSubtitlePanel({
         focusPrefix="player-subtitle-background"
         currentValue={styleSettings.backgroundOpacity}
         options={BACKGROUND_OPACITY_OPTIONS}
+        focusMap={backgroundFocusMap}
         onChange={onBackgroundOpacityChange}
       />
     </FocusButtonSection>
@@ -165,6 +215,7 @@ type SubtitleStyleRowProps<TValue extends string> = {
   currentValue: TValue;
   options: Array<{ value: TValue; label: string }>;
   onChange: (value: TValue) => void;
+  focusMap: Record<string, FocusLinks>;
 };
 
 function SubtitleStyleRow<TValue extends string>({
@@ -174,24 +225,33 @@ function SubtitleStyleRow<TValue extends string>({
   currentValue,
   options,
   onChange,
+  focusMap,
 }: SubtitleStyleRowProps<TValue>) {
   return (
     <div className="player-subtitle-panel__section">
       <span className="player-subtitle-panel__label">{title}</span>
       <div className="player-subtitle-panel__chips">
-        {options.map((option, index) => (
-          <FocusButton
-            key={option.value}
-            variant={currentValue === option.value ? 'primary' : 'ghost'}
-            size="sm"
-            sectionId={sectionId}
-            focusId={`${focusPrefix}-${option.value}`}
-            defaultFocus={index === 0 && currentValue === option.value}
-            onClick={() => onChange(option.value)}
-          >
-            {option.label}
-          </FocusButton>
-        ))}
+        {options.map((option, index) => {
+          const focusId = `${focusPrefix}-${option.value}`;
+          const links = focusMap[focusId];
+          return (
+            <FocusButton
+              key={option.value}
+              variant={currentValue === option.value ? 'primary' : 'ghost'}
+              size="sm"
+              sectionId={sectionId}
+              focusId={focusId}
+              defaultFocus={index === 0 && currentValue === option.value}
+              focusLeft={links?.left}
+              focusRight={links?.right}
+              focusUp={links?.up}
+              focusDown={links?.down}
+              onClick={() => onChange(option.value)}
+            >
+              {option.label}
+            </FocusButton>
+          );
+        })}
       </div>
     </div>
   );

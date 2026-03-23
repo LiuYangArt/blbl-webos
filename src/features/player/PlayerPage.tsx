@@ -133,6 +133,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const subtitleTrackUrlRef = useRef<string | null>(null);
   const subtitleTrackElementRef = useRef<HTMLTrackElement | null>(null);
   const subtitleCacheRef = useRef<Map<number, string>>(new Map());
+  const onOpenPlayerRef = useRef(onOpenPlayer);
+  const nextEpisodeRef = useRef<PlayerNavigationTarget | null>(null);
   const lastPersistedProgressRef = useRef(-1);
   const resumeProgressRef = useRef(0);
   const savedProgressRef = useRef(0);
@@ -218,6 +220,22 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
   const currentEpisodeIndex = episodeEntries.findIndex((entry) => entry.cid === cid);
   const currentEpisodePage = currentEpisodeIndex >= 0 ? Math.floor(currentEpisodeIndex / STRIP_PAGE_SIZE) : 0;
+
+  useEffect(() => {
+    onOpenPlayerRef.current = onOpenPlayer;
+  }, [onOpenPlayer]);
+
+  useEffect(() => {
+    const nextEpisode = currentEpisodeIndex >= 0 ? episodeEntries[currentEpisodeIndex + 1] : null;
+    nextEpisodeRef.current = nextEpisode
+      ? {
+          bvid,
+          cid: nextEpisode.cid,
+          title,
+          part: nextEpisode.part,
+        }
+      : null;
+  }, [bvid, currentEpisodeIndex, episodeEntries, title]);
 
   const playbackPlan = useMemo(() => {
     if (!play || !capability) {
@@ -814,6 +832,22 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       setIsChromeVisible(true);
     };
 
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setIsChromeVisible(true);
+
+      const nextEpisode = nextEpisodeRef.current;
+      if (!nextEpisode) {
+        return;
+      }
+
+      resumeProgressRef.current = 0;
+      savedProgressRef.current = 0;
+      lastPersistedProgressRef.current = -1;
+      setPlaybackNotice(`正在继续播放下一 P：${nextEpisode.part || '下一集'}`);
+      onOpenPlayerRef.current(nextEpisode);
+    };
+
     const handleVideoError = () => {
       const mediaError = video.error;
       finalizeFailure(mediaError?.message ?? '媒体播放失败', mediaError?.code ?? null);
@@ -823,6 +857,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
+    video.addEventListener('ended', handleEnded);
     video.addEventListener('error', handleVideoError);
 
     reportPlayerDebugEvent({
@@ -883,6 +918,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
+      video.removeEventListener('ended', handleEnded);
       video.removeEventListener('error', handleVideoError);
       if (loadWatchdogId !== null) {
         window.clearTimeout(loadWatchdogId);
@@ -1088,7 +1124,6 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     );
   }
 
-  const activeCapability = playerData.data.capability;
   const progressPercent = progressView.duration ? Math.min(100, (progressView.current / progressView.duration) * 100) : 0;
   const progressLeadingLabel = `${formatSeconds(progressView.current)} / ${formatSeconds(progressView.duration)}`;
   const progressTrailingLabel = savedProgress?.progress ? '已同步本地播放记录' : '首次播放';
@@ -1314,8 +1349,6 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
             <PlayerSettingsDrawer
               sectionId={PLAYER_SETTINGS_SECTION_ID}
               badge="播放设置"
-              title="画质与编码"
-              description={`${activeCapability.deviceLabel} · ${activeCapability.deviceClass}`}
               qualityOptions={qualityActions}
               qualityHint={qualityAvailabilityNotice}
               codecOptions={codecActions}
@@ -1382,8 +1415,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
             sectionId={STRIP_OVERLAY_CONFIG.episodes.sectionId}
             defaultElement={buildStripFocusId(STRIP_OVERLAY_CONFIG.episodes.focusPrefix, 0)}
             badge="分P / 选集"
-            title="按左右切换分P，按下翻到下一屏 6 个"
             meta={formatPageMeta(episodePage, episodePageCount, episodeEntries.length)}
+            className="player-strip--episodes"
           >
             {episodeItems.map((entry, index) => {
               const isActiveEpisode = entry.cid === cid;
@@ -1391,7 +1424,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                 <FocusButton
                   key={buildStripFocusId(STRIP_OVERLAY_CONFIG.episodes.focusPrefix, index)}
                   variant={isActiveEpisode ? 'primary' : 'glass'}
-                  className="player-strip-card"
+                  className="player-strip-card player-strip-card--episode"
                   sectionId={STRIP_OVERLAY_CONFIG.episodes.sectionId}
                   focusId={buildStripFocusId(STRIP_OVERLAY_CONFIG.episodes.focusPrefix, index)}
                   defaultFocus={index === 0}
@@ -1421,9 +1454,10 @@ type PlayerStripOverlayProps = {
   sectionId: string;
   defaultElement: string;
   badge: string;
-  title: string;
+  title?: string;
   meta: string;
   children: ReactNode;
+  className?: string;
 };
 
 function PlayerStripOverlay({
@@ -1433,6 +1467,7 @@ function PlayerStripOverlay({
   title,
   meta,
   children,
+  className,
 }: PlayerStripOverlayProps) {
   return (
     <FocusSection
@@ -1441,12 +1476,12 @@ function PlayerStripOverlay({
       group="overlay"
       enterTo="last-focused"
       defaultElement={defaultElement}
-      className="player-strip"
+      className={['player-strip', className].filter(Boolean).join(' ')}
     >
       <div className="player-strip__header">
         <div>
           <span className="player-hero__badge">{badge}</span>
-          <h2>{title}</h2>
+          {title ? <h2>{title}</h2> : null}
         </div>
         <p>{meta}</p>
       </div>
