@@ -75,8 +75,20 @@ export function readLaunchParams(): AppLaunchParams | null {
 }
 
 export function resolveInitialRoute(): AppRoute {
+  const search = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const launchParams = readLaunchParams();
-  const bootRoute = normalizeString(launchParams?.route ?? import.meta.env.VITE_BOOT_ROUTE);
+  const uiDebugEnabled = normalizeBoolean(search?.get('uiDebug'));
+  const bootRoute = normalizeString(
+    (uiDebugEnabled ? 'ui-debug' : null)
+    ?? search?.get('route')
+    ?? launchParams?.route
+    ?? import.meta.env.VITE_BOOT_ROUTE,
+  );
+
+  if (bootRoute === 'ui-debug') {
+    return { name: 'ui-debug' };
+  }
+
   if (bootRoute !== 'player') {
     return { name: 'home' };
   }

@@ -5,6 +5,7 @@ import { useAsyncData } from '../../app/useAsyncData';
 import { usePageBackHandler } from '../../app/PageBackHandler';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
+import { SearchComposer } from '../../components/SearchComposer';
 import { SectionHeader } from '../../components/SectionHeader';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import {
@@ -103,30 +104,14 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
         </div>
 
         {isComposerOpen ? (
-          <div className="search-composer">
-            <label className="search-composer__field">
-              <span>关键词</span>
-              <input
-                autoFocus
-                value={draft}
-                placeholder={defaultWord.showName}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    submitKeyword(draft || defaultWord.keyword);
-                  }
-                }}
-              />
-            </label>
-            <div className="search-composer__actions">
-              <button type="button" onClick={() => submitKeyword(draft || defaultWord.keyword)}>
-                立即搜索
-              </button>
-              <button type="button" onClick={() => setComposerOpen(false)}>
-                关闭输入面板
-              </button>
-            </div>
-          </div>
+          <SearchComposer
+            value={draft}
+            placeholder={defaultWord.showName}
+            submitLabel="立即搜索"
+            onChange={setDraft}
+            onSubmit={() => submitKeyword(draft || defaultWord.keyword)}
+            onClose={() => setComposerOpen(false)}
+          />
         ) : null}
       </FocusSection>
 

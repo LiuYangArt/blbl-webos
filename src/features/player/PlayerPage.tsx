@@ -5,6 +5,7 @@ import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { PlayerControlBar } from '../../components/PlayerControlBar';
+import { TvProgressBar } from '../../components/TvProgressBar';
 import { FocusSection, captureFocus, focusById, focusSection, releaseFocus } from '../../platform/focus';
 import { REMOTE_INTENT_EVENT, type RemoteIntentDetail } from '../../platform/remote';
 import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
@@ -17,6 +18,7 @@ import type {
   VideoPart,
 } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
+import { PlayerSettingsDrawer, type PlayerSettingsAction, type PlayerSettingsInfoRow } from './PlayerSettingsDrawer';
 import { PlayerSubtitlePanel } from './PlayerSubtitlePanel';
 import {
   buildPlaybackAttempts,
@@ -1088,6 +1090,119 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
   const activeCapability = playerData.data.capability;
   const progressPercent = progressView.duration ? Math.min(100, (progressView.current / progressView.duration) * 100) : 0;
+  const progressLeadingLabel = `${formatSeconds(progressView.current)} / ${formatSeconds(progressView.duration)}`;
+  const progressTrailingLabel = savedProgress?.progress ? '已同步本地播放记录' : '首次播放';
+  const qualityActions: PlayerSettingsAction[] = play.qualities.map((option, index) => {
+    const isSelected = qualityPreference === option.qn;
+    const isReturned = play.currentQuality === option.qn;
+    const chipLabel = option.badge ? `${option.label} ${option.badge}` : option.label;
+
+    return {
+      key: `player-quality-${option.qn}`,
+      label: isReturned ? `${chipLabel} · 已返回` : chipLabel,
+      variant: isSelected ? 'primary' : 'ghost',
+      defaultFocus: isSelected || (!play.qualities.some((item) => item.qn === qualityPreference) && index === 0),
+      onClick: () => {
+        const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
+        resumeProgressRef.current = currentTime;
+        savedProgressRef.current = currentTime;
+        lastPersistedProgressRef.current = currentTime;
+        setQualityPreference(option.qn);
+        setPlaybackNotice(`正在请求 ${option.label}，稍后会按接口实际返回结果继续播放`);
+        setActiveCandidateIndex(0);
+        setOverlayMode('none');
+        setIsChromeVisible(true);
+      },
+    };
+  });
+  const codecActions: PlayerSettingsAction[] = CODEC_OPTIONS.map((option, index) => ({
+    key: `player-codec-${option}`,
+    label: getCodecLabel(option),
+    variant: codecPreference === option ? 'primary' : 'ghost',
+    className: !selectableCodecs.has(option) ? 'focus-button--disabled' : undefined,
+    disabled: !selectableCodecs.has(option),
+    defaultFocus:
+      (codecPreference === option && selectableCodecs.has(option))
+      || (index === 0 && !selectableCodecs.has(codecPreference)),
+    onClick: () => {
+      const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
+      resumeProgressRef.current = currentTime;
+      const previewPlan = play && capability
+        ? buildPlaybackAttempts(play, option, capability, codecMemory)
+        : null;
+      const effectivePreference = previewPlan?.effectivePreference ?? option;
+      setCodecPreference(effectivePreference);
+      setPlaybackNotice(
+        previewPlan?.warning
+          ?? `已切换到 ${getCodecLabel(effectivePreference)} 策略，正在重载播放器`,
+      );
+      setActiveCandidateIndex(0);
+      setOverlayMode('none');
+      setIsChromeVisible(true);
+      setReloadNonce((previous) => previous + 1);
+    },
+  }));
+  const playerInfoRows: PlayerSettingsInfoRow[] = [
+    { key: 'bvid', label: 'BV 号', value: bvid },
+    { key: 'cid', label: 'CID', value: cid },
+    { key: 'requested-quality', label: '请求画质', value: requestedQualityOption?.label ?? play.requestedQualityLabel },
+    { key: 'returned-quality', label: '实际返回画质', value: currentQualityOption?.label ?? currentAttempt.qualityLabel },
+    { key: 'codec-preference', label: '编码偏好', value: getCodecLabel(codecPreference) },
+    { key: 'quality-limit-reason', label: '接口限制码', value: play.qualityLimitReason || '0' },
+    { key: 'effective-strategy', label: '当前执行策略', value: getCodecLabel(playbackPlan.effectivePreference) },
+    { key: 'current-codec', label: '当前执行 codec', value: currentAttempt.codecLabel },
+    { key: 'resolution', label: '当前分辨率', value: formatAttemptResolution(currentAttempt) },
+    { key: 'playback-mode', label: '播放模式', value: playbackModeLabel },
+    { key: 'engine', label: '播放引擎', value: engineLabel },
+    { key: 'mime', label: '视频 MIME', value: currentMimeType },
+    { key: 'audio', label: '音频轨', value: formatAudioStreamLabel(currentAttempt.audioStream) },
+    { key: 'candidate-count', label: '可切换地址', value: currentAttempt.candidates.length },
+    { key: 'active-candidate', label: '当前候选', value: `${activeCandidateIndex + 1} / ${currentAttempt.candidates.length}` },
+    { key: 'current-host', label: '当前 Host', value: currentCandidateHost },
+    {
+      key: 'returned-codecs',
+      label: '实际返回编码',
+      value: returnedCodecs.length ? returnedCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回',
+    },
+    {
+      key: 'declared-codecs',
+      label: '接口宣称编码',
+      value: declaredCodecs.length ? declaredCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回',
+    },
+    { key: 'environment', label: '运行环境', value: isWebOS ? 'webOS TV' : '浏览器开发环境' },
+  ];
+  const drawerActions = [
+    {
+      key: 'player-reload-current-strategy',
+      label: '重新加载当前策略',
+      variant: 'glass' as const,
+      onClick: () => {
+        const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
+        resumeProgressRef.current = currentTime;
+        setPlaybackNotice('正在按当前策略重新加载');
+        setActiveCandidateIndex(0);
+        setOverlayMode('none');
+        setIsChromeVisible(true);
+        setReloadNonce((previous) => previous + 1);
+      },
+    },
+    {
+      key: 'player-reset-auto-strategy',
+      label: '恢复自动策略',
+      variant: 'ghost' as const,
+      onClick: () => {
+        const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
+        resumeProgressRef.current = currentTime;
+        setCodecPreference('auto');
+        setPlaybackNotice('已恢复自动策略，正在重新尝试');
+        setActiveCandidateIndex(0);
+        setOverlayMode('none');
+        setIsChromeVisible(true);
+        setReloadNonce((previous) => previous + 1);
+      },
+    },
+  ];
+  const playbackPlanText = playbackPlan.attempts.map((attempt) => `${attempt.qualityLabel} ${attempt.codecLabel}`).join(' -> ');
 
   return (
     <main className="player-page">
@@ -1134,15 +1249,11 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
             </div>
 
             <div className="player-hero__bottom">
-              <div className="player-progress">
-                <div className="player-progress__meta">
-                  <span>{formatSeconds(progressView.current)} / {formatSeconds(progressView.duration)}</span>
-                  <span>{savedProgress?.progress ? '已同步本地播放记录' : '首次播放'}</span>
-                </div>
-                <div className="player-progress__track">
-                  <div className="player-progress__value" style={{ width: `${progressPercent}%` }} />
-                </div>
-              </div>
+              <TvProgressBar
+                leadingLabel={progressLeadingLabel}
+                trailingLabel={progressTrailingLabel}
+                valuePercent={progressPercent}
+              />
 
               <PlayerControlBar
                 sectionId={PLAYER_CONTROL_SECTION_ID}
@@ -1185,218 +1296,19 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
             enterTo="default-element"
             className="player-settings-drawer"
           >
-            <div className="player-settings-drawer__header">
-              <span className="player-hero__badge">播放设置</span>
-              <h2>画质与编码</h2>
-              <p>{activeCapability.deviceLabel} · {activeCapability.deviceClass}</p>
-            </div>
-
-            <div className="player-settings-drawer__section">
-              <span className="player-settings-drawer__label">画质</span>
-              <div className="player-settings-drawer__chips">
-                {play.qualities.map((option, index) => {
-                  const isSelected = qualityPreference === option.qn;
-                  const isReturned = play.currentQuality === option.qn;
-                  const chipLabel = option.badge ? `${option.label} ${option.badge}` : option.label;
-                  return (
-                    <FocusButton
-                      key={option.qn}
-                      variant={isSelected ? 'primary' : 'ghost'}
-                      size="sm"
-                      sectionId={PLAYER_SETTINGS_SECTION_ID}
-                      focusId={`player-quality-${option.qn}`}
-                      defaultFocus={isSelected || (!play.qualities.some((item) => item.qn === qualityPreference) && index === 0)}
-                      onClick={() => {
-                        const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
-                        resumeProgressRef.current = currentTime;
-                        savedProgressRef.current = currentTime;
-                        lastPersistedProgressRef.current = currentTime;
-                        setQualityPreference(option.qn);
-                        setPlaybackNotice(`正在请求 ${option.label}，稍后会按接口实际返回结果继续播放`);
-                        setActiveCandidateIndex(0);
-                        setOverlayMode('none');
-                        setIsChromeVisible(true);
-                      }}
-                    >
-                      {isReturned ? `${chipLabel} · 已返回` : chipLabel}
-                    </FocusButton>
-                  );
-                })}
-              </div>
-              {qualityAvailabilityNotice ? (
-                <p className="player-settings-drawer__hint">{qualityAvailabilityNotice}</p>
-              ) : null}
-            </div>
-
-            <div className="player-settings-drawer__section">
-              <span className="player-settings-drawer__label">编码偏好</span>
-              <div className="player-settings-drawer__chips">
-                {CODEC_OPTIONS.map((option, index) => (
-                  <FocusButton
-                    key={option}
-                    className={!selectableCodecs.has(option) ? 'focus-button--disabled' : undefined}
-                    disabled={!selectableCodecs.has(option)}
-                    variant={codecPreference === option ? 'primary' : 'ghost'}
-                    size="sm"
-                    sectionId={PLAYER_SETTINGS_SECTION_ID}
-                    focusId={`player-codec-${option}`}
-                    defaultFocus={(codecPreference === option && selectableCodecs.has(option)) || (index === 0 && !selectableCodecs.has(codecPreference))}
-                    onClick={() => {
-                      const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
-                      resumeProgressRef.current = currentTime;
-                      const previewPlan = play && capability
-                        ? buildPlaybackAttempts(play, option, capability, codecMemory)
-                        : null;
-                      const effectivePreference = previewPlan?.effectivePreference ?? option;
-                      setCodecPreference(effectivePreference);
-                      setPlaybackNotice(
-                        previewPlan?.warning
-                          ?? `已切换到 ${getCodecLabel(effectivePreference)} 策略，正在重载播放器`,
-                      );
-                      setActiveCandidateIndex(0);
-                      setOverlayMode('none');
-                      setIsChromeVisible(true);
-                      setReloadNonce((previous) => previous + 1);
-                    }}
-                  >
-                    {getCodecLabel(option)}
-                  </FocusButton>
-                ))}
-              </div>
-            </div>
-
-            <div className="player-settings-drawer__section">
-              <span className="player-settings-drawer__label">当前线路信息</span>
-              <div className="player-settings-drawer__info">
-                <div className="player-settings-drawer__info-row">
-                  <span>BV 号</span>
-                  <strong>{bvid}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>CID</span>
-                  <strong>{cid}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>请求画质</span>
-                  <strong>{requestedQualityOption?.label ?? play.requestedQualityLabel}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>实际返回画质</span>
-                  <strong>{currentQualityOption?.label ?? currentAttempt.qualityLabel}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>编码偏好</span>
-                  <strong>{getCodecLabel(codecPreference)}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>接口限制码</span>
-                  <strong>{play.qualityLimitReason || '0'}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>当前执行策略</span>
-                  <strong>{getCodecLabel(playbackPlan.effectivePreference)}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>当前执行 codec</span>
-                  <strong>{currentAttempt.codecLabel}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>当前分辨率</span>
-                  <strong>{formatAttemptResolution(currentAttempt)}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>播放模式</span>
-                  <strong>{playbackModeLabel}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>播放引擎</span>
-                  <strong>{engineLabel}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>视频 MIME</span>
-                  <strong>{currentMimeType}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>音频轨</span>
-                  <strong>{formatAudioStreamLabel(currentAttempt.audioStream)}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>可切换地址</span>
-                  <strong>{currentAttempt.candidates.length}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>当前候选</span>
-                  <strong>{activeCandidateIndex + 1} / {currentAttempt.candidates.length}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>当前 Host</span>
-                  <strong>{currentCandidateHost}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>实际返回编码</span>
-                  <strong>{returnedCodecs.length ? returnedCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回'}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>接口宣称编码</span>
-                  <strong>{declaredCodecs.length ? declaredCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回'}</strong>
-                </div>
-                <div className="player-settings-drawer__info-row">
-                  <span>运行环境</span>
-                  <strong>{isWebOS ? 'webOS TV' : '浏览器开发环境'}</strong>
-                </div>
-              </div>
-              {currentAttempt.codecNote ? (
-                <p className="player-settings-drawer__hint">{currentAttempt.codecNote}</p>
-              ) : null}
-            </div>
-
-            <div className="player-settings-drawer__section">
-              <span className="player-settings-drawer__label">快捷操作</span>
-              <div className="player-settings-drawer__actions">
-                <FocusButton
-                  variant="glass"
-                  size="sm"
-                  sectionId={PLAYER_SETTINGS_SECTION_ID}
-                  focusId="player-reload-current-strategy"
-                  onClick={() => {
-                    const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
-                    resumeProgressRef.current = currentTime;
-                    setPlaybackNotice('正在按当前策略重新加载');
-                    setActiveCandidateIndex(0);
-                    setOverlayMode('none');
-                    setIsChromeVisible(true);
-                    setReloadNonce((previous) => previous + 1);
-                  }}
-                >
-                  重新加载当前策略
-                </FocusButton>
-                <FocusButton
-                  variant="ghost"
-                  size="sm"
-                  sectionId={PLAYER_SETTINGS_SECTION_ID}
-                  focusId="player-reset-auto-strategy"
-                  onClick={() => {
-                    const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
-                    resumeProgressRef.current = currentTime;
-                    setCodecPreference('auto');
-                    setPlaybackNotice('已恢复自动策略，正在重新尝试');
-                    setActiveCandidateIndex(0);
-                    setOverlayMode('none');
-                    setIsChromeVisible(true);
-                    setReloadNonce((previous) => previous + 1);
-                  }}
-                >
-                  恢复自动策略
-                </FocusButton>
-              </div>
-            </div>
-
-            <div className="player-settings-drawer__section">
-              <span className="player-settings-drawer__label">当前候选顺序</span>
-              <p className="player-settings-drawer__hint">
-                {playbackPlan.attempts.map((attempt) => `${attempt.qualityLabel} ${attempt.codecLabel}`).join(' -> ')}
-              </p>
-            </div>
+            <PlayerSettingsDrawer
+              sectionId={PLAYER_SETTINGS_SECTION_ID}
+              badge="播放设置"
+              title="画质与编码"
+              description={`${activeCapability.deviceLabel} · ${activeCapability.deviceClass}`}
+              qualityOptions={qualityActions}
+              qualityHint={qualityAvailabilityNotice}
+              codecOptions={codecActions}
+              infoRows={playerInfoRows}
+              infoHint={currentAttempt.codecNote}
+              actionOptions={drawerActions}
+              planText={playbackPlanText}
+            />
           </FocusSection>
         ) : null}
 

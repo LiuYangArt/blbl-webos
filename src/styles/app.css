@@ -1446,6 +1446,235 @@ button {
   border-radius: var(--tv-radius-md);
 }
 
+.ui-debug-page {
+  gap: 28px;
+}
+
+.ui-debug-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.ui-debug-hero__content,
+.ui-debug-hero__summary,
+.ui-debug-summary-card,
+.ui-debug-showcase-card,
+.ui-debug-copy-block,
+.ui-debug-progress-stage,
+.ui-debug-player-bar-stage,
+.ui-debug-drawer-stage {
+  display: flex;
+  flex-direction: column;
+}
+
+.ui-debug-hero__content {
+  gap: 20px;
+}
+
+.ui-debug-hero__content h1 {
+  margin: 0;
+  font-size: 58px;
+  line-height: 1.02;
+}
+
+.ui-debug-hero__content p {
+  margin: 0;
+  max-width: 880px;
+  color: var(--tv-text-soft);
+  font-size: 21px;
+  line-height: 1.65;
+}
+
+.ui-debug-hero__notes {
+  display: grid;
+  gap: 8px;
+}
+
+.ui-debug-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.ui-debug-hero__summary {
+  gap: 16px;
+}
+
+.ui-debug-summary-card {
+  gap: 14px;
+  min-height: 0;
+  padding: 22px 24px;
+  border-radius: var(--tv-radius-md);
+  background:
+    linear-gradient(180deg, rgba(28, 27, 28, 0.9), rgba(18, 18, 19, 0.82)),
+    rgba(18, 18, 19, 0.82);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.ui-debug-summary-card__eyebrow,
+.ui-debug-state-label {
+  color: var(--tv-secondary-soft);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ui-debug-status-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 10px;
+  color: var(--tv-text-soft);
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.ui-debug-showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.ui-debug-showcase-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ui-debug-showcase-card {
+  gap: 18px;
+  min-height: 0;
+  padding: 22px;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(28, 27, 28, 0.84), rgba(18, 18, 19, 0.82)),
+    rgba(18, 18, 19, 0.82);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.ui-debug-showcase-card__meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.ui-debug-showcase-card__meta h3 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.18;
+}
+
+.ui-debug-showcase-card__meta p {
+  margin: 10px 0 0;
+  color: var(--tv-text-soft);
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.ui-debug-state-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ui-debug-state-row {
+  display: grid;
+  grid-template-columns: 110px repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: center;
+}
+
+.ui-debug-state-label {
+  font-size: 13px;
+  color: var(--tv-text-soft);
+}
+
+.ui-debug-nav-stage,
+.ui-debug-stage,
+.ui-debug-player-bar-stage,
+.ui-debug-progress-stage,
+.ui-debug-drawer-stage {
+  position: relative;
+  min-height: 0;
+  border-radius: 26px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at left top, rgba(251, 114, 153, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(20, 19, 20, 0.96), rgba(12, 12, 13, 0.96));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.ui-debug-nav-stage {
+  min-height: 520px;
+  padding: 0;
+}
+
+.ui-debug-nav-rail {
+  position: relative;
+  top: auto;
+  width: 284px;
+  height: 100%;
+}
+
+.ui-debug-media-grid {
+  gap: 18px;
+}
+
+.ui-debug-search-composer {
+  margin-top: 0;
+}
+
+.ui-debug-copy-block {
+  gap: 18px;
+}
+
+.ui-debug-shell-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.ui-debug-chip-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ui-debug-progress-stage {
+  padding: 28px 30px;
+}
+
+.ui-debug-player-bar-stage {
+  padding: 22px;
+}
+
+.ui-debug-player-drawer {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  min-height: 0;
+}
+
+.ui-debug-drawer-stage {
+  padding: 24px;
+}
+
+@media (max-width: 1600px) {
+  .ui-debug-hero,
+  .ui-debug-showcase-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ui-debug-state-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .history-card__cover {
   width: 100%;
   height: 150px;

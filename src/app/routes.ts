@@ -4,6 +4,7 @@ import type { VideoCardItem } from '../services/api/types';
 
 export type AppRoute =
   | { name: 'home' }
+  | { name: 'ui-debug' }
   | { name: 'following' }
   | { name: 'subscriptions' }
   | { name: 'hot' }
@@ -52,6 +53,8 @@ export function getActiveNav(route: AppRoute, isLoggedIn: boolean): RootNavKey |
   switch (route.name) {
     case 'home':
       return 'home';
+    case 'ui-debug':
+      return null;
     case 'following':
       return 'following';
     case 'subscriptions':

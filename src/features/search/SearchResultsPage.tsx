@@ -3,6 +3,7 @@ import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
 import { usePageBackHandler } from '../../app/PageBackHandler';
 import { FocusButton } from '../../components/FocusButton';
+import { SearchComposer } from '../../components/SearchComposer';
 import { SectionHeader } from '../../components/SectionHeader';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { VideoGridSection } from '../../components/VideoGridSection';
@@ -92,29 +93,13 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
         </div>
 
         {isComposerOpen ? (
-          <div className="search-composer">
-            <label className="search-composer__field">
-              <span>关键词</span>
-              <input
-                autoFocus
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    submitKeyword(draft);
-                  }
-                }}
-              />
-            </label>
-            <div className="search-composer__actions">
-              <button type="button" onClick={() => submitKeyword(draft)}>
-                应用关键词
-              </button>
-              <button type="button" onClick={() => setComposerOpen(false)}>
-                关闭输入面板
-              </button>
-            </div>
-          </div>
+          <SearchComposer
+            value={draft}
+            submitLabel="应用关键词"
+            onChange={setDraft}
+            onSubmit={() => submitKeyword(draft)}
+            onClose={() => setComposerOpen(false)}
+          />
         ) : null}
       </FocusSection>
 

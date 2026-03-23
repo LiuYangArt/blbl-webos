@@ -216,3 +216,97 @@
 - 视口“舒适区”滚动，而不是“仅不越界”滚动。
 - section 级滚动锚点，让第一排焦点回归时能把标题、说明、统计等头部信息一起带回视口。
 - 页面只声明滚动意图与结构，不再各自打补丁。
+
+---
+
+# Notes: 播放器 CC 字幕规划调研
+
+## 当前 WebOS 仓库事实
+
+### Source 1: `src/components/PlayerControlBar.tsx`
+- 当前播放器底部 OSD 已经有一条稳定的按钮链：返回、快退、播放/暂停、快进、从头播放、重载、分P/选集、设置、推荐视频。
+- 这意味着新增 CC 不需要重做 OSD 架构，只需要在现有按钮链中插入一个新的字幕入口，并接入现有焦点系统。
+
+### Source 2: `src/features/player/PlayerPage.tsx`
+- 当前播放器已经有成熟的 overlay 模式：`settings / recommendations / episodes`。
+- 现有 `settings` 抽屉主要承载画质、编码、线路信息和快捷操作，信息密度已经偏高。
+- 从 TV 可用性角度看，字幕更适合走一个独立的 `subtitle` overlay，而不是继续把编码/线路/字幕全部塞进同一个抽屉。
+
+### Source 3: `src/features/player/playerSettings.ts`
+- 当前播放器设置已经通过 `localStorage` 持久化了 `codecPreference` 和 `qualityPreference`。
+- 这说明“字幕默认开关持久化”有现成模式可复用，适合在同一份播放器设置存储中补充 `subtitleEnabled` 以及后续字幕样式字段。
+
+### Source 4: `src/services/api/types.ts` 与 `src/services/api/bilibili.ts`
+- 当前 `PlaySource` 只承接播放地址、画质、编码和音频轨，没有字幕轨模型。
+- 现有 `fetchPlaySource()` 只面向 `/x/player/playurl` 链路；若要可靠承接字幕，需要补充单独的 `playInfo` 请求与字幕类型定义。
+
+## 安卓参考项目的字幕实现
+
+### Source 5: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\http\api.dart`
+- 安卓参考项目获取字幕元信息时使用的是 `/x/player/wbi/v2`，而不是仅靠 `playurl`。
+- 这说明 WebOS 端若要做稳定字幕能力，数据层最好也拆成“播放地址”和“播放附加信息（含字幕）”两条请求。
+
+### Source 6: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\http\video.dart`
+- `VideoHttp.playInfo()` 负责拉取字幕与播放附加信息。
+- `VideoHttp.vttSubtitles()` 会把哔哩哔哩字幕 JSON 转成 `WEBVTT` 字符串，供播放器字幕轨加载。
+- 这为 WebOS 端提供了非常直接的实现路线：拉取字幕地址 -> 请求字幕 JSON -> 转 VTT -> 注入播放器文本轨。
+
+### Source 7: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\pages\video\controller.dart`
+- 安卓项目会维护 `subtitles`、`vttSubtitles` 缓存以及 `vttSubtitlesIndex` 当前轨道索引。
+- 播放器进入视频后，如果存在字幕轨，会根据 `Pref.subtitlePreferenceV2` 自动决定是否启用以及默认选中哪条轨道。
+- 轨道切换逻辑分成两段：关闭字幕时设置 `SubtitleTrack.no()`；选择具体轨道时再把字幕 URL 或转换后的 VTT 文件交给播放器。
+
+### Source 8: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\models\common\video\subtitle_pref_type.dart`
+- 安卓项目把默认字幕偏好抽象成 4 档：
+  - `off`：默认不显示字幕
+  - `on`：优先选择字幕
+  - `withoutAi`：跳过 AI 字幕
+  - `auto`：按静音状态自动决定
+- 这套偏好很完整，但对 TV MVP 来说偏复杂；首期不必整套照搬。
+
+### Source 9: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\plugin\pl_player\view\view.dart`
+- 安卓播放器底部控制区已经有独立的 CC 按钮。
+- 这个按钮点击后直接弹出轨道列表，列表结构是：
+  - 关闭字幕
+  - 各个可用字幕语言/轨道
+- 这验证了“OSD 里单独放一个 CC 按钮”是符合参考项目产品形态的。
+
+### Source 10: `F:\CodeProjects\bilibili_tv_android\PiliPlus\lib\pages\video\widgets\header_control.dart`
+- 安卓项目把字幕相关能力拆成两层：
+  - 轨道选择：开关 + 语言切换
+  - 字幕设置：字体大小、全屏字体大小、字体粗细、描边粗细、左右边距、底部边距、背景不透明度
+- 同文件还支持字幕导出、加载外部字幕文件等更重功能。
+
+## 适合 WebOS TV 首期的范围判断
+
+### 必须进入首期范围
+- 默认开启 CC 显示；若有字幕轨，进入播放后自动选中默认轨道。
+- 用户手动关闭字幕后，记住关闭状态，并影响后续视频。
+- 底部 OSD 增加独立 `CC` 按钮。
+- CC 面板至少提供：
+  - 显示开关
+  - 语言/轨道切换
+  - 当前视频无字幕时的禁用/空态反馈
+- 至少提供少量适合 TV 遥控器操作的基础样式项，例如：
+  - 字号
+  - 底部边距
+  - 背景不透明度
+
+### 应明确后置的能力
+- 外部字幕文件导入
+- 字幕 JSON 导出
+- 完整照搬安卓端全部样式滑杆
+- `off / on / withoutAi / auto` 四档全局策略
+- 按静音状态自动切换字幕等移动端导向逻辑
+
+## 综合结论
+
+### 建议的 TV 版字幕形态
+- 在当前播放器底部 OSD 新增 `CC` 按钮，作为字幕的主入口。
+- 点击后打开独立字幕浮层，避免和画质/编码设置混杂。
+- 首期持久化只保证“字幕总开关”全局记忆，语言切换先作为当前播放会话状态。
+- 数据层补充 `/x/player/wbi/v2` 字幕信息请求，并在播放器内将 B 站字幕 JSON 转为 VTT 文本轨。
+
+### 为什么不直接照搬安卓全量设置
+- 遥控器操作不适合承载太多滑杆和密集设置项。
+- 当前 webOS 项目仍处于 MVP 播放闭环阶段，优先级应是“能显示、能关闭、能切语言、能稳定返回”，而不是先做一整页高级排版调参。

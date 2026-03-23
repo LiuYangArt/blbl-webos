@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { AppRoute, RootNavKey } from '../app/routes';
 import { isWebOSAvailable } from '../platform/webos';
 import { SideNavRail } from './SideNavRail';
+import { TopbarProfilePill } from './TopbarProfilePill';
 
 type AppShellProps = {
   children: ReactNode;
@@ -42,7 +43,7 @@ export function AppShell({
       <div className="tv-app-main">
         <header className="tv-topbar" aria-hidden="true">
           <div className="tv-topbar__status-group">
-            <span className="tv-topbar__profile">{profileName ?? '游客模式'}</span>
+            <TopbarProfilePill label={profileName ?? '游客模式'} />
           </div>
         </header>
         <div className="tv-page-content" data-focus-scroll-root="true">{children}</div>

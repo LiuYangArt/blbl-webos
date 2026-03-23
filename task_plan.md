@@ -92,3 +92,35 @@
 
 ## Status
 **Currently in Phase 5** - 统一方案文档已写入，等待用户确认后再开始实现。
+
+---
+
+# Task Plan: 播放器 CC 字幕显示与设置规划
+
+## Goal
+基于 `PiliPlus` 安卓参考项目与当前 `bilibili_webos` 播放器架构，产出一份 TV 场景可执行的 CC 字幕功能计划文档，并创建对应 GitHub Issue，明确默认开启、关闭持久化、OSD 入口与实现分期。
+
+## Phases
+- [x] Phase 1: 审视当前 WebOS 播放器 OSD、设置抽屉与本地持久化能力
+- [x] Phase 2: 调研安卓参考项目的字幕接口、默认偏好、轨道切换与字幕设置
+- [x] Phase 3: 设计适合 TV 场景的 CC 字幕 MVP 范围与后续扩展边界
+- [x] Phase 4: 编写正式计划文档并同步研究笔记
+- [x] Phase 5: 创建对应 GitHub Issue 并等待后续确认实施
+
+## Key Questions
+1. 安卓参考项目里的字幕能力，哪些适合直接迁移到 TV 首期，哪些应该后置？
+2. 当前 WebOS 播放器应在现有设置抽屉里扩展字幕，还是增加独立的 CC 浮层？
+3. “默认开启 CC，用户关闭后持久化” 应该只保存总开关，还是连语言/样式一起全局记忆？
+4. 字幕数据应继续复用现有 `playurl`，还是补充单独的 `playInfo` 请求获取字幕轨与字幕地址？
+
+## Decisions Made
+- 首期范围按 TV MVP 裁剪：先做“默认开启、关闭持久化、轨道切换、基础样式、OSD CC 入口”，不直接照搬安卓端全部字幕能力。
+- 首期持久化只强制要求保存“字幕总开关”；语言切换先按当前播放会话生效，不在第一期承诺全局语言偏好。
+- 字幕轨数据应参考安卓项目补充 `/x/player/wbi/v2` 的 `playInfo` 请求，而不是继续假设 `playurl` 足够承载字幕元信息。
+- 当前播放器底部 OSD 增加独立 `CC` 按钮，并打开专用字幕浮层；不把字幕塞进现有“画质与编码”抽屉里混在一起。
+
+## Errors Encountered
+- 仓库根目录不存在 `.github/ISSUE_TEMPLATE`，因此后续 Issue 创建需要走普通 `gh issue create` body，而不是模板脚本。
+
+## Status
+**Currently in Phase 5** - CC 字幕规划文档与对应 GitHub Issue 已创建，可在确认后进入实现阶段。

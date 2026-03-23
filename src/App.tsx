@@ -7,6 +7,8 @@ import { PageBackHandlerProvider } from './app/PageBackHandler';
 import { type AppRoute, type PlayerRoutePayload, getActiveNav } from './app/routes';
 import { usePageStack } from './app/usePageStack';
 import { LoginPage } from './features/auth/LoginPage';
+import { UiDebugPage } from './features/debug/UiDebugPage';
+import { isEditableElement, matchesUiDebugShortcut } from './features/debug/uiDebug';
 import { FollowingPage } from './features/following/FollowingPage';
 import { HistoryPage } from './features/history/HistoryPage';
 import { HomePage } from './features/home/HomePage';
@@ -140,6 +142,30 @@ function AppContent() {
   }), [pop]);
 
   useEffect(() => {
+    const handleUiDebugShortcut = (event: KeyboardEvent) => {
+      if (!matchesUiDebugShortcut(event) || isEditableElement(document.activeElement)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (currentPage.name === 'ui-debug') {
+        if (!pop()) {
+          replace({ name: 'home' });
+        }
+        return;
+      }
+
+      push({ name: 'ui-debug' });
+    };
+
+    window.addEventListener('keydown', handleUiDebugShortcut);
+    return () => {
+      window.removeEventListener('keydown', handleUiDebugShortcut);
+    };
+  }, [currentPage.name, pop, push, replace]);
+
+  useEffect(() => {
     markBootMounted();
   }, []);
 
@@ -183,6 +209,8 @@ function summarizeRoute(route: AppRoute) {
   switch (route.name) {
     case 'player':
       return `player:${route.bvid}:${route.cid}`;
+    case 'ui-debug':
+      return 'ui-debug';
     case 'video-detail':
       return `video-detail:${route.bvid}`;
     case 'pgc-detail':
@@ -213,6 +241,16 @@ function pushPlayer(actions: RouteActions, item: PlayerRoutePayload): void {
 
 function renderRoute(route: AppRoute, actions: RouteActions) {
   switch (route.name) {
+    case 'ui-debug':
+      return (
+        <UiDebugPage
+          onExit={() => {
+            if (!actions.pop()) {
+              actions.replace({ name: 'home' });
+            }
+          }}
+        />
+      );
     case 'home':
       return (
         <HomePage

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAppStore } from '../../app/AppStore';
 import { useAsyncData } from '../../app/useAsyncData';
+import { FollowingSummaryChips } from '../../components/FollowingSummaryChips';
 import { FocusButton } from '../../components/FocusButton';
 import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchFollowingChannelData, fetchFollowingFeedPage } from '../../services/api/bilibili';
@@ -93,13 +94,13 @@ export function FollowingPage({ onLogin, onOpenPlayer }: FollowingPageProps) {
     }),
   ));
   const followingSummaryChips = data.accounts.length > 0 ? (
-    <div className="home-following-summary">
-      {data.accounts.map((account) => (
-        <span key={account.mid} className={account.hasUpdate ? 'home-following-summary__chip home-following-summary__chip--active' : 'home-following-summary__chip'}>
-          {account.name}
-        </span>
-      ))}
-    </div>
+    <FollowingSummaryChips
+      items={data.accounts.map((account) => ({
+        key: account.mid,
+        label: account.name,
+        active: account.hasUpdate,
+      }))}
+    />
   ) : undefined;
   const requestMoreFollowing = (trigger: 'prefetch' | 'manual') => {
     appendRuntimeDiagnostic('following-feed', 'request-more', {
