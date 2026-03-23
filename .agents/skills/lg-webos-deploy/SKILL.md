@@ -1,6 +1,6 @@
 ---
 name: lg-webos-deploy
-description: Use when you need to package, reinstall, verify the actual installed bundle, launch, or troubleshoot the LG webOS TV app on a real TV for this repository.
+description: Use when you need to package, reinstall, verify the actual installed bundle, launch, or troubleshoot the LG webOS TV app on a real TV or the local webOS Simulator for this repository.
 ---
 
 # LG webOS TV 打包与部署技能
@@ -79,6 +79,33 @@ npm run webos:simulator
 - 只要是重新验证最新构建，优先重新执行 `npm run webos:simulator`
 - 不要在旧 Simulator 窗口还活着时继续叠开新实例
 
+### 如果 Simulator 看起来还是旧包，按两层排查
+
+这次仓库里已经踩到一个很具体的坑：
+
+- `dist/assets` 是新的
+- 但 `build/webos/index.html` 和 `build/webos/assets` 仍然可能还是旧入口
+
+而 Simulator 实际加载的是 `build/webos`，不是 `dist`。
+
+因此以后只要用户反馈“Simulator 里还是旧样式 / 旧调试面板 / 旧焦点行为”，必须按下面顺序判断：
+
+1. 先确认 `npm run webos:simulator` 是否真的重新执行过 `build:webos`
+2. 核对 `build/webos/index.html` 里的 legacy 入口脚本名
+3. 再核对 `build/webos/assets/index-legacy-*.js` 是否与 `dist/assets` 最新入口一致
+4. 只有在 `build/webos` 已确认是最新产物后，才继续怀疑旧 Simulator 会话残留
+
+不要只看到 `dist` 变了，就直接下结论说 Simulator 一定拿到了新包。
+
+### UI Debug 页的稳定打开方式
+
+如果只是为了核对当前组件和样式，优先用下面两种方式进入 `UI Debug`：
+
+- 浏览器 / Simulator 内按 `Ctrl + Alt + Shift + U`
+- 浏览器地址栏使用 `?uiDebug=1`
+
+不建议把 Windows 下的 `npm run ... -- --params '{"route":"ui-debug"}'` 当成唯一入口，因为 `cmd` 转义后 JSON 参数可读性很差，排查时容易误判。
+
 ## 绝对规则
 
 ### 1. 真机部署命令必须串行
@@ -147,6 +174,7 @@ npm run webos:verify-install -- --device <deviceName>
 1. 旧 Simulator 进程是否还没退出
 2. 旧 DevTools 子窗口是否还挂在旧会话上
 3. 旧 `simulator-media-proxy` 是否还在占用上一轮上下文
+4. `build/webos` 的入口脚本是否真的已经同步到最新构建
 
 不要第一时间就下结论说“构建没更新”或“代码回退了”。
 
@@ -204,6 +232,21 @@ ares-package --no-minify
 ```
 
 不要恢复默认 minify，除非确认 LG CLI 已兼容当前产物。
+
+### 3. 判断 Simulator 旧包时，以 `build/webos` 为准
+
+这次实际踩到的现象是：
+
+- `dist/assets/index-legacy-*.js` 已经更新
+- 但 `build/webos/index.html` 仍然引用旧的 legacy 入口
+
+结果是：即使重新拉起 Simulator，窗口里看起来仍然像旧版本。
+
+结论：
+
+- 当怀疑 Simulator 没刷新时，先看 `build/webos`
+- `prepare-webos` / `build:webos` 没真正同步成功之前，不要把问题归因给缓存
+- 只有 `build/webos` 确认是新入口后，Simulator 画面才具备排查价值
 
 ## 首次连接新电视
 

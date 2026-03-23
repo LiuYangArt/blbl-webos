@@ -56,6 +56,10 @@ F:\CodeProjects\bilibili_tv_android\MediaPlayback
 - 所有新增页面和功能必须遵循 `DESIGN.md`，不能自行发明一套新的按钮、卡片、导航风格
 - 所有 UI 改动优先复用现有 token 与通用组件，不允许在页面里散落定义一套局部视觉体系
 - 首页、播放器、搜索、登录、历史、个人中心必须保持同一套表面层级、焦点态和内容密度
+- `UI Debug` 页面只能作为“真实组件与样式来源对照台”，用于陈列项目里已经存在的控件并标注用途；不允许为了 Debug 页再单独发明一套调试专用按钮、卡片、输入框或焦点样式
+- 需要新增 UI 样式时，先判断它是否属于真实业务页面可复用的通用能力；如果只是为了 Debug 页展示，不做新增样式
+- 同一类操作在不同页面必须尽量复用同一套视觉语义，例如顶部切换器、主 CTA、图标按钮、进度条、设置抽屉，不允许页面各自长出相似但不兼容的变体
+- 浏览器端额外增强样式不能成为唯一视觉反馈；最终基线以 webOS Simulator / 真机可见效果为准，避免桌面浏览器和 TV 容器分裂成两套体验
 
 ### 性能规则
 
@@ -78,6 +82,7 @@ F:\CodeProjects\bilibili_tv_android\MediaPlayback
 - 修改交互时，同时检查焦点流与返回链路
 - 做 UI 相关需求前，先对照 `ui_ref/` 和 `DESIGN.md` 判断是复用现有组件、扩展组件，还是新增通用组件
 - 如果现有组件不够用，优先先抽象到 `src/components/*`，再接入页面，不要直接在业务页面里堆一次性样式
+- 做 UI 改动时，要同步检查 `src/features/debug/UiDebugPage.tsx` 是否需要补充对应的真实组件展示与用途标注，确保后续指认控件时有统一对照面板
 
 ## 验证规则
 
@@ -106,6 +111,8 @@ F:\CodeProjects\bilibili_tv_android\MediaPlayback
 - 如果 `webos:verify-install` 发现电视仍是旧入口，或电视表现明显像旧代码，直接提升 `appinfo.json.version` 后重新打包部署，不要反复覆盖同版本 IPK
 - `npm run webos:simulator` 启动前必须先清理旧 Simulator 进程树和旧 `simulator-media-proxy`，避免残留旧窗口、旧 DevTools 会话和假性回归
 - 如果 Simulator 表现像旧包、旧调试面板或旧焦点行为，先排查旧 Simulator 会话是否真的清干净，再判断代码是否没生效
+- 如果 Simulator 仍像旧包，不要只看 `dist/assets`；必须核对 `build/webos/index.html` 和 `build/webos/assets` 实际引用的入口 JS 是否已经切到最新构建，因为 Simulator 加载的是 `build/webos`
+- 进入 `UI Debug` 优先使用快捷键 `Ctrl + Alt + Shift + U`，浏览器辅助入口用 `?uiDebug=1`；不要把 Windows 下 JSON 形式的 `--params` 当成唯一稳定入口
 - 设备名、IP、passphrase、私钥属于本机开发环境配置，不写入仓库业务代码
 - 更完整的打包、安装、启动、排障流程，统一参考仓库 Skill：`.agents/skills/lg-webos-deploy/SKILL.md`
 

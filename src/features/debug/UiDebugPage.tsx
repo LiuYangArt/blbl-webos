@@ -135,6 +135,38 @@ const COMPONENT_STATUS = {
   ],
 };
 
+type TopSwitcherSample = {
+  focusId: string;
+  label: string;
+  variant: 'primary' | 'glass';
+  defaultFocus?: boolean;
+  hint?: string;
+};
+
+const TOP_SWITCHER_SAMPLES: TopSwitcherSample[] = [
+  {
+    focusId: 'ui-debug-switch-home',
+    label: '个性推荐',
+    variant: 'primary',
+    defaultFocus: true,
+  },
+  {
+    focusId: 'ui-debug-switch-following',
+    label: '正在关注',
+    variant: 'glass',
+  },
+  {
+    focusId: 'ui-debug-switch-folder',
+    label: '默认收藏夹',
+    hint: '24 个视频',
+    variant: 'glass',
+  },
+] as const;
+
+function buildClassName(...parts: Array<string | false | null | undefined>): string {
+  return parts.filter(Boolean).join(' ');
+}
+
 type StaticButtonSampleProps = {
   label: string;
   variant: 'primary' | 'secondary' | 'glass';
@@ -155,13 +187,13 @@ function StaticButtonSample({
   return (
     <button
       type="button"
-      className={[
+      className={buildClassName(
         'focus-button',
         `focus-button--${variant}`,
         `focus-button--${size}`,
         extraClassName,
-        disabled ? 'focus-button--disabled' : '',
-      ].filter(Boolean).join(' ')}
+        disabled && 'focus-button--disabled',
+      )}
       data-focus-active={forcedState === 'focused' ? 'true' : undefined}
       data-focus-pressed={forcedState === 'pressed' ? 'true' : undefined}
       disabled={disabled}
@@ -191,14 +223,14 @@ function StaticIconButtonSample({
   return (
     <button
       type="button"
-      className={[
+      className={buildClassName(
         'focus-button',
         'focus-button--glass',
         'focus-button--md',
         'player-control-bar__action',
         className,
-        disabled ? 'focus-button--disabled' : '',
-      ].filter(Boolean).join(' ')}
+        disabled && 'focus-button--disabled',
+      )}
       data-focus-active={forcedState === 'focused' ? 'true' : undefined}
       data-focus-pressed={forcedState === 'pressed' ? 'true' : undefined}
       disabled={disabled}
@@ -500,6 +532,31 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
           description="用真实的 HeroBanner、MediaCard、SectionHeader 来看大屏内容块在一起时的层级。"
           actionLabel="用于首页 / 推荐流 / 详情页"
         />
+
+        <div className="ui-debug-showcase-grid">
+          <ShowcaseCard
+            title="顶部切换器"
+            usedIn="用于：首页频道切换、收藏夹切换。这两处现在统一使用收藏夹的圆角矩形样式。"
+            source="FocusButton + detail-chip + library-folder-chip"
+          >
+            <div className="library-folder-strip">
+              {TOP_SWITCHER_SAMPLES.map((item) => (
+                <FocusButton
+                  key={item.focusId}
+                  variant={item.variant}
+                  size="md"
+                  className="detail-chip library-folder-chip"
+                  sectionId="ui-debug-card-preview"
+                  focusId={item.focusId}
+                  defaultFocus={item.defaultFocus}
+                >
+                  <span>{item.label}</span>
+                  {item.hint ? <small>{item.hint}</small> : null}
+                </FocusButton>
+              ))}
+            </div>
+          </ShowcaseCard>
+        </div>
 
         <div className="ui-debug-showcase-grid ui-debug-showcase-grid--single">
           <ShowcaseCard

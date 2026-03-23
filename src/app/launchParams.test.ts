@@ -44,6 +44,30 @@ describe('launchParams', () => {
     expect(resolveInitialRoute()).toEqual({ name: 'home' });
   });
 
+  it('launch params 指定 ui-debug 时直接进入调试页', async () => {
+    window.launchParams = JSON.stringify({
+      route: 'ui-debug',
+    });
+
+    const { resolveInitialRoute } = await loadLaunchParamsModule();
+
+    expect(resolveInitialRoute()).toEqual({ name: 'ui-debug' });
+  });
+
+  it('URL 查询参数 uiDebug=1 时优先进入调试页', async () => {
+    window.history.replaceState({}, '', '/?uiDebug=1');
+    window.launchParams = JSON.stringify({
+      route: 'player',
+      bvid: 'BV1xx411c7mD',
+      cid: '12345',
+      title: '播放器直达',
+    });
+
+    const { resolveInitialRoute } = await loadLaunchParamsModule();
+
+    expect(resolveInitialRoute()).toEqual({ name: 'ui-debug' });
+  });
+
   it('优先读取 URL 查询参数中的焦点调试开关', async () => {
     window.history.replaceState({}, '', '/?debugFocus=1');
     window.launchParams = {

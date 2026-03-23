@@ -225,6 +225,28 @@ foreach ($process in $processes) {
     .filter(Boolean).length;
 };
 
+const killWindowsProcessesByNamePrefix = (prefix) => {
+  const script = `
+$prefix = ${quotePowerShellArg(prefix)}
+$processes = Get-CimInstance Win32_Process | Where-Object {
+  $_.Name -like ($prefix + '*')
+}
+
+foreach ($process in $processes) {
+  try {
+    Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+    Write-Output $process.ProcessId
+  } catch {
+  }
+}
+`;
+  const result = runPowerShellScript(script);
+  return result.stdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+};
+
 const cleanupSimulatorProcesses = async (simulatorExecutable) => {
   let cleaned = false;
 
@@ -233,6 +255,13 @@ const cleanupSimulatorProcesses = async (simulatorExecutable) => {
     if (killWindowsProcessTreeByImageName(simulatorImageName)) {
       cleaned = true;
       console.log(`已关闭旧 Simulator 进程: ${simulatorImageName}`);
+    }
+
+    const simulatorProcessPrefix = simulatorImageName.replace(/(?:_\d+\.\d+\.\d+)?\.exe$/i, '');
+    const killedSimulatorCount = killWindowsProcessesByNamePrefix(simulatorProcessPrefix);
+    if (killedSimulatorCount > 0) {
+      cleaned = true;
+      console.log(`已清理残留 Simulator 子进程: ${killedSimulatorCount} 个`);
     }
 
     const killedProxyCount = killWindowsNodeProcessesByCommandLineFragment(simulatorMediaProxyScript);

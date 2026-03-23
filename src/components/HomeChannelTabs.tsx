@@ -23,6 +23,8 @@ export function HomeChannelTabs({
   leaveDown,
   defaultFocus = false,
 }: HomeChannelTabsProps) {
+  const activeHint = tabs.find((tab) => tab.key === activeKey)?.hint ?? '';
+
   return (
     <FocusSection
       as="section"
@@ -38,21 +40,21 @@ export function HomeChannelTabs({
           <h2>首页频道</h2>
           <p>登录后会自动补出关注与订阅内容，方向键左右即可切换。</p>
         </div>
-        <span className="section-header__action">{tabs.find((tab) => tab.key === activeKey)?.hint ?? ''}</span>
+        <span className="section-header__action">{activeHint}</span>
       </div>
       <div className="home-channel-tabs__list">
         {tabs.map((tab, index) => (
           <FocusButton
             key={tab.key}
-            variant={tab.key === activeKey ? 'primary' : 'ghost'}
-            size="sm"
-            className="home-channel-tabs__button"
+            variant={tab.key === activeKey ? 'primary' : 'glass'}
+            size="md"
+            className="detail-chip library-folder-chip home-channel-tabs__button"
             sectionId="home-channel-tabs"
             focusId={`home-channel-tab-${tab.key}`}
             defaultFocus={defaultFocus && index === 0}
             onClick={() => onChange(tab.key)}
           >
-            {tab.label}
+            <span>{tab.label}</span>
           </FocusButton>
         ))}
       </div>
