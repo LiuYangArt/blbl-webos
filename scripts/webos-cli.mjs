@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const buildDir = resolve(root, 'build', 'webos');
@@ -10,6 +10,8 @@ const appId = appInfo.id;
 const appMain = appInfo.main ?? 'index.html';
 const packageFile = resolve(root, `${appInfo.id}_${appInfo.version}_all.ipk`);
 const installedAppMainFile = `/media/developer/apps/usr/palm/applications/${appId}/${appMain}`;
+const simulatorMediaProxyScript = resolve(root, 'scripts', 'simulator-media-proxy.mjs');
+const simulatorRelaunchWaitMs = 1200;
 
 const [, , action, ...restArgs] = process.argv;
 const isWindows = process.platform === 'win32';
@@ -130,6 +132,19 @@ const parseWaitMs = (value) => {
   return waitMs;
 };
 
+const killWindowsProcessTreeByImageName = (imageName) => {
+  const result = runProcess('taskkill', ['/F', '/T', '/IM', imageName], {
+    stdio: 'ignore',
+    shell: false,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return (result.status ?? 1) === 0;
+};
+
 const capture = (command, args) => {
   const result = runProcess(command, args, {
     encoding: 'utf8',
@@ -167,6 +182,72 @@ const captureWithPowerShell = (command, args) => {
   }
 
   return result.stdout.trim();
+};
+
+const runPowerShellScript = (script, options = {}) => {
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', script], {
+    encoding: 'utf8',
+    shell: false,
+    ...options,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.trim();
+    throw new Error(stderr || `powershell failed with exit code ${result.status ?? 1}`);
+  }
+
+  return result;
+};
+
+const killWindowsNodeProcessesByCommandLineFragment = (fragment) => {
+  const script = `
+$fragment = ${quotePowerShellArg(fragment)}
+$processes = Get-CimInstance Win32_Process | Where-Object {
+  $_.Name -match '^node(\\.exe)?$' -and $_.CommandLine -like ('*' + $fragment + '*')
+}
+
+foreach ($process in $processes) {
+  try {
+    Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+    Write-Output $process.ProcessId
+  } catch {
+  }
+}
+`;
+  const result = runPowerShellScript(script);
+  return result.stdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+};
+
+const cleanupSimulatorProcesses = async (simulatorExecutable) => {
+  let cleaned = false;
+
+  if (isWindows) {
+    const simulatorImageName = basename(simulatorExecutable);
+    if (killWindowsProcessTreeByImageName(simulatorImageName)) {
+      cleaned = true;
+      console.log(`已关闭旧 Simulator 进程: ${simulatorImageName}`);
+    }
+
+    const killedProxyCount = killWindowsNodeProcessesByCommandLineFragment(simulatorMediaProxyScript);
+    if (killedProxyCount > 0) {
+      cleaned = true;
+      console.log(`已关闭旧 simulator media proxy: ${killedProxyCount} 个进程`);
+    }
+  }
+
+  if (!cleaned) {
+    return;
+  }
+
+  console.log(`等待旧 Simulator 会话退出: ${simulatorRelaunchWaitMs}ms`);
+  await sleep(simulatorRelaunchWaitMs);
 };
 
 const globalNpmRoot = isWindows
@@ -399,12 +480,13 @@ switch (action) {
   }
   case 'simulator': {
     ensureBuildPrepared();
+    const simulatorExecutable = resolveSimulatorExecutable(simulatorPath, simulatorVersion);
+    await cleanupSimulatorProcesses(simulatorExecutable);
 
-    runDetached(process.execPath, [resolve(root, 'scripts', 'simulator-media-proxy.mjs'), '--port', simulatorMediaProxyPort], {
+    runDetached(process.execPath, [simulatorMediaProxyScript, '--port', simulatorMediaProxyPort], {
       cwd: root,
     });
 
-    const simulatorExecutable = resolveSimulatorExecutable(simulatorPath, simulatorVersion);
     runDetached(simulatorExecutable, [buildDir, simulatorParams], {
       cwd: simulatorPath,
     });
@@ -416,7 +498,7 @@ switch (action) {
   }
   default: {
     console.log(
-      'Usage: node ./scripts/webos-cli.mjs <doctor|package|install|reinstall|verify-installed-entry|deploy|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--wait-ms 8000] [--simulator-version 25] [--simulator-path <path>]',
+      'Usage: node ./scripts/webos-cli.mjs <doctor|package|install|reinstall|verify-installed-entry|deploy|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--wait-ms 8000] [--simulator-version 25] [--simulator-path <path>] [--media-proxy-port 19033]',
     );
   }
 }

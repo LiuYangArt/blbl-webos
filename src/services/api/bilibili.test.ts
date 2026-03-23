@@ -242,6 +242,83 @@ describe('bilibili api mapping', () => {
     });
   });
 
+  it('fetchFollowingFeedPage 会跳过当前 offset 下没有可展示视频的空页', async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              id_str: 'dyn-empty',
+              modules: {
+                module_dynamic: {
+                  major: {
+                    archive: {
+                      title: '无 bvid 的无效项',
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          has_more: false,
+          offset: 'offset-2',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              id_str: 'dyn-2',
+              modules: {
+                module_author: {
+                  name: '作者 B',
+                  pub_ts: 200,
+                },
+                module_dynamic: {
+                  major: {
+                    archive: {
+                      bvid: 'BV1follow2',
+                      cover: '//i0.hdslb.com/follow-2.jpg',
+                      title: '第二页视频',
+                      desc: '第二页简介',
+                      duration_text: '01:30',
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          has_more: true,
+          offset: 'offset-3',
+        },
+      });
+
+    const { fetchFollowingFeedPage } = await loadBilibiliModule();
+    const result = await fetchFollowingFeedPage({
+      offset: 'offset-1',
+      limit: 24,
+    });
+
+    expect(fetchJsonMock).toHaveBeenCalledTimes(2);
+    expect(fetchJsonMock.mock.calls[0]?.[0]).toContain('offset=offset-1');
+    expect(fetchJsonMock.mock.calls[1]?.[0]).toContain('offset=offset-2');
+    expect(result).toEqual({
+      items: [{
+        id: 'dyn-2',
+        bvid: 'BV1follow2',
+        title: '第二页视频',
+        cover: 'https://i0.hdslb.com/follow-2.jpg',
+        ownerName: '作者 B',
+        duration: 90,
+        description: '第二页简介',
+        publishedAt: 200,
+        reason: '关注更新',
+      }],
+      hasMore: true,
+      cursor: 'offset-3',
+    });
+  });
+
   it('fetchPlaySource 在 DASH 不可用时回退 durl 兼容流', async () => {
     fetchJsonMock.mockImplementation(async (url: string) => {
       if (url.includes('fnval=4048') || url.includes('fnval=16')) {
@@ -478,6 +555,65 @@ describe('bilibili api mapping', () => {
       vipLabel: '大会员',
       following: 88,
       follower: 99,
+    });
+  });
+
+  it('fetchHistoryPage 会按 cursor 参数继续请求并映射下一页游标', async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: {
+        list: [
+          {
+            kid: 'history-1',
+            title: '历史视频',
+            history: {
+              oid: 123,
+              bvid: 'BV1history1',
+              cid: 456,
+              part: 'P1',
+            },
+            cover: '//i0.hdslb.com/history.jpg',
+            author_name: '历史作者',
+            duration: 180,
+            progress: 60,
+            view_at: 789,
+          },
+        ],
+      },
+    });
+
+    const { fetchHistoryPage } = await loadBilibiliModule();
+    const result = await fetchHistoryPage({
+      cursor: JSON.stringify({
+        max: 999,
+        viewAt: 888,
+      }),
+      pageSize: 24,
+    });
+
+    expect(fetchJsonMock).toHaveBeenCalledTimes(1);
+    expect(fetchJsonMock.mock.calls[0]?.[0]).toContain('/x/web-interface/history/cursor?');
+    expect(fetchJsonMock.mock.calls[0]?.[0]).toContain('type=all');
+    expect(fetchJsonMock.mock.calls[0]?.[0]).toContain('ps=24');
+    expect(fetchJsonMock.mock.calls[0]?.[0]).toContain('max=999');
+    expect(fetchJsonMock.mock.calls[0]?.[0]).toContain('view_at=888');
+    expect(result).toEqual({
+      items: [{
+        kid: 'history-1',
+        title: '历史视频',
+        bvid: 'BV1history1',
+        cid: 456,
+        cover: 'https://i0.hdslb.com/history.jpg',
+        author: '历史作者',
+        duration: 180,
+        progress: 60,
+        viewAt: 789,
+        part: 'P1',
+      }],
+      hasMore: true,
+      cursor: JSON.stringify({
+        max: 123,
+        viewAt: 789,
+      }),
     });
   });
 });

@@ -1,9 +1,8 @@
 import type { PlayerRoutePayload } from '../../app/routes';
-import { useAsyncData } from '../../app/useAsyncData';
-import { MediaCard } from '../../components/MediaCard';
-import { SectionHeader } from '../../components/SectionHeader';
-import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
+import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchPopularVideos } from '../../services/api/bilibili';
+import { createResolvedVideoListItem, resolveVideoPlayerPayload } from '../shared/videoListItems';
+import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
 
 type HotPageProps = {
@@ -11,7 +10,11 @@ type HotPageProps = {
 };
 
 export function HotPage({ onOpenPlayer }: HotPageProps) {
-  const hot = useAsyncData(() => fetchPopularVideos(1, 18), []);
+  const hot = usePagedCollection({
+    deps: [],
+    loadPage: (page) => fetchPopularVideos(page, 24),
+    getItemKey: (item) => `${item.bvid}:${item.cid}`,
+  });
 
   if (hot.status !== 'success') {
     if (hot.status === 'error') {
@@ -27,36 +30,27 @@ export function HotPage({ onOpenPlayer }: HotPageProps) {
     return <PageStatus title="正在加载热门内容" description="准备热门榜单，请稍等。" />;
   }
 
-  const items = hot.data;
+  const items = hot.items;
+  const videoItems = items.map((item) => createResolvedVideoListItem(
+    item.bvid,
+    item,
+    () => resolveVideoPlayerPayload(item),
+  ));
 
   return (
     <main className="page-shell">
-      <FocusSection
-        as="section"
-        id="hot-grid"
-        group="content"
-        enterTo="last-focused"
-        className="content-section"
-        leaveFor={{ left: '@side-nav' }}
-        scroll={CONTENT_FIRST_ROW_SCROLL}
-      >
-        <SectionHeader
-          title="热门精选"
-          description="首版优先接入稳定公开接口，为 TV 端补上首页之外的主动浏览入口。"
-          actionLabel="18 条内容"
-        />
-        <div className="media-grid">
-          {items.map((item, index) => (
-            <MediaCard
-              key={item.bvid}
-              sectionId="hot-grid"
-              focusId={`hot-item-${index}`}
-              item={item}
-              onClick={() => onOpenPlayer(item)}
-            />
-          ))}
-        </div>
-      </FocusSection>
+      <VideoGridSection
+        sectionId="hot-grid"
+        title="热门精选"
+        description="热门页也统一复用视频列表模板，点击即播并支持继续向下补出更多内容。"
+        actionLabel={`${items.length} 条内容`}
+        items={videoItems}
+        onOpenPlayer={onOpenPlayer}
+        hasMore={hot.hasMore}
+        isLoadingMore={hot.isLoadingMore}
+        loadMoreError={hot.loadMoreError}
+        onRequestMore={() => void hot.loadMore()}
+      />
     </main>
   );
 }

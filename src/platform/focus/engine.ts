@@ -532,11 +532,8 @@ function focusElement(element: FocusableElement | null): FocusableElement | null
     return null;
   }
 
-  const alreadyFocused = document.activeElement === element;
   element.focus({ preventScroll: true });
-  if (alreadyFocused) {
-    ensureFocusedElementComfort(element);
-  }
+  ensureFocusedElementComfort(element);
   return element;
 }
 

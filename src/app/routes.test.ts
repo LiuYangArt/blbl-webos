@@ -5,7 +5,7 @@ describe('routes', () => {
   it('主导航页面映射到对应导航 key', () => {
     expect(getActiveNav({ name: 'home' }, false)).toBe('home');
     expect(getActiveNav({ name: 'search-results', keyword: '电视' }, false)).toBe('search');
-    expect(getActiveNav({ name: 'favorite-detail', mediaId: 1, title: '收藏夹' }, true)).toBe('favorites');
+    expect(getActiveNav({ name: 'favorites' }, true)).toBe('favorites');
     expect(getActiveNav({ name: 'history' }, true)).toBe('history');
   });
 

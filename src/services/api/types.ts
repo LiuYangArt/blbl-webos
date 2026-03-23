@@ -22,6 +22,7 @@ export type VideoCardItem = {
   publishAt?: number;
   badge?: string;
   typeName?: string;
+  metaText?: string;
 };
 
 export type VideoPart = {
@@ -104,6 +105,12 @@ export type FollowFeedItem = {
 export type FollowingChannelData = {
   accounts: FollowUpAccount[];
   items: FollowFeedItem[];
+};
+
+export type FollowingFeedPage = {
+  items: FollowFeedItem[];
+  hasMore: boolean;
+  cursor: string | null;
 };
 
 export type PgcSeasonKind = 'anime' | 'cinema';
@@ -252,6 +259,12 @@ export type HistoryItem = {
   progress: number;
   viewAt: number;
   part?: string;
+};
+
+export type HistoryPage = {
+  items: HistoryItem[];
+  hasMore: boolean;
+  cursor: string | null;
 };
 
 export type LaterItem = {

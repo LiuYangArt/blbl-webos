@@ -104,6 +104,8 @@ F:\CodeProjects\bilibili_tv_android\MediaPlayback
 - 如果必须手动拆步骤，固定顺序是：`webos:package -> webos:reinstall -> 等 8 秒 -> webos:verify-install -> webos:launch`
 - 每次 `reinstall` 后，必须核对电视上的实际入口 JS hash；CLI 显示成功不等于电视已经运行新包
 - 如果 `webos:verify-install` 发现电视仍是旧入口，或电视表现明显像旧代码，直接提升 `appinfo.json.version` 后重新打包部署，不要反复覆盖同版本 IPK
+- `npm run webos:simulator` 启动前必须先清理旧 Simulator 进程树和旧 `simulator-media-proxy`，避免残留旧窗口、旧 DevTools 会话和假性回归
+- 如果 Simulator 表现像旧包、旧调试面板或旧焦点行为，先排查旧 Simulator 会话是否真的清干净，再判断代码是否没生效
 - 设备名、IP、passphrase、私钥属于本机开发环境配置，不写入仓库业务代码
 - 更完整的打包、安装、启动、排障流程，统一参考仓库 Skill：`.agents/skills/lg-webos-deploy/SKILL.md`
 

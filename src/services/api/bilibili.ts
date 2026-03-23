@@ -6,14 +6,16 @@ import {
   unwrapData,
 } from './http';
 import { signWbi } from './wbi';
+import { appendRuntimeDiagnostic } from '../debug/runtimeDiagnostics';
 import type {
   ApiEnvelope,
   FavoriteFolder,
   FavoriteItem,
   FollowingChannelData,
+  FollowingFeedPage,
   FollowFeedItem,
   FollowUpAccount,
-  HistoryItem,
+  HistoryPage,
   HotKeyword,
   LaterItem,
   ParsedVideoCodec,
@@ -287,6 +289,8 @@ type RawDynamicFeedItem = {
 
 type RawDynamicFeedResponse = {
   items?: RawDynamicFeedItem[];
+  offset?: string;
+  has_more?: boolean;
 };
 
 type RawPgcSubscriptionItem = {
@@ -668,6 +672,13 @@ function mapDynamicFeedItem(item: RawDynamicFeedItem): FollowFeedItem | null {
   };
 }
 
+function mapDynamicFeedItems(items: RawDynamicFeedItem[] | undefined, limit = Number.POSITIVE_INFINITY): FollowFeedItem[] {
+  return (items ?? [])
+    .map(mapDynamicFeedItem)
+    .filter((item): item is FollowFeedItem => Boolean(item))
+    .slice(0, limit);
+}
+
 function resolvePgcSeasonKind(seasonType: number): PgcSeasonKind {
   return seasonType === 2 ? 'cinema' : 'anime';
 }
@@ -773,12 +784,12 @@ export async function fetchHotKeywords(): Promise<HotKeyword[]> {
   }));
 }
 
-export async function searchVideos(keyword: string, page = 1) {
+export async function searchVideos(keyword: string, page = 1, pageSize = 20) {
   const params = await signWbi({
     search_type: 'video',
     keyword,
     page,
-    page_size: 20,
+    page_size: pageSize,
     platform: 'pc',
     web_location: 1430654,
   });
@@ -830,7 +841,7 @@ export async function fetchRelatedVideos(bvid: string) {
   return unwrapData(payload).map(mapVideoCard);
 }
 
-export async function fetchFollowingChannelData(): Promise<FollowingChannelData> {
+export async function fetchFollowingChannelData(limit = 36): Promise<FollowingChannelData> {
   const [portalPayload, feedPayload] = await Promise.all([
     fetchJson<ApiEnvelope<RawFollowingPortal>>(
       getBiliApiUrl('/x/polymer/web-dynamic/v1/portal?up_list_more=1&web_location=333.1365'),
@@ -848,17 +859,71 @@ export async function fetchFollowingChannelData(): Promise<FollowingChannelData>
       .map(mapFollowUpAccount)
       .filter((item) => item.mid > 0)
       .slice(0, 12),
-    items: (feedData.items ?? [])
-      .map(mapDynamicFeedItem)
-      .filter((item): item is FollowFeedItem => Boolean(item))
-      .slice(0, 12),
+    items: mapDynamicFeedItems(feedData.items, limit),
   };
 }
 
-export async function fetchPgcSubscriptions(type: PgcSeasonKind, vmid: number): Promise<PgcSubscriptionItem[]> {
+export async function fetchFollowingFeedPage(options?: {
+  offset?: string | null;
+  limit?: number;
+}): Promise<FollowingFeedPage> {
+  let currentOffset = options?.offset ?? null;
+  const limit = options?.limit ?? 24;
+
+  while (true) {
+    const params = new URLSearchParams({
+      type: 'video',
+      web_location: '333.1365',
+    });
+
+    if (currentOffset) {
+      params.set('offset', currentOffset);
+    }
+
+    appendRuntimeDiagnostic('following-feed', 'api-request', {
+      offset: currentOffset,
+      limit,
+    });
+
+    const payload = await fetchJson<ApiEnvelope<RawDynamicFeedResponse>>(
+      getBiliApiUrl(`/x/polymer/web-dynamic/v1/feed/all?${params.toString()}`),
+    );
+    const data = unwrapData(payload);
+    const nextOffset = data.offset ? String(data.offset) : null;
+    const hasMore = Boolean(data.has_more) || Boolean(nextOffset);
+    const items = mapDynamicFeedItems(data.items, limit);
+
+    appendRuntimeDiagnostic('following-feed', 'api-response', {
+      requestOffset: currentOffset,
+      nextOffset,
+      rawCount: data.items?.length ?? 0,
+      mappedCount: items.length,
+      hasMore,
+      rawHasMore: Boolean(data.has_more),
+    });
+
+    if (items.length > 0 || !hasMore || !nextOffset || nextOffset === currentOffset) {
+      return {
+        items,
+        hasMore,
+        cursor: nextOffset,
+      };
+    }
+
+    appendRuntimeDiagnostic('following-feed', 'skip-empty-page', {
+      requestOffset: currentOffset,
+      nextOffset,
+      hasMore,
+    });
+
+    currentOffset = nextOffset;
+  }
+}
+
+export async function fetchPgcSubscriptions(type: PgcSeasonKind, vmid: number, page = 1, pageSize = 24): Promise<PgcSubscriptionItem[]> {
   const typeValue = type === 'cinema' ? 2 : 1;
   const payload = await fetchJson<ApiEnvelope<{ list: RawPgcSubscriptionItem[] }>>(
-    getBiliApiUrl(`/x/space/bangumi/follow/list?type=${typeValue}&pn=1&ps=12&vmid=${vmid}`),
+    getBiliApiUrl(`/x/space/bangumi/follow/list?type=${typeValue}&pn=${page}&ps=${pageSize}&vmid=${vmid}`),
   );
   return (unwrapData(payload).list ?? []).map(mapPgcSubscriptionItem);
 }
@@ -1122,12 +1187,23 @@ export async function fetchCurrentUserProfile(): Promise<UserProfile> {
   };
 }
 
-export async function fetchHistoryList(): Promise<HistoryItem[]> {
+export async function fetchHistoryPage(options?: {
+  cursor?: string | null;
+  pageSize?: number;
+  type?: string;
+}): Promise<HistoryPage> {
+  const cursor = parseHistoryCursor(options?.cursor);
+  const params = new URLSearchParams({
+    type: options?.type ?? 'all',
+    ps: String(options?.pageSize ?? 24),
+    max: String(cursor?.max ?? 0),
+    view_at: String(cursor?.viewAt ?? 0),
+  });
   const payload = await fetchJson<ApiEnvelope<{ list: RawHistoryItem[] }>>(
-    getBiliApiUrl('/x/web-interface/history/cursor?ps=30&type=archive'),
+    getBiliApiUrl(`/x/web-interface/history/cursor?${params.toString()}`),
   );
   const data = unwrapData(payload);
-  return (data.list ?? []).map((item) => ({
+  const items = (data.list ?? []).map((item) => ({
     kid: String(item.kid ?? `${item.history?.oid ?? item.bvid}`),
     title: String(item.title ?? ''),
     bvid: String(item.history?.bvid ?? item.bvid ?? ''),
@@ -1139,12 +1215,52 @@ export async function fetchHistoryList(): Promise<HistoryItem[]> {
     viewAt: Number(item.view_at ?? 0),
     part: String(item.history?.part ?? ''),
   }));
+  const lastItem = data.list?.at(-1);
+  const nextMax = Number(lastItem?.history?.oid ?? 0);
+  const nextViewAt = Number(lastItem?.view_at ?? 0);
+  const nextCursor = nextMax > 0 && nextViewAt > 0
+    ? JSON.stringify({
+        max: nextMax,
+        viewAt: nextViewAt,
+      })
+    : null;
+
+  return {
+    items,
+    hasMore: items.length > 0 && nextCursor !== null,
+    cursor: nextCursor,
+  };
 }
 
-export async function fetchLaterList(): Promise<LaterItem[]> {
+function parseHistoryCursor(cursor: string | null | undefined) {
+  if (!cursor) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(cursor) as {
+      max?: Numeric;
+      viewAt?: Numeric;
+    };
+    const max = Number(parsed.max ?? 0);
+    const viewAt = Number(parsed.viewAt ?? 0);
+    if (max <= 0 || viewAt <= 0) {
+      return null;
+    }
+
+    return {
+      max,
+      viewAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchLaterList(page = 1, pageSize = 90): Promise<LaterItem[]> {
   const params = await signWbi({
-    pn: 1,
-    ps: 30,
+    pn: page,
+    ps: pageSize,
     viewed: 0,
     key: '',
     asc: false,
@@ -1166,9 +1282,9 @@ export async function fetchLaterList(): Promise<LaterItem[]> {
   }));
 }
 
-export async function fetchFavoriteFolders(mid: number): Promise<FavoriteFolder[]> {
+export async function fetchFavoriteFolders(mid: number, page = 1, pageSize = 30): Promise<FavoriteFolder[]> {
   const payload = await fetchJson<ApiEnvelope<{ list: RawFavoriteFolder[] }>>(
-    getBiliApiUrl(`/x/v3/fav/folder/created/list?pn=1&ps=30&up_mid=${mid}`),
+    getBiliApiUrl(`/x/v3/fav/folder/created/list?pn=${page}&ps=${pageSize}&up_mid=${mid}`),
   );
   const data = unwrapData(payload);
   return (data.list ?? []).map((item) => ({
@@ -1180,9 +1296,9 @@ export async function fetchFavoriteFolders(mid: number): Promise<FavoriteFolder[
   }));
 }
 
-export async function fetchFavoriteFolderDetail(mediaId: number): Promise<FavoriteItem[]> {
+export async function fetchFavoriteFolderDetail(mediaId: number, page = 1, pageSize = 90): Promise<FavoriteItem[]> {
   const payload = await fetchJson<ApiEnvelope<{ medias: RawFavoriteItem[] }>>(
-    getBiliApiUrl(`/x/v3/fav/resource/list?media_id=${mediaId}&pn=1&ps=30&keyword=&order=mtime&type=0&tid=0&platform=web`),
+    getBiliApiUrl(`/x/v3/fav/resource/list?media_id=${mediaId}&pn=${page}&ps=${pageSize}&keyword=&order=mtime&type=0&tid=0&platform=web`),
   );
   const data = unwrapData(payload);
   return (data.medias ?? []).map((item) => ({
