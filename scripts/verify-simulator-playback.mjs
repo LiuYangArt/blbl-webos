@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { createServer as createNetServer } from 'node:net';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -51,25 +51,6 @@ function runCommand(command, args, options = {}) {
   }
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status ?? 1}`);
-  }
-}
-
-function stopSimulatorProcesses() {
-  if (!IS_WINDOWS) {
-    return;
-  }
-
-  const names = [
-    'webOS_TV_6.0_Simulator.exe',
-    'webOS_TV_6.0_Simulator_1.4.1.exe',
-  ];
-
-  for (const name of names) {
-    spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `taskkill /IM ${quoteArg(name)} /F`], {
-      cwd: ROOT,
-      stdio: 'ignore',
-      shell: false,
-    });
   }
 }
 
@@ -234,8 +215,6 @@ async function main() {
     };
 
     runCommand(getCommandName('npm'), ['run', 'build:webos'], { env });
-    stopSimulatorProcesses();
-    await delay(1500);
     runCommand('node', ['.\\scripts\\webos-cli.mjs', 'simulator']);
 
     console.log('等待 Simulator 回传 telemetry...');

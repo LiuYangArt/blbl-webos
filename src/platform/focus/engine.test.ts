@@ -356,4 +356,40 @@ describe('focus engine', () => {
     });
     expect(window.scrollTo).not.toHaveBeenCalled();
   });
+
+  it('moveFocus 进入滚动容器中的下一项时也会主动推动容器滚动', async () => {
+    const engine = await loadEngineModule();
+    const scrollRoot = createScrollRoot();
+
+    const first = createFocusableButton({
+      id: 'grid-card-1',
+      section: 'content',
+      left: 360,
+      top: 220,
+      height: 72,
+      default: true,
+      container: scrollRoot,
+    });
+    createFocusableButton({
+      id: 'grid-card-2',
+      section: 'content',
+      left: 360,
+      top: 860,
+      height: 72,
+      container: scrollRoot,
+    });
+
+    engine.registerSection({ id: 'content', group: 'content' });
+    first.focus();
+    vi.clearAllMocks();
+
+    engine.moveFocus('down');
+
+    expect((document.activeElement as HTMLElement | null)?.dataset.focusId).toBe('grid-card-2');
+    expect(scrollRoot.scrollTo).toHaveBeenCalledWith({
+      top: 192,
+      left: 0,
+      behavior: 'auto',
+    });
+  });
 });

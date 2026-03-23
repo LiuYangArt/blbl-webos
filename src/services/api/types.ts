@@ -107,6 +107,12 @@ export type FollowingChannelData = {
   items: FollowFeedItem[];
 };
 
+export type FollowingFeedPage = {
+  items: FollowFeedItem[];
+  hasMore: boolean;
+  cursor: string | null;
+};
+
 export type PgcSeasonKind = 'anime' | 'cinema';
 
 export type PgcSubscriptionItem = {
@@ -253,6 +259,12 @@ export type HistoryItem = {
   progress: number;
   viewAt: number;
   part?: string;
+};
+
+export type HistoryPage = {
+  items: HistoryItem[];
+  hasMore: boolean;
+  cursor: string | null;
 };
 
 export type LaterItem = {

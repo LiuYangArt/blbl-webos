@@ -53,6 +53,32 @@ npm run webos:deploy -- --device <deviceName>
 
 只有在你明确要拆步骤排查时，才手动分开执行。
 
+## Simulator 调试规则
+
+如果当前是在本机 `webOS Simulator` 里验证 UI、焦点或播放器基础行为，统一走：
+
+```bash
+npm run webos:simulator
+```
+
+这条命令现在包含一条额外护栏：
+
+1. 启动新 Simulator 之前，先清理旧 Simulator 进程树
+2. 同时清理旧 `simulator-media-proxy` 进程
+3. 等旧会话真正退出后，再拉起新的 Simulator
+
+这样做的目的不是“强迫重启”，而是避免下面这些高频误判：
+
+- 屏幕上看到的还是旧包
+- 旧调试面板明明删掉了却还在
+- 焦点/滚动行为像回到了旧代码
+- 一次调试后残留多个 Simulator / DevTools 窗口
+
+结论：
+
+- 只要是重新验证最新构建，优先重新执行 `npm run webos:simulator`
+- 不要在旧 Simulator 窗口还活着时继续叠开新实例
+
 ## 绝对规则
 
 ### 1. 真机部署命令必须串行
@@ -107,6 +133,22 @@ npm run webos:verify-install -- --device <deviceName>
 2. 重新执行 `npm run webos:deploy -- --device <deviceName>`
 
 不要继续反复覆盖同版本包。
+
+### 4. 如果 Simulator 像旧包，先怀疑旧会话残留
+
+当出现下面现象时：
+
+- 页面看起来还是旧 UI
+- 已删除的调试面板又出现
+- 修好的焦点/滚动在新窗口里像没生效
+
+优先判断：
+
+1. 旧 Simulator 进程是否还没退出
+2. 旧 DevTools 子窗口是否还挂在旧会话上
+3. 旧 `simulator-media-proxy` 是否还在占用上一轮上下文
+
+不要第一时间就下结论说“构建没更新”或“代码回退了”。
 
 ## 这次为什么明明有 Skill 还是会失败
 

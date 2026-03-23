@@ -33,6 +33,7 @@ type VideoGridSectionProps = {
   onRequestMore?: (trigger: LoadMoreTrigger) => void;
   showEndHint?: boolean;
   resetKey?: string;
+  visibilityMode?: 'loaded' | 'progressive';
 };
 
 export function VideoGridSection({
@@ -54,6 +55,7 @@ export function VideoGridSection({
   onRequestMore,
   showEndHint = true,
   resetKey,
+  visibilityMode = 'loaded',
 }: VideoGridSectionProps) {
   const [visibleCount, setVisibleCount] = useState(() => Math.min(items.length, initialVisibleCount));
   const [resolveError, setResolveError] = useState<string | null>(null);
@@ -61,16 +63,18 @@ export function VideoGridSection({
   const firstVisibleItemId = items[0]?.id ?? null;
 
   useEffect(() => {
-    setVisibleCount(Math.min(items.length, initialVisibleCount));
+    if (visibilityMode === 'progressive') {
+      setVisibleCount(Math.min(items.length, initialVisibleCount));
+    }
     setResolveError(null);
     setPendingTitle(null);
-  }, [firstVisibleItemId, initialVisibleCount, items.length, resetKey]);
+  }, [firstVisibleItemId, initialVisibleCount, items.length, resetKey, visibilityMode]);
 
   const visibleItems = useMemo(
-    () => items.slice(0, visibleCount),
-    [items, visibleCount],
+    () => (visibilityMode === 'progressive' ? items.slice(0, visibleCount) : items),
+    [items, visibilityMode, visibleCount],
   );
-  const hasHiddenLocalItems = items.length > visibleCount;
+  const hasHiddenLocalItems = visibilityMode === 'progressive' && items.length > visibleCount;
 
   const revealOrRequestMore = (trigger: LoadMoreTrigger) => {
     if (hasHiddenLocalItems) {

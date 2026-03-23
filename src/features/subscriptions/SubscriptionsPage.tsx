@@ -1,5 +1,4 @@
 import { useAppStore } from '../../app/AppStore';
-import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchPgcSubscriptions } from '../../services/api/bilibili';
@@ -9,6 +8,7 @@ import {
   mapPgcSubscriptionToVideoCard,
   resolvePgcSubscriptionPlayerPayload,
 } from '../shared/videoListItems';
+import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
 
 type SubscriptionsPageProps = {
@@ -19,19 +19,19 @@ type SubscriptionsPageProps = {
 export function SubscriptionsPage({ onLogin, onOpenPlayer }: SubscriptionsPageProps) {
   const { auth } = useAppStore();
   const viewerMid = auth.profile?.mid ?? 0;
+  const subscriptions = usePagedCollection({
+    deps: [viewerMid],
+    enabled: viewerMid > 0,
+    loadPage: async (page) => {
+      const [anime, cinema] = await Promise.all([
+        fetchPgcSubscriptions('anime', viewerMid, page, 12),
+        fetchPgcSubscriptions('cinema', viewerMid, page, 12),
+      ]);
 
-  const subscriptions = useAsyncData(async () => {
-    if (!viewerMid) {
-      return [];
-    }
-
-    const [anime, cinema] = await Promise.all([
-      fetchPgcSubscriptions('anime', viewerMid),
-      fetchPgcSubscriptions('cinema', viewerMid),
-    ]);
-
-    return [...anime, ...cinema];
-  }, [viewerMid]);
+      return [...anime, ...cinema];
+    },
+    getItemKey: (item) => `${item.seasonKind}:${item.seasonId}`,
+  });
 
   if (auth.status !== 'authenticated' || !auth.profile) {
     return (
@@ -58,7 +58,7 @@ export function SubscriptionsPage({ onLogin, onOpenPlayer }: SubscriptionsPagePr
     return <PageStatus title="正在同步订阅剧集" description="准备最近追番和最近追剧列表。" />;
   }
 
-  const items = subscriptions.data.map((item) => createResolvedVideoListItem(
+  const items = subscriptions.items.map((item) => createResolvedVideoListItem(
     `${item.seasonKind}:${item.seasonId}`,
     mapPgcSubscriptionToVideoCard(item),
     () => resolvePgcSubscriptionPlayerPayload(item),
@@ -73,6 +73,10 @@ export function SubscriptionsPage({ onLogin, onOpenPlayer }: SubscriptionsPagePr
         actionLabel={`${items.length} 条`}
         items={items}
         onOpenPlayer={onOpenPlayer}
+        hasMore={subscriptions.hasMore}
+        isLoadingMore={subscriptions.isLoadingMore}
+        loadMoreError={subscriptions.loadMoreError}
+        onRequestMore={() => void subscriptions.loadMore()}
         emptyState={(
           <div className="page-inline-actions">
             <FocusButton

@@ -1,8 +1,8 @@
-import { useAsyncData } from '../../app/useAsyncData';
 import type { PlayerRoutePayload } from '../../app/routes';
 import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchPopularVideos } from '../../services/api/bilibili';
 import { createResolvedVideoListItem, resolveVideoPlayerPayload } from '../shared/videoListItems';
+import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
 
 type HotPageProps = {
@@ -10,7 +10,11 @@ type HotPageProps = {
 };
 
 export function HotPage({ onOpenPlayer }: HotPageProps) {
-  const hot = useAsyncData(() => fetchPopularVideos(1, 18), []);
+  const hot = usePagedCollection({
+    deps: [],
+    loadPage: (page) => fetchPopularVideos(page, 24),
+    getItemKey: (item) => `${item.bvid}:${item.cid}`,
+  });
 
   if (hot.status !== 'success') {
     if (hot.status === 'error') {
@@ -26,7 +30,7 @@ export function HotPage({ onOpenPlayer }: HotPageProps) {
     return <PageStatus title="正在加载热门内容" description="准备热门榜单，请稍等。" />;
   }
 
-  const items = hot.data;
+  const items = hot.items;
   const videoItems = items.map((item) => createResolvedVideoListItem(
     item.bvid,
     item,
@@ -42,6 +46,10 @@ export function HotPage({ onOpenPlayer }: HotPageProps) {
         actionLabel={`${items.length} 条内容`}
         items={videoItems}
         onOpenPlayer={onOpenPlayer}
+        hasMore={hot.hasMore}
+        isLoadingMore={hot.isLoadingMore}
+        loadMoreError={hot.loadMoreError}
+        onRequestMore={() => void hot.loadMore()}
       />
     </main>
   );

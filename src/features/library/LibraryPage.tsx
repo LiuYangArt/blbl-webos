@@ -15,6 +15,7 @@ import {
   mapFavoriteItemToVideoCard,
   mapLaterItemToVideoCard,
 } from '../shared/videoListItems';
+import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
 
 type LibraryPageProps = {
@@ -27,10 +28,12 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
   const { auth } = useAppStore();
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
 
-  const later = useAsyncData(
-    async () => (mode === 'later' ? fetchLaterList() : []),
-    [mode],
-  );
+  const later = usePagedCollection({
+    deps: [mode],
+    enabled: mode === 'later',
+    loadPage: (page) => fetchLaterList(page, 24),
+    getItemKey: (item) => `${item.bvid}:${item.cid}`,
+  });
 
   const folders = useAsyncData(async () => {
     if (mode !== 'favorites') {
@@ -57,13 +60,12 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
     }
   }, [activeFolderId, folders, mode]);
 
-  const favoriteItems = useAsyncData(async () => {
-    if (mode !== 'favorites' || !activeFolderId) {
-      return [];
-    }
-
-    return fetchFavoriteFolderDetail(activeFolderId);
-  }, [mode, activeFolderId]);
+  const favoriteItems = usePagedCollection({
+    deps: [mode, activeFolderId],
+    enabled: mode === 'favorites' && activeFolderId !== null,
+    loadPage: (page) => fetchFavoriteFolderDetail(activeFolderId ?? 0, page, 24),
+    getItemKey: (item) => `${item.bvid}:${item.cid}`,
+  });
 
   const activeFolder = useMemo(() => {
     if (mode !== 'favorites' || folders.status !== 'success') {
@@ -89,7 +91,7 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
       return <PageStatus title="正在同步稍后再看" description="如果当前已有登录态，会自动读取账号数据。" />;
     }
 
-    const items = later.data.map((item) => createDirectVideoListItem(
+    const items = later.items.map((item) => createDirectVideoListItem(
       item.bvid,
       mapLaterItemToVideoCard(item),
       item,
@@ -104,6 +106,10 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
           actionLabel={`${items.length} 条`}
           items={items}
           onOpenPlayer={onOpenPlayer}
+          hasMore={later.hasMore}
+          isLoadingMore={later.isLoadingMore}
+          loadMoreError={later.loadMoreError}
+          onRequestMore={() => void later.loadMore()}
         />
       </main>
     );
@@ -150,7 +156,7 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
     return <PageStatus title="正在加载收藏视频" description={activeFolder?.title ?? '准备收藏列表'} />;
   }
 
-  const items = favoriteItems.data.map((item) => createDirectVideoListItem(
+  const items = favoriteItems.items.map((item) => createDirectVideoListItem(
     `${item.bvid}:${item.cid}`,
     mapFavoriteItemToVideoCard(item, activeFolder?.title),
     {
@@ -170,6 +176,10 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
         items={items}
         onOpenPlayer={onOpenPlayer}
         resetKey={String(activeFolderId ?? 'favorites')}
+        hasMore={favoriteItems.hasMore}
+        isLoadingMore={favoriteItems.isLoadingMore}
+        loadMoreError={favoriteItems.loadMoreError}
+        onRequestMore={() => void favoriteItems.loadMore()}
         beforeGrid={(
           <div className="library-folder-strip">
             {folders.data.map((folder, index) => (

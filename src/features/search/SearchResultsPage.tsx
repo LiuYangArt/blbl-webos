@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
-import { useAsyncData } from '../../app/useAsyncData';
 import { usePageBackHandler } from '../../app/PageBackHandler';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
@@ -9,6 +8,7 @@ import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { VideoGridSection } from '../../components/VideoGridSection';
 import { searchVideos } from '../../services/api/bilibili';
 import { createResolvedVideoListItem, resolveVideoPlayerPayload } from '../shared/videoListItems';
+import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
 
 type SearchResultsPageProps = {
@@ -22,7 +22,11 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState(keyword);
 
-  const result = useAsyncData(() => searchVideos(keyword, 1), [keyword]);
+  const result = usePagedCollection({
+    deps: [keyword],
+    loadPage: (page) => searchVideos(keyword, page, 24),
+    getItemKey: (item) => `${item.bvid}:${item.cid}`,
+  });
 
   usePageBackHandler(isComposerOpen ? () => {
     setComposerOpen(false);
@@ -52,7 +56,7 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
     return <PageStatus title="正在搜索视频" description={`关键词：${keyword}`} />;
   }
 
-  const items = result.data;
+  const items = result.items;
   const videoItems = items.map((item) => createResolvedVideoListItem(
     item.bvid,
     item,
@@ -122,6 +126,10 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
         items={videoItems}
         onOpenPlayer={onOpenPlayer}
         leaveFor={{ left: '@side-nav', up: '@search-results-actions' }}
+        hasMore={result.hasMore}
+        isLoadingMore={result.isLoadingMore}
+        loadMoreError={result.loadMoreError}
+        onRequestMore={() => void result.loadMore()}
         emptyState={<p className="page-helper-text">没有找到结果，试试缩短关键词或换一个热搜词。</p>}
       />
     </main>

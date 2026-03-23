@@ -459,6 +459,7 @@ function renderChannelContent(params: {
           isLoadingMore={isLoadingMorePersonalized}
           loadMoreError={personalizedLoadMoreError}
           onRequestMore={(trigger) => void onLoadMorePersonalized(trigger === 'manual' ? 'manual' : 'prefetch')}
+          visibilityMode="loaded"
           emptyState={recommended.error && personalizedItems.length === 0 ? (
             <>
               <InlineChannelNotice title="个性推荐暂时不可用" description={recommended.error} />
@@ -498,6 +499,8 @@ function renderChannelContent(params: {
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           initialVisibleCount={6}
+          revealStep={6}
+          visibilityMode="progressive"
           beforeGrid={following.data.accounts.length > 0 ? (
             <div className="home-following-summary">
               {following.data.accounts.map((account) => (
@@ -560,6 +563,8 @@ function renderChannelContent(params: {
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           initialVisibleCount={6}
+          revealStep={6}
+          visibilityMode="progressive"
           emptyState={subscriptions.anime.error || subscriptions.cinema.error ? (
             <>
               <InlineChannelNotice
@@ -616,6 +621,8 @@ function renderChannelContent(params: {
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           initialVisibleCount={6}
+          revealStep={6}
+          visibilityMode="progressive"
           emptyState={popular.error && popular.data.length === 0 ? (
             <InlineChannelNotice title="热门内容暂时不可用" description={popular.error} />
           ) : undefined}
@@ -650,6 +657,8 @@ function renderChannelContent(params: {
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           initialVisibleCount={6}
+          revealStep={6}
+          visibilityMode="progressive"
           emptyState={ranking.error && ranking.data.length === 0 ? (
             <>
               <InlineChannelNotice title="排行暂时不可用" description={ranking.error} />
