@@ -6,6 +6,8 @@ import {
   recordPlayerAttemptSuccess,
   writePlayerCodecPreference,
   writePlayerQualityPreference,
+  writePlayerSubtitleEnabled,
+  writePlayerSubtitleStyle,
 } from './playerSettings';
 
 describe('playerSettings', () => {
@@ -13,6 +15,12 @@ describe('playerSettings', () => {
     expect(readPlayerSettings()).toEqual({
       codecPreference: 'auto',
       qualityPreference: 80,
+      subtitleEnabled: true,
+      subtitleStyle: {
+        fontSize: 'standard',
+        bottomOffset: 'medium',
+        backgroundOpacity: 'medium',
+      },
     });
   });
 
@@ -23,6 +31,73 @@ describe('playerSettings', () => {
     expect(readPlayerSettings()).toEqual({
       codecPreference: 'hevc',
       qualityPreference: 64,
+      subtitleEnabled: true,
+      subtitleStyle: {
+        fontSize: 'standard',
+        bottomOffset: 'medium',
+        backgroundOpacity: 'medium',
+      },
+    });
+  });
+
+  it('可以持久化字幕开关与基础样式设置', () => {
+    writePlayerSubtitleEnabled(false);
+    writePlayerSubtitleStyle({
+      fontSize: 'extra-large',
+      backgroundOpacity: 'strong',
+    });
+
+    expect(readPlayerSettings()).toEqual({
+      codecPreference: 'auto',
+      qualityPreference: 80,
+      subtitleEnabled: false,
+      subtitleStyle: {
+        fontSize: 'extra-large',
+        bottomOffset: 'medium',
+        backgroundOpacity: 'strong',
+      },
+    });
+  });
+
+  it('能兼容旧版本缺少 subtitle 字段的本地配置', () => {
+    window.localStorage.setItem('bilibili_webos.player_settings', JSON.stringify({
+      codecPreference: 'avc',
+      qualityPreference: 112,
+    }));
+
+    expect(readPlayerSettings()).toEqual({
+      codecPreference: 'avc',
+      qualityPreference: 112,
+      subtitleEnabled: true,
+      subtitleStyle: {
+        fontSize: 'standard',
+        bottomOffset: 'medium',
+        backgroundOpacity: 'medium',
+      },
+    });
+  });
+
+  it('能兼容部分或非法 subtitleStyle 字段并回退到默认值', () => {
+    window.localStorage.setItem('bilibili_webos.player_settings', JSON.stringify({
+      codecPreference: 'unknown',
+      qualityPreference: 'invalid',
+      subtitleEnabled: true,
+      subtitleStyle: {
+        fontSize: 'super-large',
+        bottomOffset: 'low',
+        backgroundOpacity: 'opaque',
+      },
+    }));
+
+    expect(readPlayerSettings()).toEqual({
+      codecPreference: 'auto',
+      qualityPreference: 80,
+      subtitleEnabled: true,
+      subtitleStyle: {
+        fontSize: 'standard',
+        bottomOffset: 'low',
+        backgroundOpacity: 'medium',
+      },
     });
   });
 

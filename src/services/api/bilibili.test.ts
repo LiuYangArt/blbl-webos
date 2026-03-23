@@ -163,6 +163,57 @@ describe('bilibili api mapping', () => {
     });
   });
 
+  it('fetchPlayInfo 会映射字幕轨信息并给 AI 字幕补充标签', async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: {
+        subtitle: {
+          subtitles: [
+            {
+              id: 1,
+              lan: 'zh-CN',
+              lan_doc: '中文',
+              subtitle_url: '//i0.hdslb.com/subtitle-1.json',
+              type: 0,
+            },
+            {
+              id: 2,
+              lan: 'ai-zh',
+              lan_doc: '中文',
+              subtitle_url_v2: 'http://i0.hdslb.com/subtitle-2.json',
+              type: 1,
+            },
+          ],
+        },
+      },
+    });
+
+    const { fetchPlayInfo } = await loadBilibiliModule();
+    const result = await fetchPlayInfo('BV1xx411c7mD', 123);
+
+    expect(signWbiMock).toHaveBeenCalledWith({
+      bvid: 'BV1xx411c7mD',
+      cid: 123,
+    });
+    expect(result).toEqual({
+      subtitles: [
+        {
+          id: 1,
+          lang: 'zh-CN',
+          langDoc: '中文',
+          subtitleUrl: 'https://i0.hdslb.com/subtitle-1.json',
+          isAi: false,
+        },
+        {
+          id: 2,
+          lang: 'ai-zh',
+          langDoc: '中文（AI）',
+          subtitleUrl: 'https://i0.hdslb.com/subtitle-2.json',
+          isAi: true,
+        },
+      ],
+    });
+  });
+
   it('fetchFollowingChannelData 会过滤无效动态并映射关注账户', async () => {
     fetchJsonMock.mockImplementation(async (url: string) => {
       if (url.includes('/portal?')) {

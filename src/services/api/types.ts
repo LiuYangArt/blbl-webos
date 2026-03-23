@@ -221,6 +221,18 @@ export type PlayCompatibleSource = {
   candidateUrls: string[];
 };
 
+export type PlaySubtitleTrack = {
+  id: number;
+  lang: string;
+  langDoc: string;
+  subtitleUrl: string;
+  isAi: boolean;
+};
+
+export type PlayInfo = {
+  subtitles: PlaySubtitleTrack[];
+};
+
 export type PlaySource = {
   mode: 'dash' | 'durl';
   qualityLabel: string;
