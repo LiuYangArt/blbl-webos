@@ -60,16 +60,16 @@ const HOME_CHANNEL_STORAGE_KEY = 'bilibili_webos.home_channel';
 const HOME_RECOMMEND_FETCH_COUNT = 24;
 const HOME_RECOMMEND_AUTO_LOAD_THRESHOLD = 6;
 
-const PUBLIC_CHANNELS: Array<{ key: HomeChannelKey; label: string; hint: string }> = [
-  { key: 'personalized', label: '个性推荐', hint: '优先看推荐与首页主内容' },
-  { key: 'hot', label: '热门视频', hint: '快速看全站热门内容' },
-  { key: 'ranking', label: '排行', hint: '查看当前热视频排行' },
-  { key: 'live', label: '直播', hint: '首版先保留入口占位' },
+const PUBLIC_CHANNELS: Array<{ key: HomeChannelKey; label: string }> = [
+  { key: 'personalized', label: '个性推荐' },
+  { key: 'hot', label: '热门视频' },
+  { key: 'ranking', label: '排行' },
+  { key: 'live', label: '直播' },
 ];
 
-const AUTH_CHANNELS: Array<{ key: HomeChannelKey; label: string; hint: string }> = [
-  { key: 'following', label: '正在关注', hint: '只看关注区最近更新的视频' },
-  { key: 'subscriptions', label: '订阅剧集', hint: '最近追番和追剧入口' },
+const AUTH_CHANNELS: Array<{ key: HomeChannelKey; label: string }> = [
+  { key: 'following', label: '正在关注' },
+  { key: 'subscriptions', label: '订阅剧集' },
 ];
 const EMPTY_VIDEO_OPTIONAL: AsyncOptional<VideoCardItem[]> = {
   data: [],
@@ -448,8 +448,6 @@ function renderChannelContent(params: {
         <VideoGridSection
           sectionId="home-channel-content"
           title="个性推荐"
-          description="首页直接展示推荐视频列表，继续向下会自动补更多内容。"
-          actionLabel={`${personalizedItems.length} 条`}
           items={videoItems}
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
@@ -486,8 +484,6 @@ function renderChannelContent(params: {
         <VideoGridSection
           sectionId="home-channel-content"
           title="正在关注"
-          description="首页关注区也统一成点击即播的视频列表。"
-          actionLabel={`${following.data.items.length} 条更新`}
           items={following.data.items.map((item) => createResolvedVideoListItem(
             item.id,
             mapFollowItemToVideoCard(item),
@@ -557,8 +553,6 @@ function renderChannelContent(params: {
         <VideoGridSection
           sectionId="home-channel-content"
           title="订阅剧集"
-          description="首页订阅区也统一为视频列表，点击卡片直接进入播放。"
-          actionLabel={`${subscriptionItems.length} 条`}
           items={subscriptionItems}
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
@@ -611,8 +605,6 @@ function renderChannelContent(params: {
         <VideoGridSection
           sectionId="home-channel-content"
           title="热门视频"
-          description="首页热门频道也改为统一视频列表模板。"
-          actionLabel={`${popular.data.length} 条`}
           items={popular.data.map((item) => createResolvedVideoListItem(
             item.bvid,
             item,
@@ -647,8 +639,6 @@ function renderChannelContent(params: {
         <VideoGridSection
           sectionId="home-channel-content"
           title="排行"
-          description="先接全站排行，后续再分区。"
-          actionLabel={`${ranking.data.length} 条`}
           items={ranking.data.map((item) => createResolvedVideoListItem(
             item.bvid,
             item,
@@ -690,7 +680,7 @@ function renderChannelContent(params: {
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           scroll={CONTENT_FIRST_ROW_SCROLL}
         >
-          <SectionHeader title="直播" description="直播链路会单独做 TV 化，本轮先把首页频道位和焦点流补齐。" />
+          <SectionHeader title="直播" />
           <InlineChannelNotice title="直播频道将在后续阶段接入" description="当前优先把关注、订阅剧集和高画质链路做完整，避免首页入口先有了却没有稳定播放能力。" />
           <div className="page-inline-actions">
             <FocusButton

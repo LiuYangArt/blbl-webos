@@ -77,8 +77,6 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
       >
         <SectionHeader
           title="搜索内容"
-          description="TV 首版把输入做成可聚焦入口，再配合热搜与历史降低输入成本。"
-          actionLabel={defaultWord.showName}
         />
 
         <div className="search-entry">
@@ -124,7 +122,7 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
         leaveFor={{ left: '@side-nav', up: '@search-actions', down: `@${historySectionId}` }}
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
-        <SectionHeader title="热搜" description="点击热词直接进入结果页。" actionLabel={`${hotKeywords.length} 个热词`} />
+        <SectionHeader title="热搜" />
         <div className="chip-grid">
           {hotKeywords.slice(0, 8).map((item, index) => (
             <FocusButton
@@ -151,13 +149,13 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
         leaveFor={{ left: '@side-nav', up: '@search-hot-keywords', down: '@search-preview-grid' }}
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
-        <SectionHeader title="搜索历史" description="搜索历史保存在本地，便于遥控器下快速复用。" actionLabel={`${searchHistory.length} 条`} />
+        <SectionHeader title="搜索历史" />
         {searchHistory.length ? (
           <div className="chip-grid">
             {searchHistory.map((item, index) => (
               <FocusButton
                 key={item}
-                variant="secondary"
+                variant="glass"
                 className="detail-chip"
                 sectionId="search-history"
                 focusId={`search-history-${index}`}
@@ -185,7 +183,7 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
         leaveFor={{ left: '@side-nav', up: searchHistory.length ? '@search-history' : '@search-hot-keywords' }}
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
-        <SectionHeader title="直接开看" description="搜索页底部保留一组推荐内容，减少空场景。" actionLabel="推荐预览" />
+        <SectionHeader title="直接开看" />
         <div className="media-grid">
           {preview.map((item, index) => (
             <MediaCard

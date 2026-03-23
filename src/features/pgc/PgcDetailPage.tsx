@@ -120,11 +120,7 @@ export function PgcDetailPage({ seasonId, fallbackTitle, onPlay }: PgcDetailPage
         leaveFor={{ left: '@side-nav', up: '@pgc-detail-hero-actions' }}
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
-        <SectionHeader
-          title="选集"
-          description="首版先提供 TV 端最核心的剧集播放入口，详情扩展后续再补。"
-          actionLabel={`${playableEpisodes.length} 集可播`}
-        />
+        <SectionHeader title="选集" />
         <div className="chip-grid">
           {playableEpisodes.map((episode, index) => {
             const isContinueEpisode = continueEntry?.id === episode.id;

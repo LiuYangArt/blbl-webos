@@ -42,8 +42,6 @@ export function HotPage({ onOpenPlayer }: HotPageProps) {
       <VideoGridSection
         sectionId="hot-grid"
         title="热门精选"
-        description="热门页也统一复用视频列表模板，点击即播并支持继续向下补出更多内容。"
-        actionLabel={`${items.length} 条内容`}
         items={videoItems}
         onOpenPlayer={onOpenPlayer}
         hasMore={hot.hasMore}

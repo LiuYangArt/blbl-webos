@@ -12,8 +12,6 @@ type LoadMoreTrigger = 'prefetch' | 'manual';
 type VideoGridSectionProps = {
   sectionId: string;
   title: string;
-  description?: string;
-  actionLabel?: string;
   items: UnifiedVideoListItem[];
   onOpenPlayer: (item: PlayerRoutePayload) => void;
   beforeGrid?: ReactNode;
@@ -39,8 +37,6 @@ type VideoGridSectionProps = {
 export function VideoGridSection({
   sectionId,
   title,
-  description,
-  actionLabel,
   items,
   onOpenPlayer,
   beforeGrid,
@@ -117,11 +113,7 @@ export function VideoGridSection({
       leaveFor={leaveFor}
       scroll={CONTENT_FIRST_ROW_SCROLL}
     >
-      <SectionHeader
-        title={title}
-        description={description}
-        actionLabel={actionLabel}
-      />
+      <SectionHeader title={title} />
       {beforeGrid}
       {resolveError ? <p className="page-helper-text">{resolveError}</p> : null}
       {visibleItems.length > 0 ? (

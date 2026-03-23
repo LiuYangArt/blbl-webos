@@ -69,8 +69,6 @@ export function SubscriptionsPage({ onLogin, onOpenPlayer }: SubscriptionsPagePr
       <VideoGridSection
         sectionId="subscriptions-grid"
         title="订阅剧集"
-        description="统一改为订阅卡片点击即播，番剧和影视共用同一套列表模板。"
-        actionLabel={`${items.length} 条`}
         items={items}
         onOpenPlayer={onOpenPlayer}
         hasMore={subscriptions.hasMore}

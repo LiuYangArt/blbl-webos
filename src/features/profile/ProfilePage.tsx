@@ -60,7 +60,7 @@ export function ProfilePage({
         leaveFor={{ left: '@side-nav' }}
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
-        <SectionHeader title="你的内容" description="先保留 TV 端最常用的内容入口，避免把“我的”页做成移动端大杂烩。" />
+        <SectionHeader title="你的内容" />
         <div className="chip-grid">
           <FocusButton
             variant="primary"

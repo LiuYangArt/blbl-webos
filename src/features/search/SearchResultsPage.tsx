@@ -74,11 +74,7 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
         leaveFor={{ left: '@side-nav', down: '@search-results-grid' }}
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
-        <SectionHeader
-          title={`搜索结果：${keyword}`}
-          description="当前首版优先支持视频结果，并保持统一卡片体系。"
-          actionLabel={`${items.length} 条结果`}
-        />
+        <SectionHeader title={`搜索结果：${keyword}`} />
         <div className="search-entry">
           <FocusButton
             variant="primary"
@@ -106,8 +102,6 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
       <VideoGridSection
         sectionId="search-results-grid"
         title="视频结果"
-        description="点击任意结果直接进入全屏播放。"
-        actionLabel="立即播放"
         items={videoItems}
         onOpenPlayer={onOpenPlayer}
         leaveFor={{ left: '@side-nav', up: '@search-results-actions' }}

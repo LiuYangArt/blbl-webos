@@ -67,8 +67,6 @@ export function HistoryPage({ onLogin, onOpenPlayer }: HistoryPageProps) {
       <VideoGridSection
         sectionId="history-list"
         title="观看历史"
-        description="统一为可直接继续播放的视频列表，向下浏览时会继续加载更多历史记录。"
-        actionLabel={`${items.length} 条`}
         items={videoItems}
         onOpenPlayer={onOpenPlayer}
         hasMore={history.hasMore}

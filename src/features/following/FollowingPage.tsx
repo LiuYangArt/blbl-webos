@@ -119,8 +119,6 @@ export function FollowingPage({ onLogin, onOpenPlayer }: FollowingPageProps) {
       <VideoGridSection
         sectionId="following-grid"
         title="正在关注"
-        description="统一改为点击卡片直接播放，保留关注账号摘要但不再绕去详情页。"
-        actionLabel={`${items.length} 条`}
         items={items}
         onOpenPlayer={onOpenPlayer}
         hasMore={followingItems.hasMore}

@@ -102,8 +102,6 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
         <VideoGridSection
           sectionId="later-list"
           title="稍后再看"
-          description="统一收敛为和首页一致的视频列表，点击卡片直接播放。"
-          actionLabel={`${items.length} 条`}
           items={items}
           onOpenPlayer={onOpenPlayer}
           hasMore={later.hasMore}
@@ -171,8 +169,6 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
       <VideoGridSection
         sectionId="favorites-list"
         title="收藏"
-        description="默认直接展示收藏视频，顶部只保留轻量切换，不再把选收藏夹作为主流程。"
-        actionLabel={activeFolder ? `${activeFolder.title} · ${items.length} 条` : `${items.length} 条`}
         items={items}
         onOpenPlayer={onOpenPlayer}
         resetKey={String(activeFolderId ?? 'favorites')}

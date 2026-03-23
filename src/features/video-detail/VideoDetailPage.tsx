@@ -113,11 +113,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: V
         leaveFor={{ left: '@side-nav', up: '@detail-hero-actions', down: '@detail-related-grid' }}
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
-        <SectionHeader
-          title="分 P / 选集"
-          description="首版详情页先支持基础分 P 切换，后续再扩展番剧和更多面板。"
-          actionLabel={`${video.parts.length || 1} 个片段`}
-        />
+        <SectionHeader title="分 P / 选集" />
         <div className="chip-grid">
           {parts.map((part, index) => (
             <FocusButton
@@ -144,11 +140,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: V
         leaveFor={{ left: '@side-nav', up: '@detail-episodes' }}
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
-        <SectionHeader
-          title="相关推荐"
-          description="点击相关推荐后直接切到新的全屏播放。"
-          actionLabel="直接播放"
-        />
+        <SectionHeader title="相关推荐" />
         <div className="media-grid">
           {related.slice(0, 6).map((item, index) => (
             <MediaCard
