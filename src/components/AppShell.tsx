@@ -9,7 +9,7 @@ type AppShellProps = {
   activeNav: RootNavKey | null;
   profileName?: string;
   isLoggedIn: boolean;
-  onNavigate: (route: AppRoute) => void;
+  onNavigate: (route: AppRoute, navFocusId: string) => void;
   immersive?: boolean;
 };
 

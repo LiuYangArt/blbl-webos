@@ -1253,6 +1253,21 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                 leadingLabel={progressLeadingLabel}
                 trailingLabel={progressTrailingLabel}
                 valuePercent={progressPercent}
+                onSeekPercent={(value) => {
+                  const nextTime = seekVideoToPercent(videoRef.current, value);
+                  if (nextTime === null) {
+                    return;
+                  }
+
+                  const normalizedTime = Math.floor(nextTime);
+                  resumeProgressRef.current = normalizedTime;
+                  savedProgressRef.current = normalizedTime;
+                  setProgressView((previous) => ({
+                    current: normalizedTime,
+                    duration: previous.duration || Math.floor(videoRef.current?.duration ?? 0),
+                  }));
+                  setChromeActivityTick((previous) => previous + 1);
+                }}
               />
 
               <PlayerControlBar
@@ -1554,6 +1569,17 @@ function seekVideo(video: HTMLVideoElement | null, seconds: number): void {
   }
   const nextTime = Math.min(video.duration, Math.max(0, video.currentTime + seconds));
   video.currentTime = nextTime;
+}
+
+function seekVideoToPercent(video: HTMLVideoElement | null, valuePercent: number): number | null {
+  if (!video || !video.duration) {
+    return null;
+  }
+
+  const normalizedPercent = Math.max(0, Math.min(100, valuePercent));
+  const nextTime = (video.duration * normalizedPercent) / 100;
+  video.currentTime = nextTime;
+  return nextTime;
 }
 
 function formatSeconds(totalSeconds: number): string {

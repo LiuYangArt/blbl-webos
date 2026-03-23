@@ -21,7 +21,7 @@ import { SearchPage } from './features/search/SearchPage';
 import { SearchResultsPage } from './features/search/SearchResultsPage';
 import { SubscriptionsPage } from './features/subscriptions/SubscriptionsPage';
 import { VideoDetailPage } from './features/video-detail/VideoDetailPage';
-import { focusFirst, focusSection, isFocusableElement, readFocusGroup } from './platform/focus';
+import { focusById, focusFirst, focusSection, isFocusableElement, readFocusGroup } from './platform/focus';
 import { attachRemoteControl } from './platform/remote';
 import { appendRuntimeDiagnostic } from './services/debug/runtimeDiagnostics';
 import { platformBack } from './platform/webos';
@@ -46,6 +46,7 @@ function AppContent() {
   const backHandlerRef = useRef<(() => boolean) | null>(null);
   const lastRouteKeyRef = useRef<string>('');
   const nextRouteKeepsNavFocusRef = useRef(false);
+  const nextNavFocusIdRef = useRef<string | null>(null);
 
   const focusKey = useMemo(() => {
     switch (currentPage.name) {
@@ -79,8 +80,10 @@ function AppContent() {
   useEffect(() => {
     if (nextRouteKeepsNavFocusRef.current) {
       nextRouteKeepsNavFocusRef.current = false;
+      const nextNavFocusId = nextNavFocusIdRef.current;
+      nextNavFocusIdRef.current = null;
 
-      if (focusSection('side-nav')) {
+      if ((nextNavFocusId && focusById(nextNavFocusId)) || focusSection('side-nav')) {
         return undefined;
       }
     }
@@ -183,11 +186,9 @@ function AppContent() {
         profileName={auth.profile?.name}
         isLoggedIn={auth.status === 'authenticated'}
         immersive={isImmersiveRoute}
-        onNavigate={(route) => {
-          const active = document.activeElement;
-          nextRouteKeepsNavFocusRef.current = active instanceof HTMLElement
-            && isFocusableElement(active)
-            && readFocusGroup(active) === 'nav';
+        onNavigate={(route, navFocusId) => {
+          nextRouteKeepsNavFocusRef.current = true;
+          nextNavFocusIdRef.current = navFocusId;
           replace(route);
         }}
       >

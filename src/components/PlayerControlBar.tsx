@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { TV_ICONS } from '../app/iconRegistry';
 import { FocusSection } from '../platform/focus';
 import { TvIconButton } from './TvIconButton';
@@ -35,6 +36,7 @@ export function PlayerControlBar({
   onOpenSettings,
   onOpenRecommendations,
 }: PlayerControlBarProps) {
+  const [focusedActionId, setFocusedActionId] = useState<string | null>(null);
   const secondaryActions: Array<{
     focusId: string;
     symbol: (typeof TV_ICONS)[keyof typeof TV_ICONS];
@@ -59,6 +61,42 @@ export function PlayerControlBar({
     { focusId: 'player-open-recommendations', symbol: TV_ICONS.playerRecommendations, label: '推荐视频', onClick: onOpenRecommendations },
   ];
 
+  const renderAction = (
+    action: {
+      focusId: string;
+      symbol: (typeof TV_ICONS)[keyof typeof TV_ICONS];
+      label: string;
+      onClick: () => void;
+      className?: string;
+      defaultFocus?: boolean;
+    },
+  ) => {
+    const isExpanded = focusedActionId === action.focusId;
+
+    return (
+      <TvIconButton
+        key={action.focusId}
+        sectionId={sectionId}
+        focusId={action.focusId}
+        symbol={action.symbol}
+        label={action.label}
+        iconSize="xl"
+        variant="glass"
+        size="md"
+        defaultFocus={action.defaultFocus}
+        className={[
+          'player-control-bar__action',
+          isExpanded ? 'player-control-bar__action--expanded' : '',
+          action.className,
+        ].filter(Boolean).join(' ')}
+        labelClassName={isExpanded ? undefined : 'player-control-bar__label--hidden'}
+        onFocus={() => setFocusedActionId(action.focusId)}
+        onBlur={() => setFocusedActionId((current) => (current === action.focusId ? null : current))}
+        onClick={action.onClick}
+      />
+    );
+  };
+
   return (
     <div className="player-control-bar">
       <FocusSection
@@ -69,46 +107,15 @@ export function PlayerControlBar({
         disabled={disabled}
         className="player-control-bar__row"
       >
-        {secondaryActions.slice(0, 2).map((action) => (
-          <TvIconButton
-            key={action.focusId}
-            sectionId={sectionId}
-            focusId={action.focusId}
-            symbol={action.symbol}
-            label={action.label}
-            iconSize="md"
-            variant="glass"
-            size="md"
-            className={['player-control-bar__action', action.className].filter(Boolean).join(' ')}
-            onClick={action.onClick}
-          />
-        ))}
-        <TvIconButton
-          sectionId={sectionId}
-          focusId="player-toggle-play"
-          symbol={isPlaying ? TV_ICONS.playerPause : TV_ICONS.playerPlay}
-          label={isPlaying ? '暂停' : '播放'}
-          iconSize="lg"
-          variant="primary"
-          size="md"
-          className="player-control-bar__action player-control-bar__action--primary"
-          defaultFocus
-          onClick={onTogglePlay}
-        />
-        {secondaryActions.slice(2).map((action) => (
-          <TvIconButton
-            key={action.focusId}
-            sectionId={sectionId}
-            focusId={action.focusId}
-            symbol={action.symbol}
-            label={action.label}
-            iconSize="md"
-            variant="glass"
-            size="md"
-            className="player-control-bar__action"
-            onClick={action.onClick}
-          />
-        ))}
+        {secondaryActions.slice(0, 2).map(renderAction)}
+        {renderAction({
+          focusId: 'player-toggle-play',
+          symbol: isPlaying ? TV_ICONS.playerPause : TV_ICONS.playerPlay,
+          label: isPlaying ? '暂停' : '播放',
+          onClick: onTogglePlay,
+          defaultFocus: true,
+        })}
+        {secondaryActions.slice(2).map(renderAction)}
       </FocusSection>
     </div>
   );

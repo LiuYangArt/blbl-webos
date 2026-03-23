@@ -8,7 +8,7 @@ import { TvIconButton } from './TvIconButton';
 type SideNavRailProps = {
   activeNav: RootNavKey | null;
   isLoggedIn: boolean;
-  onNavigate: (route: AppRoute) => void;
+  onNavigate: (route: AppRoute, navFocusId: string) => void;
 };
 
 export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailProps) {
@@ -56,11 +56,12 @@ export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailPr
       >
         {items.map((item, index) => {
           const isActive = item.key === activeNav;
+          const navFocusId = `side-nav-${item.key}`;
           return (
             <TvIconButton
               key={item.key}
               sectionId="side-nav"
-              focusId={`side-nav-${item.key}`}
+              focusId={navFocusId}
               focusGroup="nav"
               symbol={item.icon}
               label={item.label}
@@ -69,7 +70,10 @@ export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailPr
               size="md"
               defaultFocus={index === 0}
               className={['side-nav-item', isActive ? 'side-nav-item--active' : ''].filter(Boolean).join(' ')}
-              onClick={() => onNavigate(item.route)}
+              onClick={(event) => {
+                event.currentTarget.focus({ preventScroll: true });
+                onNavigate(item.route, navFocusId);
+              }}
               aria-current={isActive ? 'page' : undefined}
               title={item.label}
             />

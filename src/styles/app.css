@@ -1201,13 +1201,19 @@ button {
   left: 52px;
   display: flex;
   flex-direction: column;
-  gap: 26px;
+}
+
+.player-hero__bottom > * + * {
+  margin-top: 24px;
 }
 
 .player-progress {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+}
+
+.player-progress > * + * {
+  margin-top: 10px;
 }
 
 .player-progress__meta {
@@ -1228,6 +1234,10 @@ button {
   background: rgba(53, 52, 54, 0.92);
 }
 
+.player-progress__track--interactive {
+  cursor: pointer;
+}
+
 .player-progress__value {
   position: absolute;
   top: 0;
@@ -1241,43 +1251,60 @@ button {
 .player-control-bar {
   display: flex;
   align-items: center;
-  gap: 18px;
 }
 
 .player-control-bar__row {
   display: flex;
   align-items: center;
-  gap: 16px;
   flex-wrap: nowrap;
   width: 100%;
   overflow: hidden;
 }
 
+.player-control-bar__row > * + * {
+  margin-left: 12px;
+}
+
 .player-control-bar__action {
-  justify-content: flex-start;
-  padding-inline: 22px;
+  justify-content: center;
+  min-width: 86px;
+  min-height: 86px;
+  padding-inline: 24px;
+  border-radius: 26px;
   flex: 0 0 auto;
+  overflow: hidden;
 }
 
 .player-control-bar__action .tv-icon-button__content {
-  gap: 10px;
+  width: 100%;
+  justify-content: center;
+  gap: 0;
+}
+
+.player-control-bar__action .tv-icon-button__icon {
+  min-width: 32px;
+}
+
+.player-control-bar__label--hidden {
+  display: none;
+}
+
+.player-control-bar__action--expanded {
+  justify-content: flex-start;
+  min-width: 148px;
+}
+
+.player-control-bar__action--expanded .tv-icon-button__content {
+  justify-content: flex-start;
+}
+
+.player-control-bar__action--expanded .tv-icon-button__label {
+  margin-left: 10px;
 }
 
 .player-control-bar__action--inactive .tv-icon-button__icon,
 .player-control-bar__action--inactive .tv-icon-button__label {
   opacity: 0.68;
-}
-
-.player-control-bar__action--primary {
-  min-width: 142px;
-  min-height: 92px;
-  padding-inline: 28px;
-  border-radius: 28px;
-  font-size: 24px;
-}
-
-.player-control-bar__action--primary .tv-icon-button__content {
-  gap: 12px;
 }
 
 .player-strip {
