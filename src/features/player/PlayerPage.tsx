@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type MutableRefObject, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../app/AppStore';
 import { usePageBackHandler } from '../../app/PageBackHandler';
 import { useAsyncData } from '../../app/useAsyncData';
@@ -8,14 +8,16 @@ import { PlayerControlBar } from '../../components/PlayerControlBar';
 import { FocusSection, captureFocus, focusById, focusSection, releaseFocus } from '../../platform/focus';
 import { REMOTE_INTENT_EVENT, type RemoteIntentDetail } from '../../platform/remote';
 import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
-import { fetchPlaySource, fetchRelatedVideos, fetchVideoDetail } from '../../services/api/bilibili';
+import { fetchPlayInfo, fetchPlaySource, fetchRelatedVideos, fetchVideoDetail } from '../../services/api/bilibili';
 import type {
   PlayAudioStream,
   PlaySource,
+  PlaySubtitleTrack,
   VideoCodecPreference,
   VideoPart,
 } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
+import { PlayerSubtitlePanel } from './PlayerSubtitlePanel';
 import {
   buildPlaybackAttempts,
   buildPlayerCodecCapability,
@@ -36,7 +38,20 @@ import {
   readPlayerSettings,
   writePlayerCodecPreference,
   writePlayerQualityPreference,
+  writePlayerSubtitleEnabled,
+  writePlayerSubtitleStyle,
 } from './playerSettings';
+import type {
+  PlayerSubtitleBackgroundOpacity,
+  PlayerSubtitleBottomOffset,
+  PlayerSubtitleFontSize,
+  PlayerSubtitleStyleSettings,
+} from './playerSettings';
+import {
+  convertSubtitleBodyToVtt,
+  extractSubtitleBody,
+  pickDefaultSubtitleTrack,
+} from './playerSubtitle';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
 
 type PlayerNavigationTarget = {
@@ -46,8 +61,9 @@ type PlayerNavigationTarget = {
   part?: string;
 };
 
-type PlayerOverlayMode = 'none' | 'settings' | 'recommendations' | 'episodes';
-type PlayerStripMode = Exclude<PlayerOverlayMode, 'none' | 'settings'>;
+type SubtitleTrackLoadState = 'idle' | 'loading' | 'ready' | 'error';
+type PlayerOverlayMode = 'none' | 'settings' | 'subtitles' | 'recommendations' | 'episodes';
+type PlayerStripMode = Exclude<PlayerOverlayMode, 'none' | 'settings' | 'subtitles'>;
 
 type PendingStripFocus = {
   sectionId: string;
@@ -78,12 +94,17 @@ const PLAYER_LOAD_TIMEOUT_MS = 4500;
 const STRIP_PAGE_SIZE = 6;
 const PLAYER_CONTROL_SECTION_ID = 'player-controls';
 const PLAYER_SETTINGS_SECTION_ID = 'player-settings-drawer';
+const PLAYER_SUBTITLE_SECTION_ID = 'player-subtitle-drawer';
 const PLAYER_RECOMMENDATIONS_SECTION_ID = 'player-recommendations-strip';
 const PLAYER_EPISODES_SECTION_ID = 'player-episodes-strip';
 const OVERLAY_CAPTURE_CONFIG: Record<Exclude<PlayerOverlayMode, 'none'>, OverlayCaptureConfig> = {
   settings: {
     sectionId: PLAYER_SETTINGS_SECTION_ID,
     restoreTarget: 'player-open-settings',
+  },
+  subtitles: {
+    sectionId: PLAYER_SUBTITLE_SECTION_ID,
+    restoreTarget: 'player-open-subtitles',
   },
   recommendations: {
     sectionId: PLAYER_RECOMMENDATIONS_SECTION_ID,
@@ -107,6 +128,9 @@ const STRIP_OVERLAY_CONFIG: Record<PlayerStripMode, StripOverlayConfig> = {
 
 export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: PlayerPageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const subtitleTrackUrlRef = useRef<string | null>(null);
+  const subtitleTrackElementRef = useRef<HTMLTrackElement | null>(null);
+  const subtitleCacheRef = useRef<Map<number, string>>(new Map());
   const lastPersistedProgressRef = useRef(-1);
   const resumeProgressRef = useRef(0);
   const savedProgressRef = useRef(0);
@@ -115,6 +139,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const chromeFocusTimeoutRef = useRef<number | null>(null);
   const [codecPreference, setCodecPreference] = useState<VideoCodecPreference>(() => readPlayerSettings().codecPreference);
   const [qualityPreference, setQualityPreference] = useState<number>(() => readPlayerSettings().qualityPreference);
+  const [subtitleEnabled, setSubtitleEnabled] = useState<boolean>(() => readPlayerSettings().subtitleEnabled);
+  const [subtitleStyle, setSubtitleStyle] = useState<PlayerSubtitleStyleSettings>(() => readPlayerSettings().subtitleStyle);
   const [overlayMode, setOverlayMode] = useState<PlayerOverlayMode>('none');
   const [isChromeVisible, setIsChromeVisible] = useState(false);
   const [chromeActivityTick, setChromeActivityTick] = useState(0);
@@ -128,17 +154,28 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const [recommendationPage, setRecommendationPage] = useState(0);
   const [episodePage, setEpisodePage] = useState(0);
   const [pendingStripFocus, setPendingStripFocus] = useState<PendingStripFocus | null>(null);
+  const [activeSubtitleTrackId, setActiveSubtitleTrackId] = useState<number | null>(null);
+  const [subtitleLoadState, setSubtitleLoadState] = useState<SubtitleTrackLoadState>('idle');
+  const [subtitleStatusText, setSubtitleStatusText] = useState<string | null>(null);
   const { setWatchProgress, watchProgress } = useAppStore();
 
   const playerData = useAsyncData(async () => {
-    const [play, related, detail, deviceInfo] = await Promise.all([
+    const [play, playInfoResult, related, detail, deviceInfo] = await Promise.all([
       fetchPlaySource(bvid, cid, qualityPreference),
+      fetchPlayInfo(bvid, cid)
+        .then((value) => ({ value, error: null as string | null }))
+        .catch((error) => ({
+          value: { subtitles: [] },
+          error: error instanceof Error ? error.message : '字幕信息请求失败',
+        })),
       fetchRelatedVideos(bvid),
       fetchVideoDetail(bvid),
       readDeviceInfo(),
     ]);
     return {
       play,
+      playInfo: playInfoResult.value,
+      playInfoError: playInfoResult.error,
       related,
       detail,
       deviceInfo,
@@ -150,10 +187,14 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const savedProgress = watchProgress[progressKey];
   const playerDataValue = playerData.status === 'success' ? playerData.data : null;
   const play = playerDataValue?.play ?? null;
+  const playInfo = playerDataValue?.playInfo ?? null;
+  const playInfoError = playerDataValue?.playInfoError ?? null;
   const related = playerDataValue?.related ?? [];
   const detail = playerDataValue?.detail ?? null;
   const deviceInfo = playerDataValue?.deviceInfo ?? null;
   const capability = playerDataValue?.capability ?? null;
+  const subtitleTracks = useMemo(() => playInfo?.subtitles ?? [], [playInfo]);
+  const hasSubtitleTracks = subtitleTracks.length > 0;
   const codecMemory = useMemo(() => (
     capability ? readPlayerCodecMemory(capability.deviceKey) : createDefaultPlayerCodecMemory()
   ), [capability]);
@@ -227,12 +268,20 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const shouldShowPlayerChrome = overlayMode === 'none' && isChromeVisible;
 
   const isSettingsOpen = overlayMode === 'settings';
+  const isSubtitlesOpen = overlayMode === 'subtitles';
   const isRecommendationsOpen = overlayMode === 'recommendations';
   const isEpisodesOpen = overlayMode === 'episodes';
   const overlayCaptureConfig = getOverlayCaptureConfig(overlayMode);
   const requestedQualityOption = play?.qualities.find((item) => item.qn === play.requestedQuality) ?? null;
   const currentQualityOption = play?.qualities.find((item) => item.qn === play.currentQuality) ?? null;
   const qualityAvailabilityNotice = play ? describeQualityAvailability(play) : null;
+  const selectedSubtitleTrack = subtitleTracks.find((track) => track.id === activeSubtitleTrackId) ?? null;
+  const subtitleTrackSummary = getSubtitleTrackSummary(selectedSubtitleTrack, subtitleEnabled, hasSubtitleTracks);
+  const subtitleStyleVars = useMemo<CSSProperties>(() => ({
+    '--player-subtitle-font-size': getSubtitleFontSizeValue(subtitleStyle.fontSize),
+    '--player-subtitle-bottom-offset': getSubtitleBottomOffsetValue(subtitleStyle.bottomOffset),
+    '--player-subtitle-background-opacity': getSubtitleBackgroundOpacityValue(subtitleStyle.backgroundOpacity),
+  } as CSSProperties), [subtitleStyle]);
 
   useEffect(() => {
     setActiveAttemptIndex(0);
@@ -265,6 +314,17 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
   function openSettingsOverlay(): void {
     setOverlayMode('settings');
+    setIsChromeVisible(false);
+  }
+
+  function openSubtitleOverlay(): void {
+    if (!hasSubtitleTracks) {
+      setPlaybackNotice('当前视频暂无可用 CC 字幕');
+      setChromeActivityTick((previous) => previous + 1);
+      return;
+    }
+
+    setOverlayMode('subtitles');
     setIsChromeVisible(false);
   }
 
@@ -331,13 +391,23 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   }, [qualityPreference]);
 
   useEffect(() => {
+    writePlayerSubtitleEnabled(subtitleEnabled);
+  }, [subtitleEnabled]);
+
+  useEffect(() => {
+    writePlayerSubtitleStyle(subtitleStyle);
+  }, [subtitleStyle]);
+
+  useEffect(() => {
     const initialProgress = savedProgressRef.current;
     resumeProgressRef.current = initialProgress;
     lastPersistedProgressRef.current = initialProgress > 0 ? initialProgress : -1;
     recordedAttemptIdRef.current = '';
     setActiveCandidateIndex(0);
     setPlaybackError(null);
-    setPlaybackNotice(playbackPlan.warning);
+    setPlaybackNotice(playInfoError
+      ? combinePlayerNotices(playbackPlan.warning, 'CC 字幕信息获取失败，本次按无字幕处理')
+      : playbackPlan.warning);
     setProgressView({ current: 0, duration: 0 });
     setReloadNonce(0);
     setOverlayMode('none');
@@ -346,7 +416,39 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     setRecommendationPage(0);
     setEpisodePage(0);
     setPendingStripFocus(null);
-  }, [bvid, cid, playbackPlan.warning, currentAttempt?.id]);
+    setSubtitleLoadState('idle');
+    setSubtitleStatusText(null);
+    setActiveSubtitleTrackId(null);
+    subtitleCacheRef.current.clear();
+  }, [bvid, cid, playbackPlan.warning, currentAttempt?.id, playInfoError]);
+
+  useEffect(() => {
+    cleanupManagedSubtitleTrack(videoRef.current, subtitleTrackElementRef, subtitleTrackUrlRef);
+  }, [currentSourceUrl, reloadNonce]);
+
+  useEffect(() => {
+    if (!hasSubtitleTracks) {
+      setActiveSubtitleTrackId(null);
+      setSubtitleLoadState('idle');
+      setSubtitleStatusText(null);
+      return;
+    }
+
+    if (!subtitleEnabled) {
+      setActiveSubtitleTrackId(null);
+      setSubtitleLoadState('idle');
+      setSubtitleStatusText('字幕已关闭。重新开启后会优先选择当前视频里最合适的一条。');
+      return;
+    }
+
+    if (activeSubtitleTrackId && subtitleTracks.some((track) => track.id === activeSubtitleTrackId)) {
+      return;
+    }
+
+    const preferredTrack = pickDefaultSubtitleTrack(subtitleTracks);
+    setActiveSubtitleTrackId(preferredTrack?.id ?? null);
+    setSubtitleStatusText(preferredTrack ? `当前默认使用 ${preferredTrack.langDoc || preferredTrack.lang}` : null);
+  }, [activeSubtitleTrackId, hasSubtitleTracks, subtitleEnabled, subtitleTracks]);
 
   useEffect(() => {
     if (!overlayCaptureConfig) {
@@ -809,6 +911,145 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     title,
   ]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !hasSubtitleTracks || !subtitleEnabled || !selectedSubtitleTrack) {
+      cleanupManagedSubtitleTrack(video, subtitleTrackElementRef, subtitleTrackUrlRef);
+      if (!hasSubtitleTracks) {
+        setSubtitleLoadState('idle');
+      }
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const applyTrack = async () => {
+      setSubtitleLoadState('loading');
+      setSubtitleStatusText(`正在加载 ${selectedSubtitleTrack.langDoc || selectedSubtitleTrack.lang} 字幕`);
+
+      try {
+        let subtitleText = subtitleCacheRef.current.get(selectedSubtitleTrack.id) ?? null;
+        if (!subtitleText) {
+          const response = await fetch(getAbsoluteSubtitleUrl(selectedSubtitleTrack.subtitleUrl), {
+            credentials: 'include',
+            headers: {
+              accept: 'application/json, text/plain, */*',
+            },
+          });
+          if (!response.ok) {
+            throw new Error(`字幕请求失败（${response.status}）`);
+          }
+          const payload = await response.json() as unknown;
+          subtitleText = convertSubtitleBodyToVtt(extractSubtitleBody(payload));
+          subtitleCacheRef.current.set(selectedSubtitleTrack.id, subtitleText);
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        cleanupManagedSubtitleTrack(video, subtitleTrackElementRef, subtitleTrackUrlRef);
+        const trackElement = document.createElement('track');
+        const trackBlobUrl = URL.createObjectURL(new Blob([subtitleText], { type: 'text/vtt' }));
+        subtitleTrackUrlRef.current = trackBlobUrl;
+        subtitleTrackElementRef.current = trackElement;
+        trackElement.kind = 'subtitles';
+        trackElement.label = selectedSubtitleTrack.langDoc || selectedSubtitleTrack.lang;
+        trackElement.srclang = normalizeSubtitleLang(selectedSubtitleTrack.lang);
+        trackElement.src = trackBlobUrl;
+        trackElement.default = true;
+
+        const handleTrackLoad = () => {
+          if (cancelled) {
+            return;
+          }
+
+          setActiveTextTrack(video, trackElement);
+          setSubtitleLoadState('ready');
+          setSubtitleStatusText(`当前字幕：${selectedSubtitleTrack.langDoc || selectedSubtitleTrack.lang}`);
+        };
+
+        const handleTrackError = () => {
+          if (cancelled) {
+            return;
+          }
+
+          setSubtitleLoadState('error');
+          setSubtitleStatusText('字幕加载失败，请尝试切换其他轨道');
+        };
+
+        trackElement.addEventListener('load', handleTrackLoad, { once: true });
+        trackElement.addEventListener('error', handleTrackError, { once: true });
+        video.appendChild(trackElement);
+
+        // 某些环境下 track 元素已经就绪，但没有触发 load 事件，补一次主动激活。
+        window.setTimeout(() => {
+          if (!cancelled) {
+            setActiveTextTrack(video, trackElement);
+          }
+        }, 0);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        cleanupManagedSubtitleTrack(video, subtitleTrackElementRef, subtitleTrackUrlRef);
+        const message = error instanceof Error ? error.message : '字幕加载失败';
+        setSubtitleLoadState('error');
+        setSubtitleStatusText(message);
+      }
+    };
+
+    void applyTrack();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasSubtitleTracks, currentSourceUrl, reloadNonce, selectedSubtitleTrack, subtitleEnabled]);
+
+  function handleSubtitleEnabledChange(enabled: boolean): void {
+    if (!hasSubtitleTracks) {
+      setPlaybackNotice('当前视频暂无可用 CC 字幕');
+      return;
+    }
+
+    setSubtitleEnabled(enabled);
+    if (!enabled) {
+      setActiveSubtitleTrackId(null);
+      setSubtitleLoadState('idle');
+      setSubtitleStatusText('字幕已关闭。下次进入播放器时会保持关闭状态。');
+      cleanupManagedSubtitleTrack(videoRef.current, subtitleTrackElementRef, subtitleTrackUrlRef);
+      return;
+    }
+
+    const nextTrack = selectedSubtitleTrack ?? pickDefaultSubtitleTrack(subtitleTracks);
+    setActiveSubtitleTrackId(nextTrack?.id ?? null);
+    setSubtitleStatusText(nextTrack ? `正在启用 ${nextTrack.langDoc || nextTrack.lang}` : '当前视频暂无可用字幕轨');
+  }
+
+  function handleSubtitleTrackSelect(trackId: number): void {
+    const track = subtitleTracks.find((item) => item.id === trackId);
+    if (!track) {
+      return;
+    }
+
+    setSubtitleEnabled(true);
+    setActiveSubtitleTrackId(trackId);
+    setSubtitleStatusText(`正在切换到 ${track.langDoc || track.lang}`);
+  }
+
+  function handleSubtitleFontSizeChange(value: PlayerSubtitleFontSize): void {
+    setSubtitleStyle((previous) => ({ ...previous, fontSize: value }));
+  }
+
+  function handleSubtitleBottomOffsetChange(value: PlayerSubtitleBottomOffset): void {
+    setSubtitleStyle((previous) => ({ ...previous, bottomOffset: value }));
+  }
+
+  function handleSubtitleBackgroundOpacityChange(value: PlayerSubtitleBackgroundOpacity): void {
+    setSubtitleStyle((previous) => ({ ...previous, backgroundOpacity: value }));
+  }
+
   if (playerData.status !== 'success') {
     if (playerData.status === 'error') {
       return (
@@ -864,6 +1105,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
           <video
             ref={videoRef}
             className="player-video"
+            style={subtitleStyleVars}
             controls={false}
             playsInline
             preload="auto"
@@ -885,6 +1127,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                   {' · '}
                   {currentAttempt.mode === 'dash' ? 'DASH' : '兼容流'}
                 </p>
+                <small className="player-hero__notice">{subtitleTrackSummary}</small>
                 {playbackNotice ? <small className="player-hero__notice">{playbackNotice}</small> : null}
                 {playbackError ? <small className="player-hero__error">{playbackError}</small> : null}
               </div>
@@ -905,6 +1148,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                 sectionId={PLAYER_CONTROL_SECTION_ID}
                 disabled={!shouldShowPlayerChrome}
                 isPlaying={isPlaying}
+                subtitleAvailable={hasSubtitleTracks}
                 onBack={onBack}
                 onReplay={() => seekVideo(videoRef.current, -10)}
                 onTogglePlay={() => {
@@ -925,6 +1169,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                   revealPlayerChrome(false);
                 }}
                 onOpenEpisodes={openEpisodesOverlay}
+                onOpenSubtitles={openSubtitleOverlay}
                 onOpenSettings={openSettingsOverlay}
                 onOpenRecommendations={openRecommendationsOverlay}
               />
@@ -1152,6 +1397,31 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                 {playbackPlan.attempts.map((attempt) => `${attempt.qualityLabel} ${attempt.codecLabel}`).join(' -> ')}
               </p>
             </div>
+          </FocusSection>
+        ) : null}
+
+        {isSubtitlesOpen ? (
+          <FocusSection
+            as="aside"
+            id={PLAYER_SUBTITLE_SECTION_ID}
+            group="overlay"
+            enterTo="default-element"
+            className="player-settings-drawer player-subtitle-drawer"
+          >
+            <PlayerSubtitlePanel
+              sectionId={PLAYER_SUBTITLE_SECTION_ID}
+              subtitleEnabled={subtitleEnabled}
+              activeTrackId={activeSubtitleTrackId}
+              tracks={subtitleTracks}
+              styleSettings={subtitleStyle}
+              loadingState={subtitleLoadState}
+              statusText={subtitleStatusText}
+              onToggleEnabled={handleSubtitleEnabledChange}
+              onSelectTrack={handleSubtitleTrackSelect}
+              onFontSizeChange={handleSubtitleFontSizeChange}
+              onBottomOffsetChange={handleSubtitleBottomOffsetChange}
+              onBackgroundOpacityChange={handleSubtitleBackgroundOpacityChange}
+            />
           </FocusSection>
         ) : null}
 
@@ -1402,6 +1672,80 @@ function formatPageMeta(page: number, pageCount: number, total: number): string 
   return `第 ${page + 1} / ${pageCount} 屏 · 共 ${total} 项`;
 }
 
+function getSubtitleTrackSummary(
+  track: PlaySubtitleTrack | null,
+  subtitleEnabled: boolean,
+  hasSubtitleTracks: boolean,
+): string {
+  if (!hasSubtitleTracks) {
+    return '当前视频暂无 CC 字幕';
+  }
+  if (!subtitleEnabled) {
+    return 'CC 字幕已关闭';
+  }
+  if (!track) {
+    return '正在选择默认字幕轨';
+  }
+  return `CC：${track.langDoc || track.lang}`;
+}
+
+function combinePlayerNotices(primary: string | null, secondary: string | null): string | null {
+  if (primary && secondary) {
+    return `${primary} ${secondary}`;
+  }
+  return primary ?? secondary;
+}
+
+function getSubtitleFontSizeValue(value: PlayerSubtitleFontSize): string {
+  switch (value) {
+    case 'large':
+      return '34px';
+    case 'extra-large':
+      return '40px';
+    case 'standard':
+    default:
+      return '28px';
+  }
+}
+
+function getSubtitleBottomOffsetValue(value: PlayerSubtitleBottomOffset): string {
+  switch (value) {
+    case 'low':
+      return '2%';
+    case 'high':
+      return '10%';
+    case 'medium':
+    default:
+      return '6%';
+  }
+}
+
+function getSubtitleBackgroundOpacityValue(value: PlayerSubtitleBackgroundOpacity): string {
+  switch (value) {
+    case 'light':
+      return '0.28';
+    case 'strong':
+      return '0.72';
+    case 'medium':
+    default:
+      return '0.5';
+  }
+}
+
+function getAbsoluteSubtitleUrl(url: string): string {
+  if (url.startsWith('http://')) {
+    return `https://${url.slice('http://'.length)}`;
+  }
+  if (url.startsWith('//')) {
+    return `https:${url}`;
+  }
+  return url;
+}
+
+function normalizeSubtitleLang(lang: string): string {
+  return lang.replace(/_/g, '-').replace(/[^a-zA-Z-]/g, '').toLowerCase() || 'zh';
+}
+
 function loadDirectVideoSource(video: HTMLVideoElement, sourceUrl: string): void {
   resetVideoElement(video);
   const sourceNode = document.createElement('source');
@@ -1418,6 +1762,35 @@ function resetVideoElement(video: HTMLVideoElement): void {
     video.removeChild(video.firstChild);
   }
   video.load();
+}
+
+function cleanupManagedSubtitleTrack(
+  video: HTMLVideoElement | null,
+  trackElementRef: MutableRefObject<HTMLTrackElement | null>,
+  trackUrlRef: MutableRefObject<string | null>,
+): void {
+  if (video) {
+    Array.from(video.textTracks).forEach((track) => {
+      track.mode = 'disabled';
+    });
+  }
+
+  if (trackElementRef.current?.parentNode) {
+    trackElementRef.current.parentNode.removeChild(trackElementRef.current);
+  }
+  trackElementRef.current = null;
+
+  if (trackUrlRef.current) {
+    URL.revokeObjectURL(trackUrlRef.current);
+    trackUrlRef.current = null;
+  }
+}
+
+function setActiveTextTrack(video: HTMLVideoElement, trackElement: HTMLTrackElement): void {
+  const targetTrack = trackElement.track;
+  Array.from(video.textTracks).forEach((track) => {
+    track.mode = track === targetTrack ? 'showing' : 'disabled';
+  });
 }
 
 function readDecodedVideoFrames(video: HTMLVideoElement): number | null {

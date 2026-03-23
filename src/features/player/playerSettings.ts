@@ -2,10 +2,21 @@ import type { ParsedVideoCodec, VideoCodecPreference } from '../../services/api/
 import { readJsonStorage, writeJsonStorage } from '../../services/storage/local';
 
 type PlayerPlaybackMode = 'dash' | 'compatible';
+export type PlayerSubtitleFontSize = 'standard' | 'large' | 'extra-large';
+export type PlayerSubtitleBottomOffset = 'low' | 'medium' | 'high';
+export type PlayerSubtitleBackgroundOpacity = 'light' | 'medium' | 'strong';
+
+export type PlayerSubtitleStyleSettings = {
+  fontSize: PlayerSubtitleFontSize;
+  bottomOffset: PlayerSubtitleBottomOffset;
+  backgroundOpacity: PlayerSubtitleBackgroundOpacity;
+};
 
 type StoredPlayerSettings = {
   codecPreference: VideoCodecPreference;
   qualityPreference: number;
+  subtitleEnabled: boolean;
+  subtitleStyle: PlayerSubtitleStyleSettings;
 };
 
 type StoredCodecMemoryEntry = {
@@ -39,6 +50,12 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS: StoredPlayerSettings = {
   codecPreference: 'auto',
   qualityPreference: 80,
+  subtitleEnabled: true,
+  subtitleStyle: {
+    fontSize: 'standard',
+    bottomOffset: 'medium',
+    backgroundOpacity: 'medium',
+  },
 };
 
 const DEFAULT_CODEC_MEMORY_ENTRY: StoredCodecMemoryEntry = {
@@ -61,7 +78,8 @@ const DEFAULT_CODEC_MEMORY_ENTRY: StoredCodecMemoryEntry = {
 const MAX_MODE_MEMORY_COUNT = 8;
 
 export function readPlayerSettings() {
-  return readJsonStorage<StoredPlayerSettings>(STORAGE_KEYS.settings, DEFAULT_SETTINGS);
+  const stored = readJsonStorage<Partial<StoredPlayerSettings>>(STORAGE_KEYS.settings, DEFAULT_SETTINGS);
+  return mergePlayerSettings(stored);
 }
 
 export function writePlayerCodecPreference(codecPreference: VideoCodecPreference) {
@@ -75,6 +93,24 @@ export function writePlayerQualityPreference(qualityPreference: number) {
   writeJsonStorage(STORAGE_KEYS.settings, {
     ...readPlayerSettings(),
     qualityPreference,
+  });
+}
+
+export function writePlayerSubtitleEnabled(subtitleEnabled: boolean) {
+  writeJsonStorage(STORAGE_KEYS.settings, {
+    ...readPlayerSettings(),
+    subtitleEnabled,
+  });
+}
+
+export function writePlayerSubtitleStyle(subtitleStyle: Partial<PlayerSubtitleStyleSettings>) {
+  const current = readPlayerSettings();
+  writeJsonStorage(STORAGE_KEYS.settings, {
+    ...current,
+    subtitleStyle: {
+      ...current.subtitleStyle,
+      ...subtitleStyle,
+    },
   });
 }
 
@@ -159,4 +195,78 @@ function mergeCodecMemoryEntry(
 
 function clampModeMemoryCount(value: number): number {
   return Math.min(value, MAX_MODE_MEMORY_COUNT);
+}
+
+function mergePlayerSettings(stored: Partial<StoredPlayerSettings> | null | undefined): StoredPlayerSettings {
+  const codecPreference = normalizeCodecPreference(stored?.codecPreference);
+  const qualityPreference = normalizeQualityPreference(stored?.qualityPreference);
+  const subtitleEnabled = typeof stored?.subtitleEnabled === 'boolean'
+    ? stored.subtitleEnabled
+    : DEFAULT_SETTINGS.subtitleEnabled;
+  const subtitleStyle = normalizeSubtitleStyle(stored?.subtitleStyle);
+
+  return {
+    codecPreference,
+    qualityPreference,
+    subtitleEnabled,
+    subtitleStyle,
+  };
+}
+
+function normalizeCodecPreference(value: unknown): VideoCodecPreference {
+  switch (value) {
+    case 'avc':
+    case 'hevc':
+    case 'av1':
+    case 'auto':
+      return value;
+    default:
+      return DEFAULT_SETTINGS.codecPreference;
+  }
+}
+
+function normalizeQualityPreference(value: unknown): number {
+  return Number.isFinite(value) ? Number(value) : DEFAULT_SETTINGS.qualityPreference;
+}
+
+function normalizeSubtitleStyle(value: unknown): PlayerSubtitleStyleSettings {
+  const style = (value ?? {}) as Partial<PlayerSubtitleStyleSettings>;
+  return {
+    fontSize: normalizeSubtitleFontSize(style.fontSize),
+    bottomOffset: normalizeSubtitleBottomOffset(style.bottomOffset),
+    backgroundOpacity: normalizeSubtitleBackgroundOpacity(style.backgroundOpacity),
+  };
+}
+
+function normalizeSubtitleFontSize(value: unknown): PlayerSubtitleFontSize {
+  switch (value) {
+    case 'large':
+    case 'extra-large':
+    case 'standard':
+      return value;
+    default:
+      return DEFAULT_SETTINGS.subtitleStyle.fontSize;
+  }
+}
+
+function normalizeSubtitleBottomOffset(value: unknown): PlayerSubtitleBottomOffset {
+  switch (value) {
+    case 'low':
+    case 'high':
+    case 'medium':
+      return value;
+    default:
+      return DEFAULT_SETTINGS.subtitleStyle.bottomOffset;
+  }
+}
+
+function normalizeSubtitleBackgroundOpacity(value: unknown): PlayerSubtitleBackgroundOpacity {
+  switch (value) {
+    case 'light':
+    case 'strong':
+    case 'medium':
+      return value;
+    default:
+      return DEFAULT_SETTINGS.subtitleStyle.backgroundOpacity;
+  }
 }

@@ -26,9 +26,11 @@ import type {
   PlayAudioStream,
   PlayAudioKind,
   PlayCompatibleSource,
+  PlayInfo,
   PlayQualityOption,
   PlayQualityTier,
   PlaySource,
+  PlaySubtitleTrack,
   PlayVideoStream,
   SearchDefaultWord,
   UserProfile,
@@ -166,6 +168,21 @@ type RawPlaySource = {
     flac?: {
       audio?: RawDashStream | null;
     };
+  };
+};
+
+type RawPlaySubtitleTrack = {
+  id?: Numeric;
+  lan?: string;
+  lan_doc?: string;
+  subtitle_url?: string;
+  subtitle_url_v2?: string;
+  type?: Numeric;
+};
+
+type RawPlayInfo = {
+  subtitle?: {
+    subtitles?: RawPlaySubtitleTrack[];
   };
 };
 
@@ -834,6 +851,20 @@ export async function fetchVideoDetail(bvid: string): Promise<VideoDetail> {
   };
 }
 
+export async function fetchPlayInfo(bvid: string, cid: number): Promise<PlayInfo> {
+  const params = await signWbi({
+    bvid,
+    cid,
+  });
+  const payload = await fetchJson<ApiEnvelope<RawPlayInfo>>(
+    getBiliApiUrl(`/x/player/wbi/v2?${params.toString()}`),
+  );
+  const data = unwrapData(payload);
+  return {
+    subtitles: (data.subtitle?.subtitles ?? []).map(mapPlaySubtitleTrack),
+  };
+}
+
 export async function fetchRelatedVideos(bvid: string) {
   const payload = await fetchJson<ApiEnvelope<RawVideoCard[]>>(
     getBiliApiUrl(`/x/web-interface/archive/related?bvid=${encodeURIComponent(bvid)}`),
@@ -1255,6 +1286,18 @@ function parseHistoryCursor(cursor: string | null | undefined) {
   } catch {
     return null;
   }
+}
+
+function mapPlaySubtitleTrack(track: RawPlaySubtitleTrack): PlaySubtitleTrack {
+  const isAi = Number(track.type ?? 0) === 1;
+  const langDoc = String(track.lan_doc ?? track.lan ?? '');
+  return {
+    id: Number(track.id ?? 0),
+    lang: String(track.lan ?? ''),
+    langDoc: isAi && langDoc ? `${langDoc}（AI）` : langDoc,
+    subtitleUrl: normalizeCover(String(track.subtitle_url ?? track.subtitle_url_v2 ?? '')),
+    isAi,
+  };
 }
 
 export async function fetchLaterList(page = 1, pageSize = 90): Promise<LaterItem[]> {
