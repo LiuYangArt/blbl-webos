@@ -20,7 +20,7 @@ import { SearchPage } from './features/search/SearchPage';
 import { SearchResultsPage } from './features/search/SearchResultsPage';
 import { SubscriptionsPage } from './features/subscriptions/SubscriptionsPage';
 import { VideoDetailPage } from './features/video-detail/VideoDetailPage';
-import { focusFirst, isFocusableElement, readFocusGroup } from './platform/focus';
+import { focusFirst, focusSection, isFocusableElement, readFocusGroup } from './platform/focus';
 import { attachRemoteControl } from './platform/remote';
 import { appendRuntimeDiagnostic } from './services/debug/runtimeDiagnostics';
 import { platformBack } from './platform/webos';
@@ -44,6 +44,7 @@ function AppContent() {
   const { current: currentPage, pop, push, replace } = pageStack;
   const backHandlerRef = useRef<(() => boolean) | null>(null);
   const lastRouteKeyRef = useRef<string>('');
+  const nextRouteKeepsNavFocusRef = useRef(false);
 
   const focusKey = useMemo(() => {
     switch (currentPage.name) {
@@ -77,6 +78,14 @@ function AppContent() {
   }, [currentPage, pageStack.depth]);
 
   useEffect(() => {
+    if (nextRouteKeepsNavFocusRef.current) {
+      nextRouteKeepsNavFocusRef.current = false;
+
+      if (focusSection('side-nav')) {
+        return undefined;
+      }
+    }
+
     const active = document.activeElement;
     if (
       active instanceof HTMLElement
@@ -151,7 +160,13 @@ function AppContent() {
         profileName={auth.profile?.name}
         isLoggedIn={auth.status === 'authenticated'}
         immersive={isImmersiveRoute}
-        onNavigate={(route) => replace(route)}
+        onNavigate={(route) => {
+          const active = document.activeElement;
+          nextRouteKeepsNavFocusRef.current = active instanceof HTMLElement
+            && isFocusableElement(active)
+            && readFocusGroup(active) === 'nav';
+          replace(route);
+        }}
       >
         <div className="app-page">
           {renderRoute(currentPage, {

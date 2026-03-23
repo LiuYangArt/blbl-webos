@@ -551,7 +551,13 @@ export function moveFocus(direction: Direction) {
     return;
   }
 
-  focusTarget(section.config.leaveFor?.[direction]);
+  if (focusTarget(section.config.leaveFor?.[direction])) {
+    return;
+  }
+
+  if (direction === 'right' && readFocusGroup(activeElement) === 'nav') {
+    focusFirst({ preferredGroup: 'content', allowFallbackGroup: false });
+  }
 }
 
 export function activateFocused() {

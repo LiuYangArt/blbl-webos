@@ -120,6 +120,35 @@ describe('focus engine', () => {
     expect((document.activeElement as HTMLElement | null)?.dataset.focusId).toBe('card-3');
   });
 
+  it('侧边导航按右键时会进入内容区首个可聚焦元素', async () => {
+    const engine = await loadEngineModule();
+
+    const nav = createFocusableButton({
+      id: 'nav-home',
+      section: 'side-nav',
+      left: 0,
+      top: 0,
+      group: 'nav',
+      default: true,
+    });
+    createFocusableButton({
+      id: 'content-hero',
+      section: 'content',
+      left: 400,
+      top: 0,
+      group: 'content',
+      default: true,
+    });
+
+    engine.registerSection({ id: 'side-nav', group: 'nav', enterTo: 'last-focused' });
+    engine.registerSection({ id: 'content', group: 'content' });
+    nav.focus();
+
+    engine.moveFocus('right');
+
+    expect((document.activeElement as HTMLElement | null)?.dataset.focusId).toBe('content-hero');
+  });
+
   it('captureFocus 和 releaseFocus 会把焦点锁到 overlay，并在释放后恢复', async () => {
     const engine = await loadEngineModule();
 

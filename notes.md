@@ -164,3 +164,55 @@
 - `正在关注` 适合做首页登录态二级频道，但首版应优先展示“可播放的关注更新”，而不是完整复刻动态社区。
 - `订阅剧集` 适合做首页登录态二级频道，底层数据优先复用 `/x/space/bangumi/follow/list`，并在 UI 上统一成“订阅剧集”入口，内部再细分番剧 / 影视。
 - 不建议把这两项直接塞进左侧一级导航；更适合保持左侧导航克制，把它们作为首页内的内容频道。
+
+---
+
+# Notes: TV 焦点舒适区滚动方案调研
+
+## 当前 `bilibili_webos` 的事实
+
+### Source 1: `F:\CodeProjects\bilibili_webos\src\platform\focus\engine.ts`
+- 当前焦点引擎在 `focusElement()` 之后只调用 `ensureElementVisible(element)`。
+- `ensureElementVisible()` 的判断标准是“当前焦点元素是否超出一个很窄的 viewport padding”。
+- 一旦元素没有越界，就不会继续滚动；即使 section 标题、说明文字、统计标签已经被挤出屏幕，也不会管。
+- 这说明当前模型保证的是“焦点元素可见”，不是“焦点所在内容区可读”。
+
+### Source 2: `F:\CodeProjects\bilibili_webos\src\components\HomeChannelTabs.tsx`
+- 首页频道 tabs 只是一个普通 `FocusSection`。
+- 过去曾把 `up` 指向一个已经不存在的 `@home-hero-actions`，说明页面里已有旧焦点链路残留。
+- 即便补了某个 section 的 `scrollIntoView()`，也只能修一个页面，不能解决所有长内容页的共性问题。
+
+### Source 3: `F:\CodeProjects\bilibili_webos\DESIGN.md`
+- 现有规范已经明确“遥控器优先、TV 场景优先、Section + Spatial Navigation 模型优先”。
+- 但规范里还没有把“焦点滚动策略”提升为一等规则，尤其缺少“舒适区”和“section 头部信息保留”的定义。
+
+## `jellyfin-webos` 仓库调研结论
+
+### Source 4: `F:\CodeProjects\bilibili_tv_android\jellyfin-webos\frontend\js\index.js`
+- 这个仓库自己的方向导航非常简单，只是在连接页里对 `input/button` 做线性 `focus()` 切换。
+- 它没有实现复杂页面下的 section 几何导航，也没有实现你希望的“焦点返回时把 section 头部信息一起带回来的滚动策略”。
+
+### Source 5: `F:\CodeProjects\bilibili_tv_android\jellyfin-webos\frontend\js\index.js`
+- 仓库核心流程是：连接 Jellyfin Server -> 把真正的 Jellyfin Web 页面加载进 `iframe#contentFrame`。
+- 所以用户在电视上感受到的长列表焦点滚动体验，并不是这个壳层仓库完成的，而是 iframe 里 Jellyfin Web 自己的 TV 布局在处理。
+
+### Source 6: `F:\CodeProjects\bilibili_tv_android\jellyfin-webos\frontend\js\webOS.js`
+- 注入脚本主要做 `NativeShell/AppHost` 能力适配，不包含长列表滚动策略。
+
+### Source 7: `F:\CodeProjects\bilibili_tv_android\jellyfin-webos\frontend\css\webOS.css`
+- 仅隐藏了 TV 布局下的 scrollbar，不包含焦点舒适区、section 头部保留或滚动锚点的实现。
+
+## 综合结论
+
+### 为什么当前问题不是单页 bug
+- 首页、关注页等多个页面都出现了同样现象：从下方卡片往上返回时，焦点能回到第一排按钮/卡片，但页面顶部说明区露不出来。
+- 这说明问题不在某一个 section 的 `leaveFor`，而在全局滚动策略过于保守。
+
+### `jellyfin-webos` 能借鉴什么
+- 能借鉴的是产品效果目标：TV 页面不应让焦点长期贴着屏幕边缘；回到第一排交互元素时，应让该内容区的上下文一起可读。
+- 不能直接借鉴的是实现代码，因为本地这个 `jellyfin-webos` 仓库并没有承载那套长内容页滚动逻辑。
+
+### 对本项目真正需要的能力
+- 视口“舒适区”滚动，而不是“仅不越界”滚动。
+- section 级滚动锚点，让第一排焦点回归时能把标题、说明、统计等头部信息一起带回视口。
+- 页面只声明滚动意图与结构，不再各自打补丁。

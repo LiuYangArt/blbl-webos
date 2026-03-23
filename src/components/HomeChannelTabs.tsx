@@ -30,7 +30,14 @@ export function HomeChannelTabs({
       group="content"
       enterTo="last-focused"
       className="content-section home-channel-tabs"
-      leaveFor={{ left: '@side-nav', up: '@home-hero-actions', down: leaveDown }}
+      leaveFor={{ left: '@side-nav', down: leaveDown }}
+      onFocusCapture={(event) => {
+        event.currentTarget.scrollIntoView({
+          block: 'start',
+          inline: 'nearest',
+          behavior: 'auto',
+        });
+      }}
     >
       <div className="section-header">
         <div>

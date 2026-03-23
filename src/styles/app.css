@@ -168,14 +168,6 @@ button {
   box-shadow:
     0 0 0 2px rgba(0, 0, 0, 0.34),
     0 18px 36px rgba(0, 0, 0, 0.28);
-  transition:
-    left 120ms ease,
-    top 120ms ease,
-    width 120ms ease,
-    height 120ms ease,
-    border-color 90ms ease,
-    background 90ms ease,
-    box-shadow 120ms ease;
 }
 
 .focus-debug-ring--pressed {
@@ -257,6 +249,11 @@ button {
 }
 
 .side-nav-rail:focus-within {
+  width: var(--tv-nav-expanded-width);
+  box-shadow: 40px 0 72px rgba(0, 0, 0, 0.34);
+}
+
+.side-nav-rail--expanded {
   width: var(--tv-nav-expanded-width);
   box-shadow: 40px 0 72px rgba(0, 0, 0, 0.34);
 }
@@ -392,8 +389,11 @@ button {
 }
 
 .side-nav-rail:focus-within .side-nav-rail__brand-copy,
+.side-nav-rail--expanded .side-nav-rail__brand-copy,
 .side-nav-rail:focus-within .side-nav-rail__footer-copy,
-.side-nav-rail:focus-within .side-nav-item .tv-icon-button__label {
+.side-nav-rail--expanded .side-nav-rail__footer-copy,
+.side-nav-rail:focus-within .side-nav-item .tv-icon-button__label,
+.side-nav-rail--expanded .side-nav-item .tv-icon-button__label {
   opacity: 1;
   transform: translateX(0);
 }
@@ -607,6 +607,7 @@ button {
 .home-channel-tabs {
   padding-top: 24px;
   padding-bottom: 24px;
+  scroll-margin-top: 72px;
 }
 
 .home-channel-tabs__list {

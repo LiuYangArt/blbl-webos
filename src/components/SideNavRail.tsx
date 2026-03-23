@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { AppRoute, RootNavKey } from '../app/routes';
 import { ROOT_NAV_ITEMS } from '../app/routes';
 import { FocusSection } from '../platform/focus';
@@ -10,6 +11,7 @@ type SideNavRailProps = {
 };
 
 export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailProps) {
+  const [isPinnedOpen, setPinnedOpen] = useState(false);
   const items = ROOT_NAV_ITEMS.filter((item) => {
     if (item.key === 'login') {
       return !isLoggedIn;
@@ -21,7 +23,19 @@ export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailPr
   });
 
   return (
-    <aside className="side-nav-rail" aria-label="全局导航">
+    <aside
+      className={['side-nav-rail', isPinnedOpen ? 'side-nav-rail--expanded' : ''].filter(Boolean).join(' ')}
+      aria-label="全局导航"
+      onFocusCapture={() => setPinnedOpen(true)}
+      onBlurCapture={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+          return;
+        }
+
+        setPinnedOpen(false);
+      }}
+    >
       <div className="side-nav-rail__brand">
         <span className="side-nav-rail__logo">bi</span>
         <div className="side-nav-rail__brand-copy">
