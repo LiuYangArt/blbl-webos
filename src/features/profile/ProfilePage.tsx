@@ -1,7 +1,7 @@
 import { useAppStore } from '../../app/AppStore';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { PageStatus } from '../shared/PageStatus';
 
 type ProfilePageProps = {
@@ -58,6 +58,7 @@ export function ProfilePage({
         group="content"
         className="content-section"
         leaveFor={{ left: '@side-nav' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader title="你的内容" description="先保留 TV 端最常用的内容入口，避免把“我的”页做成移动端大杂烩。" />
         <div className="chip-grid">

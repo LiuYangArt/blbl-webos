@@ -126,8 +126,13 @@ button {
 }
 
 .tv-app-main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 100vh;
   min-width: 0;
   padding: var(--tv-safe-y) var(--tv-safe-x) 48px 20px;
+  overflow: hidden;
 }
 
 .tv-topbar {
@@ -156,7 +161,12 @@ button {
 }
 
 .tv-page-content {
+  flex: 1 1 auto;
+  min-height: 0;
   min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .focus-debug-ring {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { FocusButton } from '../../components/FocusButton';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { createWebQrLogin, pollWebQrLogin } from '../../services/api/bilibili';
 import { useAppStore } from '../../app/AppStore';
 import { PageStatus } from '../shared/PageStatus';
@@ -126,6 +126,7 @@ export function LoginPage({ onCompleted }: LoginPageProps) {
         group="content"
         className="content-section login-panel"
         leaveFor={{ left: '@side-nav' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <div className="login-panel__content">
           <div className="login-panel__qr">

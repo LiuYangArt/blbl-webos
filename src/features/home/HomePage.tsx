@@ -6,7 +6,7 @@ import { FocusButton } from '../../components/FocusButton';
 import { HomeChannelTabs } from '../../components/HomeChannelTabs';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection, focusById } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection, focusById } from '../../platform/focus';
 import {
   fetchFollowingChannelData,
   fetchPgcSubscriptions,
@@ -452,6 +452,7 @@ function renderChannelContent(params: {
           enterTo="last-focused"
           className="content-section"
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
+          scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <SectionHeader
             title="个性推荐"
@@ -527,6 +528,7 @@ function renderChannelContent(params: {
           enterTo="last-focused"
           className="content-section"
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
+          scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <SectionHeader
             title="正在关注"
@@ -603,6 +605,7 @@ function renderChannelContent(params: {
           enterTo="last-focused"
           className="content-section"
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
+          scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <SectionHeader
             title="订阅剧集"
@@ -697,6 +700,7 @@ function renderChannelContent(params: {
           enterTo="last-focused"
           className="content-section"
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
+          scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <SectionHeader title="热门视频" description="首版继续复用可稳定直播的热门内容。" actionLabel={`${popular.data.length} 条`} />
           {popular.error && popular.data.length === 0 ? (
@@ -738,6 +742,7 @@ function renderChannelContent(params: {
           enterTo="last-focused"
           className="content-section"
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
+          scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <SectionHeader title="排行" description="先接全站排行，后续再分区。" actionLabel={`${ranking.data.length} 条`} />
           {ranking.error && ranking.data.length === 0 ? (
@@ -782,6 +787,7 @@ function renderChannelContent(params: {
           enterTo="last-focused"
           className="content-section"
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
+          scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <SectionHeader title="直播" description="直播链路会单独做 TV 化，本轮先把首页频道位和焦点流补齐。" />
           <InlineChannelNotice title="直播频道将在后续阶段接入" description="当前优先把关注、订阅剧集和高画质链路做完整，避免首页入口先有了却没有稳定播放能力。" />

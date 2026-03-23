@@ -1,4 +1,5 @@
 export { FocusSection } from './FocusSection';
+export { CONTENT_FIRST_ROW_SCROLL } from './presets';
 export {
   activateFocused,
   captureFocus,
@@ -17,7 +18,10 @@ export type {
   FocusCaptureOptions,
   FocusFirstOptions,
   FocusGroup,
+  FocusScrollAnchor,
+  FocusScrollMode,
   FocusSectionConfig,
   FocusSectionEnterTo,
+  FocusSectionScrollConfig,
   FocusTarget,
 } from './types';

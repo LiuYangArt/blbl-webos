@@ -3,7 +3,7 @@ import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { fetchFavoriteFolderDetail, fetchVideoDetail } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
@@ -74,6 +74,7 @@ export function FavoriteDetailPage({ mediaId, title, onOpenPlayer }: FavoriteDet
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader title={title} description="先支持直接播放，复杂管理动作后置。" actionLabel={`${items.length} 个视频`} />
         {resolveError ? <p className="page-helper-text">{resolveError}</p> : null}

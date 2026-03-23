@@ -5,7 +5,7 @@ import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { fetchRelatedVideos, fetchVideoDetail } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
@@ -60,6 +60,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: V
         group="content"
         className="detail-hero"
         leaveFor={{ left: '@side-nav', down: '@detail-episodes' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <div className="detail-hero__cover">
           <img src={video.cover} alt="" referrerPolicy="no-referrer" />
@@ -110,6 +111,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: V
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav', up: '@detail-hero-actions', down: '@detail-related-grid' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader
           title="分 P / 选集"
@@ -140,6 +142,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: V
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav', up: '@detail-episodes' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader
           title="相关推荐"

@@ -45,7 +45,7 @@ export function AppShell({
             <span className="tv-topbar__profile">{profileName ?? '游客模式'}</span>
           </div>
         </header>
-        <div className="tv-page-content">{children}</div>
+        <div className="tv-page-content" data-focus-scroll-root="true">{children}</div>
       </div>
     </div>
   );

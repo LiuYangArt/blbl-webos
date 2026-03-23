@@ -1,5 +1,5 @@
 import { FocusButton } from './FocusButton';
-import { FocusSection } from '../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../platform/focus';
 import type { HomeChannelKey } from '../services/api/types';
 
 type HomeChannelTab = {
@@ -31,13 +31,7 @@ export function HomeChannelTabs({
       enterTo="last-focused"
       className="content-section home-channel-tabs"
       leaveFor={{ left: '@side-nav', down: leaveDown }}
-      onFocusCapture={(event) => {
-        event.currentTarget.scrollIntoView({
-          block: 'start',
-          inline: 'nearest',
-          behavior: 'auto',
-        });
-      }}
+      scroll={CONTENT_FIRST_ROW_SCROLL}
     >
       <div className="section-header">
         <div>

@@ -3,10 +3,11 @@ import type {
   FocusCaptureOptions,
   FocusFirstOptions,
   FocusGroup,
+  FocusScrollAnchor,
+  FocusSectionScrollConfig,
   FocusSectionConfig,
   FocusTarget,
 } from './types';
-import { isWebOSAvailable } from '../webos';
 
 type FocusableElement = HTMLElement & {
   dataset: DOMStringMap & {
@@ -49,14 +50,27 @@ type FocusRect = {
   centerY: number;
 };
 
+type FocusViewportComfortZone = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
+
+type FocusViewportFrame = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
 const FOCUSABLE_SELECTOR = '[data-focusable="true"]';
-const FOCUS_VISIBILITY_PADDING = {
-  top: 24,
-  right: 24,
-  bottom: 32,
-  left: 24,
-} as const;
+const FOCUS_SCROLL_ROOT_SELECTOR = '[data-focus-scroll-root="true"]';
 const FOCUS_PRESS_VISUAL_MS = 120;
+const DEFAULT_SECTION_TOP_OFFSET = 88;
+const SCROLL_EPSILON = 1;
 const sections = new Map<string, RegisteredSection>();
 const captures: FocusCapture[] = [];
 const pressedStateTimers = new WeakMap<FocusableElement, number>();
@@ -116,6 +130,7 @@ function handleFocusIn(event: FocusEvent) {
   markActiveFocusedElement(target);
   section.lastFocusedElement = target;
   section.lastFocusedId = target.dataset.focusId ?? null;
+  ensureFocusedElementComfort(target);
 }
 
 function readSectionId(element: FocusableElement): string | null {
@@ -187,6 +202,226 @@ function getElementRect(element: FocusableElement): FocusRect {
     centerX: rect.left + rect.width / 2,
     centerY: rect.top + rect.height / 2,
   };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getViewportComfortZone(viewportFrame: FocusViewportFrame): FocusViewportComfortZone {
+  return {
+    top: Math.round(clamp(viewportFrame.height * 0.18, 120, 220)),
+    right: Math.round(clamp(viewportFrame.width * 0.03, 24, 64)),
+    bottom: Math.round(clamp(viewportFrame.height * 0.16, 120, 200)),
+    left: Math.round(clamp(viewportFrame.width * 0.03, 24, 64)),
+  };
+}
+
+function getDefaultSectionScrollConfig(section: RegisteredSection): Required<FocusSectionScrollConfig> {
+  return {
+    mode: section.config.group === 'content' ? 'comfort-zone' : 'none',
+    anchor: 'focused-element',
+    preserveHeaderWhenFirstRowFocused: false,
+    topOffset: DEFAULT_SECTION_TOP_OFFSET,
+  };
+}
+
+function getSectionScrollConfig(section: RegisteredSection): Required<FocusSectionScrollConfig> {
+  const defaults = getDefaultSectionScrollConfig(section);
+  return {
+    mode: section.config.scroll?.mode ?? defaults.mode,
+    anchor: section.config.scroll?.anchor ?? defaults.anchor,
+    preserveHeaderWhenFirstRowFocused: section.config.scroll?.preserveHeaderWhenFirstRowFocused
+      ?? defaults.preserveHeaderWhenFirstRowFocused,
+    topOffset: section.config.scroll?.topOffset ?? defaults.topOffset,
+  };
+}
+
+function getSectionRootElement(sectionId: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-focus-section-root="${escapeAttributeValue(sectionId)}"]`);
+}
+
+function getDocumentScrollElement(): HTMLElement | null {
+  return document.scrollingElement instanceof HTMLElement
+    ? document.scrollingElement
+    : document.documentElement instanceof HTMLElement
+      ? document.documentElement
+      : null;
+}
+
+function getScrollRoot(element: HTMLElement): HTMLElement | null {
+  return element.closest<HTMLElement>(FOCUS_SCROLL_ROOT_SELECTOR);
+}
+
+function readViewportScrollTop(scrollRoot: HTMLElement | null): number {
+  if (scrollRoot) {
+    return scrollRoot.scrollTop;
+  }
+
+  const scrollElement = getDocumentScrollElement();
+  return scrollElement?.scrollTop ?? window.scrollY ?? 0;
+}
+
+function getViewportMaxScrollTop(scrollRoot: HTMLElement | null): number {
+  if (scrollRoot) {
+    return Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+  }
+
+  const scrollElement = getDocumentScrollElement();
+  if (!scrollElement) {
+    return 0;
+  }
+
+  return Math.max(0, scrollElement.scrollHeight - window.innerHeight);
+}
+
+function scrollViewportTo(scrollRoot: HTMLElement | null, top: number): boolean {
+  const clampedTop = clamp(top, 0, getViewportMaxScrollTop(scrollRoot));
+  const currentTop = readViewportScrollTop(scrollRoot);
+  if (Math.abs(clampedTop - currentTop) < SCROLL_EPSILON) {
+    return false;
+  }
+
+  if (scrollRoot) {
+    if (typeof scrollRoot.scrollTo === 'function') {
+      scrollRoot.scrollTo({
+        top: clampedTop,
+        left: scrollRoot.scrollLeft ?? 0,
+        behavior: 'auto',
+      });
+    } else {
+      scrollRoot.scrollTop = clampedTop;
+    }
+    return true;
+  }
+
+  window.scrollTo({
+    top: clampedTop,
+    left: window.scrollX,
+    behavior: 'auto',
+  });
+  return true;
+}
+
+function scrollViewportBy(scrollRoot: HTMLElement | null, deltaY: number): boolean {
+  if (Math.abs(deltaY) < SCROLL_EPSILON) {
+    return false;
+  }
+
+  return scrollViewportTo(scrollRoot, readViewportScrollTop(scrollRoot) + deltaY);
+}
+
+function getViewportFrame(scrollRoot: HTMLElement | null): FocusViewportFrame {
+  if (scrollRoot) {
+    const rect = scrollRoot.getBoundingClientRect();
+    return {
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+    };
+  }
+
+  return {
+    top: 0,
+    right: window.innerWidth,
+    bottom: window.innerHeight,
+    left: 0,
+    width: window.innerWidth,
+    height: window.innerHeight,
+  };
+}
+
+function getSectionAnchorElement(sectionId: string, anchor: FocusScrollAnchor, focusedElement: FocusableElement): HTMLElement | null {
+  if (anchor === 'focused-element') {
+    return focusedElement;
+  }
+
+  const sectionRoot = getSectionRootElement(sectionId);
+  if (!sectionRoot) {
+    return focusedElement;
+  }
+
+  if (anchor === 'section-header') {
+    return sectionRoot.querySelector<HTMLElement>('.section-header') ?? sectionRoot;
+  }
+
+  return sectionRoot;
+}
+
+function isFirstRowFocused(element: FocusableElement, sectionId: string): boolean {
+  const elements = getSectionElements(sectionId);
+  if (elements.length <= 1) {
+    return true;
+  }
+
+  const elementRect = getElementRect(element);
+  const firstRowTop = Math.min(...elements.map((candidate) => getElementRect(candidate).top));
+  const rowTolerance = Math.max(28, Math.min(72, Math.round(elementRect.height * 0.2)));
+
+  return elementRect.top <= firstRowTop + rowTolerance;
+}
+
+function alignSectionAnchorIntoView(
+  sectionId: string,
+  config: Required<FocusSectionScrollConfig>,
+  focusedElement: FocusableElement,
+): boolean {
+  const anchorElement = getSectionAnchorElement(sectionId, config.anchor, focusedElement);
+  if (!(anchorElement instanceof HTMLElement)) {
+    return false;
+  }
+
+  const scrollRoot = getScrollRoot(focusedElement);
+  const viewportFrame = getViewportFrame(scrollRoot);
+  const anchorRect = anchorElement.getBoundingClientRect();
+  return scrollViewportBy(scrollRoot, anchorRect.top - (viewportFrame.top + config.topOffset));
+}
+
+function ensureFocusedElementComfort(element: FocusableElement): void {
+  const sectionId = readSectionId(element);
+  const section = sectionId ? getSectionRecord(sectionId) : null;
+  if (!section) {
+    return;
+  }
+
+  const scrollConfig = getSectionScrollConfig(section);
+  if (scrollConfig.mode === 'none') {
+    return;
+  }
+
+  if (
+    sectionId
+    && scrollConfig.preserveHeaderWhenFirstRowFocused
+    && isFirstRowFocused(element, sectionId)
+    && alignSectionAnchorIntoView(sectionId, scrollConfig, element)
+  ) {
+    return;
+  }
+
+  const scrollRoot = getScrollRoot(element);
+  const viewportFrame = getViewportFrame(scrollRoot);
+  const rect = element.getBoundingClientRect();
+  const comfortZone = getViewportComfortZone(viewportFrame);
+  const comfortTop = viewportFrame.top + comfortZone.top;
+  const comfortLeft = viewportFrame.left + comfortZone.left;
+  const maxComfortRight = viewportFrame.right - comfortZone.right;
+  const maxComfortBottom = viewportFrame.bottom - comfortZone.bottom;
+  const horizontalOverflow = rect.left < comfortLeft || rect.right > maxComfortRight;
+
+  if (rect.top < comfortTop) {
+    scrollViewportBy(scrollRoot, rect.top - comfortTop);
+  } else if (rect.bottom > maxComfortBottom) {
+    scrollViewportBy(scrollRoot, rect.bottom - maxComfortBottom);
+  } else if (horizontalOverflow) {
+    element.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: 'auto',
+    });
+  }
 }
 
 function getDirectionalTarget(element: FocusableElement, direction: Direction): string | null {
@@ -297,27 +532,12 @@ function focusElement(element: FocusableElement | null): FocusableElement | null
     return null;
   }
 
+  const alreadyFocused = document.activeElement === element;
   element.focus({ preventScroll: true });
-  ensureElementVisible(element);
-  return element;
-}
-
-function ensureElementVisible(element: FocusableElement) {
-  const rect = element.getBoundingClientRect();
-  const isOutsideViewport = rect.top < FOCUS_VISIBILITY_PADDING.top
-    || rect.bottom > window.innerHeight - FOCUS_VISIBILITY_PADDING.bottom
-    || rect.left < FOCUS_VISIBILITY_PADDING.left
-    || rect.right > window.innerWidth - FOCUS_VISIBILITY_PADDING.right;
-
-  if (!isOutsideViewport) {
-    return;
+  if (alreadyFocused) {
+    ensureFocusedElementComfort(element);
   }
-
-  element.scrollIntoView({
-    block: 'nearest',
-    inline: 'nearest',
-    behavior: isWebOSAvailable() ? 'auto' : 'smooth',
-  });
+  return element;
 }
 
 function focusTarget(target: FocusTarget): FocusableElement | null {

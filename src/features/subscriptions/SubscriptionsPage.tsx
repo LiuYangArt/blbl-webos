@@ -3,7 +3,7 @@ import type { PgcDetailRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { fetchPgcSubscriptions } from '../../services/api/bilibili';
 import type { PgcSubscriptionItem } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
@@ -69,6 +69,7 @@ export function SubscriptionsPage({ onLogin, onOpenPgcDetail }: SubscriptionsPag
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader
           title="订阅剧集"

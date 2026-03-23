@@ -4,7 +4,7 @@ import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { fetchPgcSeasonDetail } from '../../services/api/bilibili';
 import { PageStatus } from '../shared/PageStatus';
 
@@ -63,6 +63,7 @@ export function PgcDetailPage({ seasonId, fallbackTitle, onPlay }: PgcDetailPage
         group="content"
         className="detail-hero"
         leaveFor={{ left: '@side-nav', down: '@pgc-detail-episodes' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <div className="detail-hero__cover">
           <img src={season.cover} alt="" referrerPolicy="no-referrer" />
@@ -117,6 +118,7 @@ export function PgcDetailPage({ seasonId, fallbackTitle, onPlay }: PgcDetailPage
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav', up: '@pgc-detail-hero-actions' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader
           title="选集"

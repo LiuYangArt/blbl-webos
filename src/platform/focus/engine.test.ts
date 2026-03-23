@@ -25,6 +25,79 @@ function setElementRect(
   });
 }
 
+function createSectionRoot(config: {
+  id: string;
+  top: number;
+  left?: number;
+  width?: number;
+  height?: number;
+  headerTop?: number;
+  headerHeight?: number;
+}) {
+  const section = document.createElement('section');
+  section.dataset.focusSectionRoot = config.id;
+  setElementRect(section, {
+    left: config.left ?? 0,
+    top: config.top,
+    width: config.width ?? 1200,
+    height: config.height ?? 360,
+  });
+
+  const header = document.createElement('div');
+  header.className = 'section-header';
+  setElementRect(header, {
+    left: config.left ?? 0,
+    top: config.headerTop ?? config.top + 28,
+    width: config.width ?? 1200,
+    height: config.headerHeight ?? 80,
+  });
+  section.appendChild(header);
+  document.body.appendChild(section);
+  return { section, header };
+}
+
+function createScrollRoot(config?: {
+  top?: number;
+  left?: number;
+  width?: number;
+  height?: number;
+  scrollHeight?: number;
+}) {
+  const root = document.createElement('div');
+  root.dataset.focusScrollRoot = 'true';
+  root.scrollTo = vi.fn();
+  Object.defineProperty(root, 'clientHeight', {
+    configurable: true,
+    value: config?.height ?? 720,
+  });
+  Object.defineProperty(root, 'clientWidth', {
+    configurable: true,
+    value: config?.width ?? 1440,
+  });
+  Object.defineProperty(root, 'scrollHeight', {
+    configurable: true,
+    value: config?.scrollHeight ?? 2400,
+  });
+  Object.defineProperty(root, 'scrollLeft', {
+    configurable: true,
+    writable: true,
+    value: 0,
+  });
+  Object.defineProperty(root, 'scrollTop', {
+    configurable: true,
+    writable: true,
+    value: 0,
+  });
+  setElementRect(root, {
+    left: config?.left ?? 120,
+    top: config?.top ?? 140,
+    width: config?.width ?? 1440,
+    height: config?.height ?? 720,
+  });
+  document.body.appendChild(root);
+  return root;
+}
+
 function createFocusableButton(config: {
   id: string;
   section: string;
@@ -36,6 +109,7 @@ function createFocusableButton(config: {
   default?: boolean;
   right?: string;
   text?: string;
+  container?: HTMLElement;
 }) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -60,7 +134,7 @@ function createFocusableButton(config: {
     width: config.width ?? 120,
     height: config.height ?? 60,
   });
-  document.body.appendChild(button);
+  (config.container ?? document.body).appendChild(button);
   return button;
 }
 
@@ -73,6 +147,16 @@ describe('focus engine', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     vi.useFakeTimers();
+    window.scrollTo = vi.fn();
+    Object.defineProperty(document.documentElement, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      configurable: true,
+      value: 3000,
+    });
   });
 
   it('focusFirst 优先聚焦目标分组里的默认元素', async () => {
@@ -187,5 +271,89 @@ describe('focus engine', () => {
     vi.advanceTimersByTime(120);
 
     expect(button.dataset.focusPressed).toBeUndefined();
+  });
+
+  it('焦点落到舒适区外时会触发统一纵向滚动', async () => {
+    const engine = await loadEngineModule();
+
+    const button = createFocusableButton({
+      id: 'deep-card',
+      section: 'content',
+      left: 400,
+      top: 720,
+      height: 72,
+      default: true,
+    });
+
+    engine.registerSection({ id: 'content', group: 'content' });
+    button.focus();
+
+    expect(window.scrollTo).toHaveBeenCalledWith({
+      top: 147,
+      left: 0,
+      behavior: 'auto',
+    });
+  });
+
+  it('首行焦点启用保头部后会优先按 section 锚点回滚', async () => {
+    const engine = await loadEngineModule();
+    const { section } = createSectionRoot({
+      id: 'content',
+      top: 320,
+      headerTop: 348,
+      height: 420,
+    });
+
+    const button = createFocusableButton({
+      id: 'section-first-row',
+      section: 'content',
+      left: 420,
+      top: 420,
+      default: true,
+      container: section,
+    });
+
+    engine.registerSection({
+      id: 'content',
+      group: 'content',
+      scroll: {
+        preserveHeaderWhenFirstRowFocused: true,
+        anchor: 'section-start',
+        topOffset: 96,
+      },
+    });
+
+    button.focus();
+
+    expect(window.scrollTo).toHaveBeenCalledWith({
+      top: 224,
+      left: 0,
+      behavior: 'auto',
+    });
+  });
+
+  it('存在内容滚动容器时会优先滚动容器而不是 window', async () => {
+    const engine = await loadEngineModule();
+    const scrollRoot = createScrollRoot();
+
+    const button = createFocusableButton({
+      id: 'scroll-root-card',
+      section: 'content',
+      left: 360,
+      top: 760,
+      height: 72,
+      default: true,
+      container: scrollRoot,
+    });
+
+    engine.registerSection({ id: 'content', group: 'content' });
+    button.focus();
+
+    expect(scrollRoot.scrollTo).toHaveBeenCalledWith({
+      top: 92,
+      left: 0,
+      behavior: 'auto',
+    });
+    expect(window.scrollTo).not.toHaveBeenCalled();
   });
 });

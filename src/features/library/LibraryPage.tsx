@@ -3,7 +3,7 @@ import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import {
   fetchCurrentUserProfile,
   fetchFavoriteFolders,
@@ -61,6 +61,7 @@ export function LibraryPage(props: LibraryPageProps) {
           enterTo="last-focused"
           className="content-section"
           leaveFor={{ left: '@side-nav' }}
+          scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <SectionHeader title="稍后再看" description="首版先支持列表浏览和直接播放，管理动作后置。" actionLabel={`${items.length} 条`} />
           <div className="list-panel">
@@ -99,6 +100,7 @@ export function LibraryPage(props: LibraryPageProps) {
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader title="收藏夹" description="首版先做文件夹列表和详情播放入口，管理动作后置。" actionLabel={`${folders.length} 个`} />
         <div className="chip-grid">

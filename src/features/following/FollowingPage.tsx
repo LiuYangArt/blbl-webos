@@ -4,7 +4,7 @@ import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { fetchFollowingChannelData } from '../../services/api/bilibili';
 import type { FollowFeedItem, VideoCardItem } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
@@ -55,6 +55,7 @@ export function FollowingPage({ onLogin, onOpenDetail }: FollowingPageProps) {
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader
           title="正在关注"

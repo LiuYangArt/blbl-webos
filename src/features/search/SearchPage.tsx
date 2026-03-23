@@ -6,7 +6,7 @@ import { usePageBackHandler } from '../../app/PageBackHandler';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import {
   fetchHotKeywords,
   fetchRecommendedVideos,
@@ -72,6 +72,7 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
         group="content"
         className="content-section search-hero"
         leaveFor={{ left: '@side-nav', down: '@search-hot-keywords' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader
           title="搜索内容"
@@ -136,6 +137,7 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav', up: '@search-actions', down: `@${historySectionId}` }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader title="热搜" description="点击热词直接进入结果页。" actionLabel={`${hotKeywords.length} 个热词`} />
         <div className="chip-grid">
@@ -162,6 +164,7 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
         className="content-section"
         disabled={!searchHistory.length}
         leaveFor={{ left: '@side-nav', up: '@search-hot-keywords', down: '@search-preview-grid' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader title="搜索历史" description="搜索历史保存在本地，便于遥控器下快速复用。" actionLabel={`${searchHistory.length} 条`} />
         {searchHistory.length ? (
@@ -195,6 +198,7 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav', up: searchHistory.length ? '@search-history' : '@search-hot-keywords' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader title="直接开看" description="搜索页底部保留一组推荐内容，减少空场景。" actionLabel="推荐预览" />
         <div className="media-grid">

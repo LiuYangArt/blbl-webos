@@ -6,7 +6,7 @@ import { usePageBackHandler } from '../../app/PageBackHandler';
 import { FocusButton } from '../../components/FocusButton';
 import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
-import { FocusSection } from '../../platform/focus';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { fetchVideoDetail, searchVideos } from '../../services/api/bilibili';
 import type { VideoCardItem } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
@@ -89,6 +89,7 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
         group="content"
         className="content-section search-hero"
         leaveFor={{ left: '@side-nav', down: '@search-results-grid' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader
           title={`搜索结果：${keyword}`}
@@ -142,6 +143,7 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
         enterTo="last-focused"
         className="content-section"
         leaveFor={{ left: '@side-nav', up: '@search-results-actions' }}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader title="视频结果" description="点击任意结果直接进入全屏播放。" actionLabel="立即播放" />
         {resolveError ? <p className="page-helper-text">{resolveError}</p> : null}
