@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { basename, resolve } from 'node:path';
 
@@ -130,6 +130,49 @@ const parseWaitMs = (value) => {
     throw new Error(`--wait-ms 必须是大于等于 0 的毫秒数，当前收到: ${value}`);
   }
   return waitMs;
+};
+
+const getSimulatorProfileConfigFile = (version) => {
+  if (!isWindows) {
+    return null;
+  }
+
+  const appData = process.env.APPDATA;
+  if (!appData) {
+    return null;
+  }
+
+  const normalizedVersion = String(version).trim();
+  const candidateFiles = [
+    resolve(appData, `webOS TV ${normalizedVersion} Simulator`, `webos-tv-simulator-${normalizedVersion}.json`),
+    resolve(appData, 'webos-simulator', `webos-tv-simulator-${normalizedVersion}.json`),
+  ];
+
+  return candidateFiles.find((file) => existsSync(file)) ?? candidateFiles[0] ?? null;
+};
+
+const disableSimulatorAutoInspector = (version) => {
+  const configFile = getSimulatorProfileConfigFile(version);
+  if (!configFile || !existsSync(configFile)) {
+    return;
+  }
+
+  const raw = readFileSync(configFile, 'utf8');
+  const config = JSON.parse(raw);
+  if (config?.settings?.['auto-inspector'] === false) {
+    return;
+  }
+
+  const nextConfig = {
+    ...config,
+    settings: {
+      ...(config.settings ?? {}),
+      'auto-inspector': false,
+    },
+  };
+
+  writeFileSync(configFile, `${JSON.stringify(nextConfig, null, '\t')}\n`, 'utf8');
+  console.log(`已关闭 Simulator auto-inspector: ${configFile}`);
 };
 
 const killWindowsProcessTreeByImageName = (imageName) => {
@@ -509,6 +552,7 @@ switch (action) {
   }
   case 'simulator': {
     ensureBuildPrepared();
+    disableSimulatorAutoInspector(simulatorVersion);
     const simulatorExecutable = resolveSimulatorExecutable(simulatorPath, simulatorVersion);
     await cleanupSimulatorProcesses(simulatorExecutable);
 

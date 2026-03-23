@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { readDebugFocusEnabled } from '../app/launchParams';
+import { expandBorderRadius } from './focusOverlayRadius';
 
 type FocusOverlaySnapshot = {
   focusId: string | null;
@@ -124,7 +125,7 @@ export function FocusOverlay() {
     top: `${snapshot.top - ringInset}px`,
     width: `${snapshot.width + (ringInset * 2)}px`,
     height: `${snapshot.height + (ringInset * 2)}px`,
-    borderRadius: snapshot.borderRadius,
+    borderRadius: expandBorderRadius(snapshot.borderRadius, ringInset),
   };
 
   return (

@@ -106,6 +106,43 @@ npm run webos:simulator
 
 不建议把 Windows 下的 `npm run ... -- --params '{"route":"ui-debug"}'` 当成唯一入口，因为 `cmd` 转义后 JSON 参数可读性很差，排查时容易误判。
 
+### 如果 Simulator 主进程弹出 `socket hang up`
+
+如果用户看到的是：
+
+- `A JavaScript error occurred in the main process`
+- `Error: socket hang up`
+
+先不要直接把问题归因给当前仓库 App，优先按下面顺序判断：
+
+1. 这个弹窗是不是在 **运行一段时间后** 才出现，而不是启动瞬间出现
+2. 当前 App 是否同时出现了白屏、焦点失效、播放失败、接口失败等稳定业务症状
+3. 宿主机其它网络请求是否也在报 `ECONNRESET` / `socket hang up`
+
+如果答案更接近：
+
+- Simulator 已运行一会儿
+- App 页面还能正常工作
+- 宿主网络本身也不稳定
+
+则优先把它视为：
+
+- `webOS Simulator` 自己的 Electron 主进程后台请求异常
+- 或宿主网络环境导致的噪音
+
+而不是当前 App 回归。
+
+可做的低成本降噪动作：
+
+1. 保证 `npm run webos:simulator` 走仓库脚本
+2. 保证旧 Simulator 和旧 `simulator-media-proxy` 已清理
+3. 关闭 Simulator profile 中的 `auto-inspector`
+
+但要注意：
+
+- `auto-inspector` 关闭只能降低噪音，不能证明它一定是最终根因
+- 只有当这个弹窗和业务症状能稳定关联时，才继续往前端或播放器代码里排查
+
 ## 绝对规则
 
 ### 1. 真机部署命令必须串行

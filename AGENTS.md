@@ -112,6 +112,7 @@ F:\CodeProjects\bilibili_tv_android\MediaPlayback
 - `npm run webos:simulator` 启动前必须先清理旧 Simulator 进程树和旧 `simulator-media-proxy`，避免残留旧窗口、旧 DevTools 会话和假性回归
 - 如果 Simulator 表现像旧包、旧调试面板或旧焦点行为，先排查旧 Simulator 会话是否真的清干净，再判断代码是否没生效
 - 如果 Simulator 仍像旧包，不要只看 `dist/assets`；必须核对 `build/webos/index.html` 和 `build/webos/assets` 实际引用的入口 JS 是否已经切到最新构建，因为 Simulator 加载的是 `build/webos`
+- 如果 Simulator 主进程在运行一段时间后弹出 `socket hang up`，先按“宿主网络 / Simulator 背景请求异常”处理，不要在没有业务症状时直接把问题归因到当前 App
 - 进入 `UI Debug` 优先使用快捷键 `Ctrl + Alt + Shift + U`，浏览器辅助入口用 `?uiDebug=1`；不要把 Windows 下 JSON 形式的 `--params` 当成唯一稳定入口
 - 设备名、IP、passphrase、私钥属于本机开发环境配置，不写入仓库业务代码
 - 更完整的打包、安装、启动、排障流程，统一参考仓库 Skill：`.agents/skills/lg-webos-deploy/SKILL.md`
