@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAsyncData } from '../../app/useAsyncData';
-import type { DetailRoutePayload, PgcDetailRoutePayload, PlayerRoutePayload } from '../../app/routes';
+import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
 import { FocusButton } from '../../components/FocusButton';
 import { HomeChannelTabs } from '../../components/HomeChannelTabs';
-import { MediaCard } from '../../components/MediaCard';
 import { SectionHeader } from '../../components/SectionHeader';
+import { VideoGridSection } from '../../components/VideoGridSection';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection, focusById } from '../../platform/focus';
 import {
   fetchFollowingChannelData,
@@ -20,18 +20,22 @@ import { readHomePublicFeedCache, writeHomePublicFeedCache } from './homeFeedCac
 import { readJsonStorage, writeJsonStorage } from '../../services/storage/local';
 import type {
   FollowingChannelData,
-  FollowFeedItem,
   HomeChannelKey,
   PgcSubscriptionItem,
   VideoCardItem,
 } from '../../services/api/types';
+import {
+  createResolvedVideoListItem,
+  mapFollowItemToVideoCard,
+  mapPgcSubscriptionToVideoCard,
+  resolvePgcSubscriptionPlayerPayload,
+  resolveVideoPlayerPayload,
+} from '../shared/videoListItems';
 import { PageStatus } from '../shared/PageStatus';
 
 type HomePageProps = {
   isLoggedIn: boolean;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
-  onOpenDetail: (item: DetailRoutePayload) => void;
-  onOpenPgcDetail: (item: PgcDetailRoutePayload) => void;
   onOpenSearch: () => void;
   onOpenHot: () => void;
 };
@@ -75,8 +79,6 @@ const EMPTY_VIDEO_OPTIONAL: AsyncOptional<VideoCardItem[]> = {
 export function HomePage({
   isLoggedIn,
   onOpenPlayer,
-  onOpenDetail,
-  onOpenPgcDetail,
   onOpenSearch,
   onOpenHot,
 }: HomePageProps) {
@@ -154,10 +156,10 @@ export function HomePage({
           : loadOptional(() => fetchRecommendedVideos(HOME_RECOMMEND_FETCH_COUNT, 1), [], '首页推荐', requestId),
         freshPublicCache
           ? Promise.resolve(createCachedOptional(freshPublicCache.data.popular))
-          : loadOptional(() => fetchPopularVideos(1, 12), [], '首页热门', requestId),
+          : loadOptional(() => fetchPopularVideos(1, 24), [], '首页热门', requestId),
         freshPublicCache
           ? Promise.resolve(createCachedOptional(freshPublicCache.data.ranking))
-          : loadOptional(() => fetchRankingVideos(12), [], '首页排行', requestId),
+          : loadOptional(() => fetchRankingVideos(24), [], '首页排行', requestId),
         loadOptional(
           async () => (isAuthenticated ? fetchFollowingChannelData() : emptyFollowingChannelData()),
           emptyFollowingChannelData(),
@@ -387,8 +389,6 @@ export function HomePage({
         following,
         subscriptions,
         onOpenPlayer,
-        onOpenDetail,
-        onOpenPgcDetail,
         onOpenSearch,
         onOpenHot,
         personalizedItems,
@@ -412,8 +412,6 @@ function renderChannelContent(params: {
     cinema: AsyncOptional<PgcSubscriptionItem[]>;
   };
   onOpenPlayer: (item: PlayerRoutePayload) => void;
-  onOpenDetail: (item: DetailRoutePayload) => void;
-  onOpenPgcDetail: (item: PgcDetailRoutePayload) => void;
   onOpenSearch: () => void;
   onOpenHot: () => void;
   personalizedItems: VideoCardItem[];
@@ -430,8 +428,6 @@ function renderChannelContent(params: {
     following,
     subscriptions,
     onOpenPlayer,
-    onOpenDetail,
-    onOpenPgcDetail,
     onOpenSearch,
     onOpenHot,
     personalizedItems,
@@ -443,23 +439,27 @@ function renderChannelContent(params: {
 
   switch (activeChannel) {
     case 'personalized': {
-      const autoLoadStartIndex = Math.max(0, personalizedItems.length - HOME_RECOMMEND_AUTO_LOAD_THRESHOLD);
+      const videoItems = personalizedItems.map((item) => createResolvedVideoListItem(
+        item.bvid,
+        item,
+        () => resolveVideoPlayerPayload(item),
+      ));
       return (
-        <FocusSection
-          as="section"
-          id="home-channel-content"
-          group="content"
-          enterTo="last-focused"
-          className="content-section"
+        <VideoGridSection
+          sectionId="home-channel-content"
+          title="个性推荐"
+          description="首页直接展示推荐视频列表，继续向下会自动补更多内容。"
+          actionLabel={`${personalizedItems.length} 条`}
+          items={videoItems}
+          onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
-          scroll={CONTENT_FIRST_ROW_SCROLL}
-        >
-          <SectionHeader
-            title="个性推荐"
-            description="首页直接展示推荐视频列表，继续向下会自动补更多内容。"
-            actionLabel={`${personalizedItems.length} 条`}
-          />
-          {recommended.error && personalizedItems.length === 0 ? (
+          initialVisibleCount={12}
+          prefetchThreshold={HOME_RECOMMEND_AUTO_LOAD_THRESHOLD}
+          hasMore={hasMorePersonalized}
+          isLoadingMore={isLoadingMorePersonalized}
+          loadMoreError={personalizedLoadMoreError}
+          onRequestMore={(trigger) => void onLoadMorePersonalized(trigger === 'manual' ? 'manual' : 'prefetch')}
+          emptyState={recommended.error && personalizedItems.length === 0 ? (
             <>
               <InlineChannelNotice title="个性推荐暂时不可用" description={recommended.error} />
               <div className="page-inline-actions">
@@ -476,66 +476,38 @@ function renderChannelContent(params: {
                 </FocusButton>
               </div>
             </>
-          ) : (
-            <>
-              <div className="media-grid">
-                {personalizedItems.map((item, index) => (
-                  <MediaCard
-                    key={item.bvid}
-                    sectionId="home-channel-content"
-                    focusId={`home-personalized-${index}`}
-                    defaultFocus={index === 0}
-                    item={item}
-                    onFocus={() => {
-                      if (hasMorePersonalized && index >= autoLoadStartIndex) {
-                        void onLoadMorePersonalized('prefetch');
-                      }
-                    }}
-                    onClick={() => onOpenPlayer(item)}
-                  />
-                ))}
-              </div>
-              {isLoadingMorePersonalized ? (
-                <p className="page-helper-text">正在加载更多推荐...</p>
-              ) : null}
-              {personalizedLoadMoreError ? (
-                <div className="page-inline-actions">
-                  <FocusButton
-                    variant="ghost"
-                    size="sm"
-                    className="page-inline-link"
-                    sectionId="home-channel-content"
-                    focusId="home-personalized-retry-load-more"
-                    onClick={() => void onLoadMorePersonalized('manual')}
-                  >
-                    重试加载更多推荐
-                  </FocusButton>
-                </div>
-              ) : !hasMorePersonalized ? (
-                <p className="page-helper-text">已经到底了，稍后再来刷新推荐。</p>
-              ) : null}
-            </>
-          )}
-        </FocusSection>
+          ) : undefined}
+        />
       );
     }
     case 'following':
       return (
-        <FocusSection
-          as="section"
-          id="home-channel-content"
-          group="content"
-          enterTo="last-focused"
-          className="content-section"
+        <VideoGridSection
+          sectionId="home-channel-content"
+          title="正在关注"
+          description="首页关注区也统一成点击即播的视频列表。"
+          actionLabel={`${following.data.items.length} 条更新`}
+          items={following.data.items.map((item) => createResolvedVideoListItem(
+            item.id,
+            mapFollowItemToVideoCard(item),
+            () => resolveVideoPlayerPayload({
+              bvid: item.bvid,
+              title: item.title,
+            }),
+          ))}
+          onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
-          scroll={CONTENT_FIRST_ROW_SCROLL}
-        >
-          <SectionHeader
-            title="正在关注"
-            description="首页首版只保留可直接进入详情的视频动态，避免把 TV 页面做成动态广场。"
-            actionLabel={`${following.data.items.length} 条更新`}
-          />
-          {following.error ? (
+          initialVisibleCount={6}
+          beforeGrid={following.data.accounts.length > 0 ? (
+            <div className="home-following-summary">
+              {following.data.accounts.map((account) => (
+                <span key={account.mid} className={account.hasUpdate ? 'home-following-summary__chip home-following-summary__chip--active' : 'home-following-summary__chip'}>
+                  {account.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          emptyState={following.error ? (
             <>
               <InlineChannelNotice title="关注动态暂时不可用" description={following.error} />
               <div className="page-inline-actions">
@@ -550,30 +522,6 @@ function renderChannelContent(params: {
                 >
                   先去搜索内容
                 </FocusButton>
-              </div>
-            </>
-          ) : following.data.items.length > 0 ? (
-            <>
-              {following.data.accounts.length > 0 ? (
-                <div className="home-following-summary">
-                  {following.data.accounts.map((account) => (
-                    <span key={account.mid} className={account.hasUpdate ? 'home-following-summary__chip home-following-summary__chip--active' : 'home-following-summary__chip'}>
-                      {account.name}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              <div className="media-grid">
-                {following.data.items.map((item, index) => (
-                  <MediaCard
-                    key={item.id}
-                    sectionId="home-channel-content"
-                    focusId={`home-following-${index}`}
-                    defaultFocus={index === 0}
-                    item={createFollowVideoCard(item)}
-                    onClick={() => onOpenDetail({ bvid: item.bvid, title: item.title })}
-                  />
-                ))}
               </div>
             </>
           ) : (
@@ -594,25 +542,25 @@ function renderChannelContent(params: {
               </div>
             </>
           )}
-        </FocusSection>
+        />
       );
-    case 'subscriptions':
+    case 'subscriptions': {
+      const subscriptionItems = [...subscriptions.anime.data, ...subscriptions.cinema.data].map((item) => createResolvedVideoListItem(
+        `${item.seasonKind}:${item.seasonId}`,
+        mapPgcSubscriptionToVideoCard(item),
+        () => resolvePgcSubscriptionPlayerPayload(item),
+      ));
       return (
-        <FocusSection
-          as="section"
-          id="home-channel-content"
-          group="content"
-          enterTo="last-focused"
-          className="content-section"
+        <VideoGridSection
+          sectionId="home-channel-content"
+          title="订阅剧集"
+          description="首页订阅区也统一为视频列表，点击卡片直接进入播放。"
+          actionLabel={`${subscriptionItems.length} 条`}
+          items={subscriptionItems}
+          onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
-          scroll={CONTENT_FIRST_ROW_SCROLL}
-        >
-          <SectionHeader
-            title="订阅剧集"
-            description="先按“最近追番 / 最近追剧”两段展示，点击后进入简化版剧集详情页。"
-            actionLabel={`${subscriptions.anime.data.length + subscriptions.cinema.data.length} 条`}
-          />
-          {subscriptions.anime.error || subscriptions.cinema.error ? (
+          initialVisibleCount={6}
+          emptyState={subscriptions.anime.error || subscriptions.cinema.error ? (
             <>
               <InlineChannelNotice
                 title="订阅剧集暂时不可用"
@@ -632,7 +580,7 @@ function renderChannelContent(params: {
                 </FocusButton>
               </div>
             </>
-          ) : subscriptions.anime.data.length === 0 && subscriptions.cinema.data.length === 0 ? (
+          ) : (
             <>
               <InlineChannelNotice title="当前还没有订阅内容" description="等你在账号里追番或追剧后，这里会优先展示最近在看的条目。" />
               <div className="page-inline-actions">
@@ -649,103 +597,60 @@ function renderChannelContent(params: {
                 </FocusButton>
               </div>
             </>
-          ) : (
-            <div className="home-channel-stack">
-              <div className="home-subscription-group">
-                <div className="home-subscription-group__header">
-                  <strong>最近追番</strong>
-                  <span>{subscriptions.anime.data.length} 条</span>
-                </div>
-                <div className="media-grid">
-                  {subscriptions.anime.data.slice(0, 6).map((item, index) => (
-                    <PgcSubscriptionCard
-                      key={`anime-${item.seasonId}`}
-                      sectionId="home-channel-content"
-                      focusId={`home-subscription-anime-${index}`}
-                      defaultFocus={index === 0}
-                      item={item}
-                      onClick={() => onOpenPgcDetail({ seasonId: item.seasonId, title: item.title })}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="home-subscription-group">
-                <div className="home-subscription-group__header">
-                  <strong>最近追剧</strong>
-                  <span>{subscriptions.cinema.data.length} 条</span>
-                </div>
-                <div className="media-grid">
-                  {subscriptions.cinema.data.slice(0, 6).map((item, index) => (
-                    <PgcSubscriptionCard
-                      key={`cinema-${item.seasonId}`}
-                      sectionId="home-channel-content"
-                      focusId={`home-subscription-cinema-${index}`}
-                      defaultFocus={subscriptions.anime.data.length === 0 && index === 0}
-                      item={item}
-                      onClick={() => onOpenPgcDetail({ seasonId: item.seasonId, title: item.title })}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
           )}
-        </FocusSection>
+        />
       );
+    }
     case 'hot':
       return (
-        <FocusSection
-          as="section"
-          id="home-channel-content"
-          group="content"
-          enterTo="last-focused"
-          className="content-section"
+        <VideoGridSection
+          sectionId="home-channel-content"
+          title="热门视频"
+          description="首页热门频道也改为统一视频列表模板。"
+          actionLabel={`${popular.data.length} 条`}
+          items={popular.data.map((item) => createResolvedVideoListItem(
+            item.bvid,
+            item,
+            () => resolveVideoPlayerPayload(item),
+          ))}
+          onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
-          scroll={CONTENT_FIRST_ROW_SCROLL}
-        >
-          <SectionHeader title="热门视频" description="首版继续复用可稳定直播的热门内容。" actionLabel={`${popular.data.length} 条`} />
-          {popular.error && popular.data.length === 0 ? (
+          initialVisibleCount={6}
+          emptyState={popular.error && popular.data.length === 0 ? (
             <InlineChannelNotice title="热门内容暂时不可用" description={popular.error} />
-          ) : (
-            <div className="media-grid">
-              {popular.data.slice(0, 6).map((item, index) => (
-                <MediaCard
-                  key={item.bvid}
-                  sectionId="home-channel-content"
-                  focusId={`home-hot-${index}`}
-                  defaultFocus={index === 0}
-                  item={item}
-                  onClick={() => onOpenPlayer(item)}
-                />
-              ))}
+          ) : undefined}
+          beforeGrid={(
+            <div className="page-inline-actions">
+              <FocusButton
+                variant="ghost"
+                size="sm"
+                className="page-inline-link"
+                sectionId="home-channel-content"
+                focusId="home-hot-more"
+                onClick={onOpenHot}
+              >
+                查看完整热门页
+              </FocusButton>
             </div>
           )}
-          <div className="page-inline-actions">
-            <FocusButton
-              variant="ghost"
-              size="sm"
-              className="page-inline-link"
-              sectionId="home-channel-content"
-              focusId="home-hot-more"
-              onClick={onOpenHot}
-            >
-              查看完整热门页
-            </FocusButton>
-          </div>
-        </FocusSection>
+        />
       );
     case 'ranking':
       return (
-        <FocusSection
-          as="section"
-          id="home-channel-content"
-          group="content"
-          enterTo="last-focused"
-          className="content-section"
+        <VideoGridSection
+          sectionId="home-channel-content"
+          title="排行"
+          description="先接全站排行，后续再分区。"
+          actionLabel={`${ranking.data.length} 条`}
+          items={ranking.data.map((item) => createResolvedVideoListItem(
+            item.bvid,
+            item,
+            () => resolveVideoPlayerPayload(item),
+          ))}
+          onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
-          scroll={CONTENT_FIRST_ROW_SCROLL}
-        >
-          <SectionHeader title="排行" description="先接全站排行，后续再分区。" actionLabel={`${ranking.data.length} 条`} />
-          {ranking.error && ranking.data.length === 0 ? (
+          initialVisibleCount={6}
+          emptyState={ranking.error && ranking.data.length === 0 ? (
             <>
               <InlineChannelNotice title="排行暂时不可用" description={ranking.error} />
               <div className="page-inline-actions">
@@ -762,21 +667,8 @@ function renderChannelContent(params: {
                 </FocusButton>
               </div>
             </>
-          ) : (
-            <div className="media-grid">
-              {ranking.data.map((item, index) => (
-                <MediaCard
-                  key={item.bvid}
-                  sectionId="home-channel-content"
-                  focusId={`home-ranking-${index}`}
-                  defaultFocus={index === 0}
-                  item={item}
-                  onClick={() => onOpenPlayer(item)}
-                />
-              ))}
-            </div>
-          )}
-        </FocusSection>
+          ) : undefined}
+        />
       );
     case 'live':
       return (
@@ -809,36 +701,6 @@ function renderChannelContent(params: {
   }
 }
 
-function PgcSubscriptionCard(props: {
-  item: PgcSubscriptionItem;
-  sectionId: string;
-  focusId: string;
-  defaultFocus?: boolean;
-  onClick: () => void;
-}) {
-  const { item, sectionId, focusId, defaultFocus = false, onClick } = props;
-  return (
-    <FocusButton
-      variant="card"
-      className="media-card media-card--pgc"
-      sectionId={sectionId}
-      focusId={focusId}
-      defaultFocus={defaultFocus}
-      onClick={onClick}
-    >
-      <div className="media-card__poster" aria-hidden="true">
-        {item.cover ? <img src={item.cover} alt="" referrerPolicy="no-referrer" /> : null}
-        {item.badge ? <span className="media-card__reason">{item.badge}</span> : null}
-      </div>
-      <div className="media-card__body">
-        <strong>{item.title}</strong>
-        <span>{item.progress || item.latestEpisodeLabel || item.seasonTypeLabel}</span>
-        <small>{item.subtitle || item.latestEpisodeTitle || '点击进入剧集详情'}</small>
-      </div>
-    </FocusButton>
-  );
-}
-
 function InlineChannelNotice({ title, description }: { title: string; description: string }) {
   return (
     <div className="home-channel-notice">
@@ -846,23 +708,6 @@ function InlineChannelNotice({ title, description }: { title: string; descriptio
       <span>{description}</span>
     </div>
   );
-}
-
-function createFollowVideoCard(item: FollowFeedItem): VideoCardItem {
-  return {
-    aid: 0,
-    bvid: item.bvid,
-    cid: 0,
-    title: item.title,
-    cover: item.cover,
-    duration: item.duration,
-    ownerName: item.ownerName,
-    playCount: 0,
-    danmakuCount: 0,
-    description: item.description,
-    reason: item.reason,
-    publishAt: item.publishedAt,
-  };
 }
 
 function emptyFollowingChannelData(): FollowingChannelData {

@@ -48,6 +48,7 @@ export function MediaCard({
       <div className="media-card__body">
         <strong>{item.title}</strong>
         <span>{item.ownerName || item.typeName || '哔哩哔哩'}</span>
+        {item.metaText ? <small>{item.metaText}</small> : null}
       </div>
     </FocusButton>
   );

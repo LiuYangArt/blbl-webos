@@ -1,132 +1,195 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../app/AppStore';
 import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
-import { SectionHeader } from '../../components/SectionHeader';
-import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
+import { VideoGridSection } from '../../components/VideoGridSection';
 import {
   fetchCurrentUserProfile,
+  fetchFavoriteFolderDetail,
   fetchFavoriteFolders,
   fetchLaterList,
 } from '../../services/api/bilibili';
-import type { FavoriteFolder } from '../../services/api/types';
+import {
+  createDirectVideoListItem,
+  mapFavoriteItemToVideoCard,
+  mapLaterItemToVideoCard,
+} from '../shared/videoListItems';
 import { PageStatus } from '../shared/PageStatus';
 
-type LibraryPageProps =
-  | {
-      mode: 'later';
-      onLogin: () => void;
-      onOpenPlayer: (item: PlayerRoutePayload) => void;
-    }
-  | {
-      mode: 'favorites';
-      onLogin: () => void;
-      onOpenFavorite: (folder: FavoriteFolder) => void;
-    };
+type LibraryPageProps = {
+  mode: 'later' | 'favorites';
+  onLogin: () => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
+};
 
-export function LibraryPage(props: LibraryPageProps) {
+export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
   const { auth } = useAppStore();
-  const library = useAsyncData(async () => {
-    if (props.mode === 'later') {
-      return { items: await fetchLaterList() };
+  const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
+
+  const later = useAsyncData(
+    async () => (mode === 'later' ? fetchLaterList() : []),
+    [mode],
+  );
+
+  const folders = useAsyncData(async () => {
+    if (mode !== 'favorites') {
+      return [];
     }
+
     const profile = auth.profile ?? await fetchCurrentUserProfile();
-    return { folders: await fetchFavoriteFolders(profile.mid) };
-  }, [props.mode, auth.profile?.mid]);
+    return fetchFavoriteFolders(profile.mid);
+  }, [mode, auth.profile?.mid]);
 
-  if (library.status !== 'success') {
-    if (library.status === 'error') {
-      return (
-        <PageStatus
-          title={props.mode === 'later' ? '稍后再看暂不可用' : '收藏夹暂不可用'}
-          description="通常是因为当前还没有有效登录态。"
-          actionLabel="去扫码登录"
-          onAction={props.onLogin}
-        />
-      );
+  useEffect(() => {
+    if (mode !== 'favorites' || folders.status !== 'success') {
+      return;
     }
-    return <PageStatus title={props.mode === 'later' ? '正在同步稍后再看' : '正在同步收藏夹'} description="如果当前已有登录态，会自动读取账号数据。" />;
-  }
 
-  const data = library.data;
+    if (folders.data.length === 0) {
+      setActiveFolderId(null);
+      return;
+    }
 
-  if (props.mode === 'later') {
-    const items = ('items' in data ? data.items : undefined) ?? [];
+    const hasActiveFolder = activeFolderId !== null && folders.data.some((folder) => folder.id === activeFolderId);
+    if (!hasActiveFolder) {
+      setActiveFolderId(folders.data[0].id);
+    }
+  }, [activeFolderId, folders, mode]);
+
+  const favoriteItems = useAsyncData(async () => {
+    if (mode !== 'favorites' || !activeFolderId) {
+      return [];
+    }
+
+    return fetchFavoriteFolderDetail(activeFolderId);
+  }, [mode, activeFolderId]);
+
+  const activeFolder = useMemo(() => {
+    if (mode !== 'favorites' || folders.status !== 'success') {
+      return null;
+    }
+
+    return folders.data.find((folder) => folder.id === activeFolderId) ?? folders.data[0] ?? null;
+  }, [activeFolderId, folders, mode]);
+
+  if (mode === 'later') {
+    if (later.status !== 'success') {
+      if (later.status === 'error') {
+        return (
+          <PageStatus
+            title="稍后再看暂不可用"
+            description="通常是因为当前还没有有效登录态。"
+            actionLabel="去扫码登录"
+            onAction={onLogin}
+          />
+        );
+      }
+
+      return <PageStatus title="正在同步稍后再看" description="如果当前已有登录态，会自动读取账号数据。" />;
+    }
+
+    const items = later.data.map((item) => createDirectVideoListItem(
+      item.bvid,
+      mapLaterItemToVideoCard(item),
+      item,
+    ));
+
     return (
       <main className="page-shell">
-        <FocusSection
-          as="section"
-          id="later-list"
-          group="content"
-          enterTo="last-focused"
-          className="content-section"
-          leaveFor={{ left: '@side-nav' }}
-          scroll={CONTENT_FIRST_ROW_SCROLL}
-        >
-          <SectionHeader title="稍后再看" description="首版先支持列表浏览和直接播放，管理动作后置。" actionLabel={`${items.length} 条`} />
-          <div className="list-panel">
-            {items.map((item, index) => (
-              <div key={item.bvid} className="list-panel__row">
-                <FocusButton
-                  variant="card"
-                  className="history-card"
-                  sectionId="later-list"
-                  focusId={`later-item-${index}`}
-                  defaultFocus={index === 0}
-                  onClick={() => props.onOpenPlayer(item)}
-                >
-                  <img src={item.cover} alt="" className="history-card__cover" referrerPolicy="no-referrer" />
-                  <div className="history-card__body">
-                    <strong>{item.title}</strong>
-                    <span>{item.author}</span>
-                    <small>{formatDuration(item.duration)}</small>
-                  </div>
-                </FocusButton>
-              </div>
-            ))}
-          </div>
-        </FocusSection>
+        <VideoGridSection
+          sectionId="later-list"
+          title="稍后再看"
+          description="统一收敛为和首页一致的视频列表，点击卡片直接播放。"
+          actionLabel={`${items.length} 条`}
+          items={items}
+          onOpenPlayer={onOpenPlayer}
+        />
       </main>
     );
   }
 
-  const folders = ('folders' in data ? data.folders : undefined) ?? [];
+  if (folders.status !== 'success') {
+    if (folders.status === 'error') {
+      return (
+        <PageStatus
+          title="收藏夹暂不可用"
+          description="通常是因为当前还没有有效登录态。"
+          actionLabel="去扫码登录"
+          onAction={onLogin}
+        />
+      );
+    }
+
+    return <PageStatus title="正在同步收藏夹" description="如果当前已有登录态，会自动读取账号数据。" />;
+  }
+
+  if (folders.data.length === 0) {
+    return (
+      <PageStatus
+        title="还没有收藏内容"
+        description="登录后，这里会直接展示默认收藏夹里的视频内容。"
+        actionLabel="去扫码登录"
+        onAction={onLogin}
+      />
+    );
+  }
+
+  if (favoriteItems.status !== 'success') {
+    if (favoriteItems.status === 'error') {
+      return (
+        <PageStatus
+          title="收藏视频加载失败"
+          description={favoriteItems.error}
+          actionLabel="重新加载"
+          onAction={() => void favoriteItems.reload()}
+        />
+      );
+    }
+
+    return <PageStatus title="正在加载收藏视频" description={activeFolder?.title ?? '准备收藏列表'} />;
+  }
+
+  const items = favoriteItems.data.map((item) => createDirectVideoListItem(
+    `${item.bvid}:${item.cid}`,
+    mapFavoriteItemToVideoCard(item, activeFolder?.title),
+    {
+      bvid: item.bvid,
+      cid: item.cid,
+      title: item.title,
+    },
+  ));
+
   return (
     <main className="page-shell">
-      <FocusSection
-        as="section"
-        id="favorites-grid"
-        group="content"
-        enterTo="last-focused"
-        className="content-section"
-        leaveFor={{ left: '@side-nav' }}
-        scroll={CONTENT_FIRST_ROW_SCROLL}
-      >
-        <SectionHeader title="收藏夹" description="首版先做文件夹列表和详情播放入口，管理动作后置。" actionLabel={`${folders.length} 个`} />
-        <div className="chip-grid">
-          {folders.map((folder, index) => (
-            <FocusButton
-              key={folder.id}
-              variant={index === 0 ? 'primary' : 'glass'}
-              size="hero"
-              sectionId="favorites-grid"
-              focusId={`favorite-folder-${index}`}
-              defaultFocus={index === 0}
-              className="library-folder-card"
-              onClick={() => props.onOpenFavorite(folder)}
-            >
-              <span>{folder.title}</span>
-              <small>{folder.mediaCount} 个视频</small>
-            </FocusButton>
+      <VideoGridSection
+        sectionId="favorites-list"
+        title="收藏"
+        description="默认直接展示收藏视频，顶部只保留轻量切换，不再把选收藏夹作为主流程。"
+        actionLabel={activeFolder ? `${activeFolder.title} · ${items.length} 条` : `${items.length} 条`}
+        items={items}
+        onOpenPlayer={onOpenPlayer}
+        resetKey={String(activeFolderId ?? 'favorites')}
+        beforeGrid={(
+          <div className="library-folder-strip">
+            {folders.data.map((folder, index) => (
+              <FocusButton
+                key={folder.id}
+                variant={folder.id === activeFolderId ? 'primary' : 'glass'}
+                size="md"
+                className="detail-chip library-folder-chip"
+                sectionId="favorites-list"
+                focusId={`favorite-folder-${index}`}
+                onClick={() => setActiveFolderId(folder.id)}
+              >
+                <span>{folder.title}</span>
+                <small>{folder.mediaCount} 个视频</small>
+              </FocusButton>
             ))}
-        </div>
-      </FocusSection>
+          </div>
+        )}
+        emptyState={<p className="page-helper-text">这个收藏夹里暂时还没有可展示的视频。</p>}
+      />
     </main>
   );
-}
-
-function formatDuration(duration: number) {
-  const minutes = Math.floor(duration / 60);
-  const seconds = duration % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }

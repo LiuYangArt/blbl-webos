@@ -22,6 +22,7 @@ export type VideoCardItem = {
   publishAt?: number;
   badge?: string;
   typeName?: string;
+  metaText?: string;
 };
 
 export type VideoPart = {

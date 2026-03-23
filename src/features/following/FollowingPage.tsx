@@ -1,20 +1,18 @@
 import { useAppStore } from '../../app/AppStore';
-import type { DetailRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
-import { MediaCard } from '../../components/MediaCard';
-import { SectionHeader } from '../../components/SectionHeader';
-import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
+import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchFollowingChannelData } from '../../services/api/bilibili';
-import type { FollowFeedItem, VideoCardItem } from '../../services/api/types';
+import type { PlayerRoutePayload } from '../../app/routes';
+import { createResolvedVideoListItem, mapFollowItemToVideoCard, resolveVideoPlayerPayload } from '../shared/videoListItems';
 import { PageStatus } from '../shared/PageStatus';
 
 type FollowingPageProps = {
   onLogin: () => void;
-  onOpenDetail: (item: DetailRoutePayload) => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function FollowingPage({ onLogin, onOpenDetail }: FollowingPageProps) {
+export function FollowingPage({ onLogin, onOpenPlayer }: FollowingPageProps) {
   const { auth } = useAppStore();
 
   const following = useAsyncData(async () => fetchFollowingChannelData(), []);
@@ -45,24 +43,25 @@ export function FollowingPage({ onLogin, onOpenDetail }: FollowingPageProps) {
   }
 
   const data = following.data;
+  const items = data.items.map((item) => createResolvedVideoListItem(
+    item.id,
+    mapFollowItemToVideoCard(item),
+    () => resolveVideoPlayerPayload({
+      bvid: item.bvid,
+      title: item.title,
+    }),
+  ));
 
   return (
     <main className="page-shell">
-      <FocusSection
-        as="section"
-        id="following-grid"
-        group="content"
-        enterTo="last-focused"
-        className="content-section"
-        leaveFor={{ left: '@side-nav' }}
-        scroll={CONTENT_FIRST_ROW_SCROLL}
-      >
-        <SectionHeader
-          title="正在关注"
-          description="首版只保留可直接进入视频详情的关注更新，不把文字动态和复杂互动带进 TV 端。"
-          actionLabel={`${data.items.length} 条`}
-        />
-        {data.accounts.length > 0 ? (
+      <VideoGridSection
+        sectionId="following-grid"
+        title="正在关注"
+        description="统一改为点击卡片直接播放，保留关注账号摘要但不再绕去详情页。"
+        actionLabel={`${data.items.length} 条`}
+        items={items}
+        onOpenPlayer={onOpenPlayer}
+        beforeGrid={data.accounts.length > 0 ? (
           <div className="home-following-summary">
             {data.accounts.map((account) => (
               <span key={account.mid} className={account.hasUpdate ? 'home-following-summary__chip home-following-summary__chip--active' : 'home-following-summary__chip'}>
@@ -71,21 +70,7 @@ export function FollowingPage({ onLogin, onOpenDetail }: FollowingPageProps) {
             ))}
           </div>
         ) : null}
-
-        {data.items.length > 0 ? (
-          <div className="media-grid">
-            {data.items.map((item, index) => (
-              <MediaCard
-                key={item.id}
-                sectionId="following-grid"
-                focusId={`following-item-${index}`}
-                defaultFocus={index === 0}
-                item={toVideoCard(item)}
-                onClick={() => onOpenDetail({ bvid: item.bvid, title: item.title })}
-              />
-            ))}
-          </div>
-        ) : (
+        emptyState={(
           <div className="page-inline-actions">
             <FocusButton
               variant="ghost"
@@ -100,24 +85,7 @@ export function FollowingPage({ onLogin, onOpenDetail }: FollowingPageProps) {
             </FocusButton>
           </div>
         )}
-      </FocusSection>
+      />
     </main>
   );
-}
-
-function toVideoCard(item: FollowFeedItem): VideoCardItem {
-  return {
-    aid: 0,
-    bvid: item.bvid,
-    cid: 0,
-    title: item.title,
-    cover: item.cover,
-    duration: item.duration,
-    ownerName: item.ownerName,
-    playCount: 0,
-    danmakuCount: 0,
-    description: item.description,
-    reason: item.reason,
-    publishAt: item.publishedAt,
-  };
 }

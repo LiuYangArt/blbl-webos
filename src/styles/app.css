@@ -1449,6 +1449,24 @@ button {
   object-fit: cover;
 }
 
+.library-folder-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.library-folder-chip {
+  min-width: 190px;
+  min-height: 82px;
+  padding: 14px 18px;
+}
+
+.library-folder-chip small {
+  color: rgba(229, 226, 227, 0.74);
+  font-size: 14px;
+}
+
 .library-folder-card {
   display: flex;
   flex-direction: column;

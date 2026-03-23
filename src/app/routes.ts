@@ -1,6 +1,6 @@
 import { TV_ICONS } from './iconRegistry';
 import type { TvIconName } from './iconRegistry';
-import type { FavoriteFolder, VideoCardItem } from '../services/api/types';
+import type { VideoCardItem } from '../services/api/types';
 
 export type AppRoute =
   | { name: 'home' }
@@ -16,8 +16,7 @@ export type AppRoute =
   | { name: 'login' }
   | { name: 'profile' }
   | { name: 'later' }
-  | { name: 'favorites' }
-  | { name: 'favorite-detail'; mediaId: number; title: string };
+  | { name: 'favorites' };
 
 export type RootNavKey =
   | 'home'
@@ -67,7 +66,6 @@ export function getActiveNav(route: AppRoute, isLoggedIn: boolean): RootNavKey |
     case 'later':
       return 'later';
     case 'favorites':
-    case 'favorite-detail':
       return 'favorites';
     case 'profile':
       return 'profile';
@@ -86,7 +84,6 @@ export type DetailRoutePayload = Pick<VideoCardItem, 'bvid' | 'title'>;
 export type PlayerRoutePayload = Pick<VideoCardItem, 'bvid' | 'cid' | 'title'> & {
   part?: string;
 };
-export type FavoriteRoutePayload = Pick<FavoriteFolder, 'id' | 'title'>;
 export type PgcDetailRoutePayload = {
   seasonId: number;
   title: string;

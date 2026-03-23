@@ -1,9 +1,8 @@
-import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
-import { MediaCard } from '../../components/MediaCard';
-import { SectionHeader } from '../../components/SectionHeader';
-import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
+import type { PlayerRoutePayload } from '../../app/routes';
+import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchPopularVideos } from '../../services/api/bilibili';
+import { createResolvedVideoListItem, resolveVideoPlayerPayload } from '../shared/videoListItems';
 import { PageStatus } from '../shared/PageStatus';
 
 type HotPageProps = {
@@ -28,35 +27,22 @@ export function HotPage({ onOpenPlayer }: HotPageProps) {
   }
 
   const items = hot.data;
+  const videoItems = items.map((item) => createResolvedVideoListItem(
+    item.bvid,
+    item,
+    () => resolveVideoPlayerPayload(item),
+  ));
 
   return (
     <main className="page-shell">
-      <FocusSection
-        as="section"
-        id="hot-grid"
-        group="content"
-        enterTo="last-focused"
-        className="content-section"
-        leaveFor={{ left: '@side-nav' }}
-        scroll={CONTENT_FIRST_ROW_SCROLL}
-      >
-        <SectionHeader
-          title="热门精选"
-          description="首版优先接入稳定公开接口，为 TV 端补上首页之外的主动浏览入口。"
-          actionLabel="18 条内容"
-        />
-        <div className="media-grid">
-          {items.map((item, index) => (
-            <MediaCard
-              key={item.bvid}
-              sectionId="hot-grid"
-              focusId={`hot-item-${index}`}
-              item={item}
-              onClick={() => onOpenPlayer(item)}
-            />
-          ))}
-        </div>
-      </FocusSection>
+      <VideoGridSection
+        sectionId="hot-grid"
+        title="热门精选"
+        description="热门页也统一复用视频列表模板，点击即播并支持继续向下补出更多内容。"
+        actionLabel={`${items.length} 条内容`}
+        items={videoItems}
+        onOpenPlayer={onOpenPlayer}
+      />
     </main>
   );
 }

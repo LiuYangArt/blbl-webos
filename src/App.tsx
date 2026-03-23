@@ -12,7 +12,6 @@ import { HistoryPage } from './features/history/HistoryPage';
 import { HomePage } from './features/home/HomePage';
 import { HotPage } from './features/hot/HotPage';
 import { LibraryPage } from './features/library/LibraryPage';
-import { FavoriteDetailPage } from './features/library/FavoriteDetailPage';
 import { PlayerPage } from './features/player/PlayerPage';
 import { PgcDetailPage } from './features/pgc/PgcDetailPage';
 import { ProfilePage } from './features/profile/ProfilePage';
@@ -56,8 +55,6 @@ function AppContent() {
         return `${currentPage.name}:${currentPage.seasonId}`;
       case 'player':
         return `${currentPage.name}:${currentPage.bvid}:${currentPage.cid}`;
-      case 'favorite-detail':
-        return `${currentPage.name}:${currentPage.mediaId}`;
       default:
         return currentPage.name;
     }
@@ -192,8 +189,6 @@ function summarizeRoute(route: AppRoute) {
       return `pgc-detail:${route.seasonId}`;
     case 'search-results':
       return `search-results:${route.keyword}`;
-    case 'favorite-detail':
-      return `favorite-detail:${route.mediaId}`;
     default:
       return route.name;
   }
@@ -223,8 +218,6 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
         <HomePage
           isLoggedIn={actions.isLoggedIn}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
-          onOpenPgcDetail={(item) => actions.push({ name: 'pgc-detail', seasonId: item.seasonId, title: item.title })}
           onOpenSearch={() => actions.replace({ name: 'search' })}
           onOpenHot={() => actions.replace({ name: 'hot' })}
         />
@@ -233,14 +226,14 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
       return (
         <FollowingPage
           onLogin={() => actions.push({ name: 'login' })}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
     case 'subscriptions':
       return (
         <SubscriptionsPage
           onLogin={() => actions.push({ name: 'login' })}
-          onOpenPgcDetail={(item) => actions.push({ name: 'pgc-detail', seasonId: item.seasonId, title: item.title })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
     case 'hot':
@@ -304,14 +297,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
       return (
         <HistoryPage
           onLogin={() => actions.push({ name: 'login' })}
-          onOpenDetail={(item) => actions.push({ name: 'video-detail', bvid: item.bvid, title: item.title })}
-          onOpenPlayer={(item) => actions.push({
-            name: 'player',
-            bvid: item.bvid,
-            cid: item.cid,
-            title: item.title,
-            part: item.part,
-          })}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
     case 'login':
@@ -339,14 +325,6 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
         <LibraryPage
           mode="favorites"
           onLogin={() => actions.push({ name: 'login' })}
-          onOpenFavorite={(folder) => actions.push({ name: 'favorite-detail', mediaId: folder.id, title: folder.title })}
-        />
-      );
-    case 'favorite-detail':
-      return (
-        <FavoriteDetailPage
-          mediaId={route.mediaId}
-          title={route.title}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
