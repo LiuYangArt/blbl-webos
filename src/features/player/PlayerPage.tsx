@@ -54,6 +54,7 @@ import {
   extractSubtitleBody,
   pickDefaultSubtitleTrack,
 } from './playerSubtitle';
+import { shouldRevealChromeAfterPause } from './playerChromePause';
 import { decidePlayerChromeRemoteAction } from './playerRemoteMode';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
 
@@ -139,6 +140,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const lastPersistedProgressRef = useRef(-1);
   const resumeProgressRef = useRef(0);
   const savedProgressRef = useRef(0);
+  const suppressPauseChromeRef = useRef(false);
   const recordedAttemptIdRef = useRef('');
   const reportedEnvironmentKeyRef = useRef('');
   const chromeFocusTimeoutRef = useRef<number | null>(null);
@@ -456,6 +458,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     setSubtitleLoadState('idle');
     setSubtitleStatusText(null);
     setActiveSubtitleTrackId(null);
+    suppressPauseChromeRef.current = false;
     subtitleCacheRef.current.clear();
   }, [bvid, cid, playbackPlan.warning, currentAttempt?.id, playInfoError]);
 
@@ -871,6 +874,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     };
 
     const handlePause = () => {
+      const shouldRevealChrome = shouldRevealChromeAfterPause(suppressPauseChromeRef.current);
+      suppressPauseChromeRef.current = false;
+      if (!shouldRevealChrome) {
+        return;
+      }
+
       setIsPlaying(false);
       setIsChromeVisible(true);
     };
@@ -922,6 +931,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     }, PLAYER_LOAD_TIMEOUT_MS);
 
     const bootPlayer = async () => {
+      suppressPauseChromeRef.current = true;
       resetVideoElement(video);
 
       if (currentAttempt.mode === 'dash') {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { AppShell } from './components/AppShell';
 import { FocusOverlay } from './components/FocusOverlay';
 import { AppStoreProvider, useAppStore } from './app/AppStore';
+import { shouldAutofocusContentAfterMutation } from './app/focusPolicy';
 import { resolveInitialRoute } from './app/launchParams';
 import { PageBackHandlerProvider } from './app/PageBackHandler';
 import { type AppRoute, type PlayerRoutePayload, getActiveNav } from './app/routes';
@@ -114,6 +115,10 @@ function AppContent() {
       return undefined;
     }
 
+    if (!shouldAutofocusContentAfterMutation(currentPage)) {
+      return undefined;
+    }
+
     const pageContent = document.querySelector('.tv-page-content');
     const observer = new MutationObserver(() => {
       if (tryFocusContent()) {
@@ -131,7 +136,7 @@ function AppContent() {
     return () => {
       observer.disconnect();
     };
-  }, [focusKey]);
+  }, [currentPage, focusKey]);
 
   useEffect(() => attachRemoteControl({
     onBack: () => {

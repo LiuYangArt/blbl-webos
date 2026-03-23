@@ -12,10 +12,8 @@ import { TvProgressBar } from '../../components/TvProgressBar';
 import { TvIcon } from '../../components/TvIcon';
 import { TvIconButton } from '../../components/TvIconButton';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
-import type { PlaySubtitleTrack, VideoCardItem } from '../../services/api/types';
+import type { VideoCardItem } from '../../services/api/types';
 import { PlayerSettingsDrawer } from '../player/PlayerSettingsDrawer';
-import { PlayerSubtitlePanel } from '../player/PlayerSubtitlePanel';
-import type { PlayerSubtitleStyleSettings } from '../player/playerSettings';
 import {
   UI_DEBUG_DIRECT_FLAG,
   UI_DEBUG_DIRECT_ROUTE,
@@ -103,36 +101,6 @@ const PLAYER_INFO_ROWS = [
   ['线路来源', 'DASH + 兼容源回退'],
   ['最近用途', '播放器右侧设置抽屉'],
 ] as const;
-
-const SUBTITLE_TRACKS: PlaySubtitleTrack[] = [
-  {
-    id: 1,
-    lang: 'zh-CN',
-    langDoc: '中文（简体）',
-    subtitleUrl: 'https://example.com/subtitles/zh-cn.json',
-    isAi: false,
-  },
-  {
-    id: 2,
-    lang: 'ja',
-    langDoc: '日语',
-    subtitleUrl: 'https://example.com/subtitles/ja.json',
-    isAi: false,
-  },
-  {
-    id: 3,
-    lang: 'en',
-    langDoc: 'English',
-    subtitleUrl: 'https://example.com/subtitles/en.json',
-    isAi: true,
-  },
-];
-
-const SUBTITLE_STYLE: PlayerSubtitleStyleSettings = {
-  fontSize: 'standard',
-  bottomOffset: 'medium',
-  backgroundOpacity: 'medium',
-};
 
 const COMPONENT_STATUS = {
   unified: [
@@ -664,7 +632,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
       <section className="content-section">
         <SectionHeader
           title="播放器复合模块"
-          description="这里把播放器里最容易反复调整的控件集中摆出来，重点看 OSD、设置抽屉和 CC 设置抽屉。"
+          description="这里把播放器里最容易反复调整的控件集中摆出来，重点看 OSD 和设置抽屉基线。"
           actionLabel="用于播放器页"
         />
 
@@ -725,8 +693,8 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
           scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <ShowcaseCard
-            title="播放器设置抽屉片段"
-            usedIn="用于：播放器右侧设置抽屉，当前承载画质、编码偏好、线路信息和快捷操作。"
+            title="设置抽屉基线"
+            usedIn="用于：播放器右侧设置类面板的统一样式来源。真实字幕设置页复用这一套抽屉标题、section 节奏、chip 按钮和信息块基线。"
             source="PlayerSettingsDrawer"
           >
             <div className="ui-debug-drawer-stage">
@@ -771,31 +739,6 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                     },
                   ]}
                   planText="1080P AVC -> 1080P HEVC -> 720P AVC"
-                />
-              </div>
-            </div>
-          </ShowcaseCard>
-
-          <ShowcaseCard
-            title="CC 字幕设置抽屉片段"
-            usedIn="用于：播放器字幕开关、轨道选择与样式设置，和播放设置抽屉共享同一套标题、间距与焦点规则。"
-            source="PlayerSubtitlePanel"
-          >
-            <div className="ui-debug-drawer-stage">
-              <div className="player-settings-drawer player-subtitle-drawer ui-debug-player-drawer">
-                <PlayerSubtitlePanel
-                  sectionId="ui-debug-player-panels"
-                  subtitleEnabled
-                  activeTrackId={1}
-                  tracks={SUBTITLE_TRACKS}
-                  styleSettings={SUBTITLE_STYLE}
-                  loadingState="ready"
-                  statusText="当前默认使用 中文（简体）"
-                  onToggleEnabled={() => {}}
-                  onSelectTrack={() => {}}
-                  onFontSizeChange={() => {}}
-                  onBottomOffsetChange={() => {}}
-                  onBackgroundOpacityChange={() => {}}
                 />
               </div>
             </div>
