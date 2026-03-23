@@ -1551,6 +1551,10 @@ button {
   line-height: 1.45;
 }
 
+.player-settings-drawer__info-row > * + * {
+  margin-left: 18px;
+}
+
 .player-settings-drawer__info-row strong {
   color: var(--tv-text);
   font-size: 21px;
@@ -1576,6 +1580,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.search-composer__field > * + * {
+  margin-top: 10px;
 }
 
 .search-composer__field span {
@@ -1667,7 +1675,7 @@ button {
   line-height: 1.02;
 }
 
-.ui-debug-hero__content p {
+.ui-debug-hero__lead {
   margin: 0;
   max-width: 880px;
   color: var(--tv-text-soft);
@@ -1676,8 +1684,12 @@ button {
 }
 
 .ui-debug-hero__notes {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ui-debug-hero__notes > * + * {
+  margin-top: 8px;
 }
 
 .ui-debug-hero__actions {
@@ -1694,6 +1706,14 @@ button {
   gap: 16px;
 }
 
+.ui-debug-hero__content > * + * {
+  margin-top: 20px;
+}
+
+.ui-debug-hero__summary > * + * {
+  margin-top: 16px;
+}
+
 .ui-debug-summary-card {
   gap: 14px;
   min-height: 0;
@@ -1705,6 +1725,10 @@ button {
   box-shadow:
     0 18px 42px rgba(0, 0, 0, 0.24),
     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.ui-debug-summary-card > * + * {
+  margin-top: 14px;
 }
 
 .ui-debug-summary-card__eyebrow,
@@ -1749,11 +1773,19 @@ button {
     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
+.ui-debug-showcase-card > * + * {
+  margin-top: 18px;
+}
+
 .ui-debug-showcase-card__meta {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
+}
+
+.ui-debug-showcase-card__meta > * + * {
+  margin-left: 18px;
 }
 
 .ui-debug-showcase-card__meta h3 {
@@ -1773,6 +1805,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.ui-debug-state-grid > * + * {
+  margin-top: 14px;
 }
 
 .ui-debug-state-row {
@@ -1826,11 +1862,20 @@ button {
   gap: 18px;
 }
 
+.ui-debug-copy-block > * + * {
+  margin-top: 18px;
+}
+
 .ui-debug-shell-row {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   align-items: center;
+  margin: -8px 0 0 -16px;
+}
+
+.ui-debug-shell-row > * {
+  margin: 8px 0 0 16px;
 }
 
 .ui-debug-chip-grid {

@@ -5,6 +5,11 @@ export type FocusLinks = {
   down?: string;
 };
 
+export type FocusGridSection = {
+  ids: string[];
+  columns: number;
+};
+
 export function buildRowTargets(
   ids: string[],
   columns: number,
@@ -55,6 +60,28 @@ export function buildGridFocusMap(
       up: above,
       down: below,
     };
+  });
+
+  return focusMap;
+}
+
+export function buildStackedGridFocusMap(sections: FocusGridSection[]): Record<string, FocusLinks> {
+  const filteredSections = sections.filter((section) => section.ids.length > 0 && section.columns > 0);
+  const focusMap: Record<string, FocusLinks> = {};
+
+  filteredSections.forEach((section, index) => {
+    const previousSection = filteredSections[index - 1];
+    const nextSection = filteredSections[index + 1];
+    const sectionFocusMap = buildGridFocusMap(section.ids, section.columns, {
+      upByColumn: previousSection
+        ? buildRowTargets(previousSection.ids, previousSection.columns, 'last', section.columns)
+        : [],
+      downByColumn: nextSection
+        ? buildRowTargets(nextSection.ids, nextSection.columns, 'first', section.columns)
+        : [],
+    });
+
+    Object.assign(focusMap, sectionFocusMap);
   });
 
   return focusMap;

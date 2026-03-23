@@ -7,7 +7,7 @@ import type {
   PlayerSubtitleFontSize,
   PlayerSubtitleStyleSettings,
 } from './playerSettings';
-import { buildGridFocusMap, buildRowTargets, type FocusLinks } from './playerFocusGrid';
+import { buildStackedGridFocusMap, type FocusGridSection, type FocusLinks } from './playerFocusGrid';
 
 type PlayerSubtitlePanelProps = {
   sectionId: string;
@@ -61,40 +61,14 @@ export function PlayerSubtitlePanel({
   const fontIds = FONT_SIZE_OPTIONS.map((option) => `player-subtitle-font-${option.value}`);
   const bottomIds = BOTTOM_OFFSET_OPTIONS.map((option) => `player-subtitle-bottom-${option.value}`);
   const backgroundIds = BACKGROUND_OPACITY_OPTIONS.map((option) => `player-subtitle-background-${option.value}`);
-  const displayTargets = [...displayIds];
-  const displayDownTargets = trackIds.length
-    ? buildRowTargets(trackIds, 2, 'first', displayIds.length)
-    : buildRowTargets(fontIds, 3, 'first', displayIds.length);
-  const trackUpTargets = buildRowTargets(displayTargets, 2, 'first', 2);
-  const trackDownTargets = buildRowTargets(fontIds, 3, 'first', 2);
-  let fontUpTargets: string[] = [];
-  if (trackIds.length) {
-    fontUpTargets = buildRowTargets(trackIds, 2, 'last', fontIds.length);
-  } else {
-    fontUpTargets = buildRowTargets(displayTargets, 2, 'first', fontIds.length);
-  }
-  const bottomUpTargets = buildRowTargets(fontIds, 3, 'first', bottomIds.length);
-  const bottomDownTargets = buildRowTargets(backgroundIds, 3, 'first', bottomIds.length);
-  const backgroundUpTargets = buildRowTargets(bottomIds, 3, 'first', backgroundIds.length);
-
-  const displayFocusMap = buildGridFocusMap(displayTargets, 2, {
-    downByColumn: displayDownTargets,
-  });
-  const trackFocusMap = buildGridFocusMap(trackIds, 2, {
-    upByColumn: trackUpTargets,
-    downByColumn: trackDownTargets,
-  });
-  const fontFocusMap = buildGridFocusMap(fontIds, 3, {
-    upByColumn: fontUpTargets,
-    downByColumn: buildRowTargets(bottomIds, 3, 'first', fontIds.length),
-  });
-  const bottomFocusMap = buildGridFocusMap(bottomIds, 3, {
-    upByColumn: bottomUpTargets,
-    downByColumn: bottomDownTargets,
-  });
-  const backgroundFocusMap = buildGridFocusMap(backgroundIds, 3, {
-    upByColumn: backgroundUpTargets,
-  });
+  const focusSections: FocusGridSection[] = [
+    { ids: [...displayIds], columns: 2 },
+    { ids: trackIds, columns: 2 },
+    { ids: fontIds, columns: 3 },
+    { ids: bottomIds, columns: 3 },
+    { ids: backgroundIds, columns: 3 },
+  ];
+  const focusMap = buildStackedGridFocusMap(focusSections);
 
   return (
     <FocusButtonSection sectionId={sectionId}>
@@ -111,8 +85,8 @@ export function PlayerSubtitlePanel({
             sectionId={sectionId}
             focusId={displayIds[0]}
             defaultFocus={subtitleEnabled}
-            focusRight={displayFocusMap[displayIds[0]]?.right}
-            focusDown={displayFocusMap[displayIds[0]]?.down}
+            focusRight={focusMap[displayIds[0]]?.right}
+            focusDown={focusMap[displayIds[0]]?.down}
             onClick={() => onToggleEnabled(true)}
           >
             开启字幕
@@ -123,8 +97,8 @@ export function PlayerSubtitlePanel({
             sectionId={sectionId}
             focusId={displayIds[1]}
             defaultFocus={!subtitleEnabled}
-            focusLeft={displayFocusMap[displayIds[1]]?.left}
-            focusDown={displayFocusMap[displayIds[1]]?.down}
+            focusLeft={focusMap[displayIds[1]]?.left}
+            focusDown={focusMap[displayIds[1]]?.down}
             onClick={() => onToggleEnabled(false)}
           >
             关闭字幕
@@ -145,10 +119,10 @@ export function PlayerSubtitlePanel({
                 sectionId={sectionId}
                 focusId={trackIds[index]}
                 defaultFocus={index === 0 && activeTrackId === null}
-                focusLeft={trackFocusMap[trackIds[index]]?.left}
-                focusRight={trackFocusMap[trackIds[index]]?.right}
-                focusUp={trackFocusMap[trackIds[index]]?.up}
-                focusDown={trackFocusMap[trackIds[index]]?.down}
+                focusLeft={focusMap[trackIds[index]]?.left}
+                focusRight={focusMap[trackIds[index]]?.right}
+                focusUp={focusMap[trackIds[index]]?.up}
+                focusDown={focusMap[trackIds[index]]?.down}
                 onClick={() => onSelectTrack(track.id)}
               >
                 {track.langDoc || track.lang || `轨道 ${index + 1}`}
@@ -168,7 +142,7 @@ export function PlayerSubtitlePanel({
         focusPrefix="player-subtitle-font"
         currentValue={styleSettings.fontSize}
         options={FONT_SIZE_OPTIONS}
-        focusMap={fontFocusMap}
+        focusMap={focusMap}
         onChange={onFontSizeChange}
       />
 
@@ -178,7 +152,7 @@ export function PlayerSubtitlePanel({
         focusPrefix="player-subtitle-bottom"
         currentValue={styleSettings.bottomOffset}
         options={BOTTOM_OFFSET_OPTIONS}
-        focusMap={bottomFocusMap}
+        focusMap={focusMap}
         onChange={onBottomOffsetChange}
       />
 
@@ -188,7 +162,7 @@ export function PlayerSubtitlePanel({
         focusPrefix="player-subtitle-background"
         currentValue={styleSettings.backgroundOpacity}
         options={BACKGROUND_OPACITY_OPTIONS}
-        focusMap={backgroundFocusMap}
+        focusMap={focusMap}
         onChange={onBackgroundOpacityChange}
       />
     </FocusButtonSection>

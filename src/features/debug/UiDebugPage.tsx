@@ -3,7 +3,6 @@ import { TV_ICONS } from '../../app/iconRegistry';
 import { BilibiliBrandMark } from '../../components/BilibiliBrandMark';
 import { FollowingSummaryChips } from '../../components/FollowingSummaryChips';
 import { FocusButton } from '../../components/FocusButton';
-import { HeroBanner } from '../../components/HeroBanner';
 import { MediaCard } from '../../components/MediaCard';
 import { PlayerControlBar } from '../../components/PlayerControlBar';
 import { SearchComposer } from '../../components/SearchComposer';
@@ -13,8 +12,10 @@ import { TvProgressBar } from '../../components/TvProgressBar';
 import { TvIcon } from '../../components/TvIcon';
 import { TvIconButton } from '../../components/TvIconButton';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
-import type { VideoCardItem } from '../../services/api/types';
+import type { PlaySubtitleTrack, VideoCardItem } from '../../services/api/types';
 import { PlayerSettingsDrawer } from '../player/PlayerSettingsDrawer';
+import { PlayerSubtitlePanel } from '../player/PlayerSubtitlePanel';
+import type { PlayerSubtitleStyleSettings } from '../player/playerSettings';
 import {
   UI_DEBUG_DIRECT_FLAG,
   UI_DEBUG_DIRECT_ROUTE,
@@ -50,21 +51,6 @@ const SAMPLE_COVER = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
     </text>
   </svg>
 `)}`;
-
-const HERO_ITEM: VideoCardItem = {
-  aid: 114514,
-  bvid: 'BV1debugHero',
-  cid: 1919810,
-  title: 'UI Debug 对照台',
-  cover: SAMPLE_COVER,
-  duration: 602,
-  ownerName: '设计调试环境',
-  playCount: 482000,
-  danmakuCount: 1380,
-  description: '集中查看当前项目里的真实 TV 控件和复合模块。',
-  typeName: '调试入口',
-  metaText: '用于核对控件样式与焦点态',
-};
 
 const CARD_ITEMS: VideoCardItem[] = [
   {
@@ -118,21 +104,52 @@ const PLAYER_INFO_ROWS = [
   ['最近用途', '播放器右侧设置抽屉'],
 ] as const;
 
+const SUBTITLE_TRACKS: PlaySubtitleTrack[] = [
+  {
+    id: 1,
+    lang: 'zh-CN',
+    langDoc: '中文（简体）',
+    subtitleUrl: 'https://example.com/subtitles/zh-cn.json',
+    isAi: false,
+  },
+  {
+    id: 2,
+    lang: 'ja',
+    langDoc: '日语',
+    subtitleUrl: 'https://example.com/subtitles/ja.json',
+    isAi: false,
+  },
+  {
+    id: 3,
+    lang: 'en',
+    langDoc: 'English',
+    subtitleUrl: 'https://example.com/subtitles/en.json',
+    isAi: true,
+  },
+];
+
+const SUBTITLE_STYLE: PlayerSubtitleStyleSettings = {
+  fontSize: 'standard',
+  bottomOffset: 'medium',
+  backgroundOpacity: 'medium',
+};
+
 const COMPONENT_STATUS = {
   unified: [
     'FocusButton / TvIconButton：主按钮、图标按钮、导航项、播放器控制按钮',
     'MediaCard：首页、热门、搜索、收藏等视频卡片',
     'SectionHeader：内容分区标题',
-    'HeroBanner：首页 Hero 大横幅 CTA',
     'PlayerControlBar：播放器底部主控制条',
     'SearchComposer：搜索页与搜索结果页输入面板',
     'TvProgressBar：播放器进度展示与 UI Debug 进度样本',
-    'PlayerSettingsDrawer：播放器右侧设置抽屉与 UI Debug 抽屉样本',
+    'PlayerSettingsDrawer / PlayerSubtitlePanel：播放器设置类抽屉',
     'TopbarProfilePill：应用壳右上角账号状态胶囊',
     'FollowingSummaryChips：关注页顶部账号摘要标签',
   ],
-  pending: [
-    '这批首轮待统一项已经全部收口到组件文件，后续新增散样式时继续按这个页面登记与收口。',
+  rules: [
+    'UI Debug 只保留真实在用组件，不陈列已经废弃或已被统一规则淘汰的历史样式。',
+    '设置类面板统一使用显式焦点网格规则，不再依赖几何猜测焦点移动。',
+    '关键 flex / column / wrap 布局补 margin fallback，不能只依赖 Simulator 里的 gap。',
   ],
 };
 
@@ -294,7 +311,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
         <div className="ui-debug-hero__content">
           <span className="detail-hero__tag">开发专用</span>
           <h1>UI Debug 对照台</h1>
-          <p>
+          <p className="ui-debug-hero__lead">
             这个页面把当前项目真实在用的 TV 控件和复合模块集中摆在一起，并标明它们分别用于哪里，
             后续我们讨论“改哪个按钮 / 哪个进度条 / 哪个抽屉”时，可以直接按这里的名字对齐。
           </p>
@@ -330,8 +347,8 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
             <StatusList items={COMPONENT_STATUS.unified} />
           </div>
           <div className="ui-debug-summary-card">
-            <span className="ui-debug-summary-card__eyebrow">待继续收口</span>
-            <StatusList items={COMPONENT_STATUS.pending} />
+            <span className="ui-debug-summary-card__eyebrow">当前规则</span>
+            <StatusList items={COMPONENT_STATUS.rules} />
           </div>
         </div>
       </FocusSection>
@@ -525,8 +542,8 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
       <section className="content-section">
         <SectionHeader
           title="卡片与内容模块"
-          description="用真实的 HeroBanner、MediaCard、SectionHeader 来看大屏内容块在一起时的层级。"
-          actionLabel="用于首页 / 推荐流 / 详情页"
+          description="这里保留真实还在使用的内容入口样式，重点看顶部切换器和视频卡片。"
+          actionLabel="用于首页 / 收藏夹 / 推荐流 / 详情页"
         />
 
         <div className="ui-debug-showcase-grid">
@@ -551,33 +568,6 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                 </FocusButton>
               ))}
             </div>
-          </ShowcaseCard>
-        </div>
-
-        <div className="ui-debug-showcase-grid ui-debug-showcase-grid--single">
-          <ShowcaseCard
-            title="首页 Hero 大横幅"
-            usedIn="用于：首页顶部首屏推荐位，重点看大标题、背景层、主次按钮关系。"
-            source="HeroBanner + FocusButton"
-          >
-            <FocusSection
-              as="div"
-              id="ui-debug-hero-banner"
-              group="content"
-              className="ui-debug-stage"
-              leaveFor={{ left: '@side-nav' }}
-            >
-              <HeroBanner
-                item={HERO_ITEM}
-                onPrimaryAction={() => {}}
-                onSecondaryAction={() => {}}
-                primaryLabel="立即核对"
-                secondaryLabel="查看次按钮"
-                sectionId="ui-debug-hero-banner"
-                primaryFocusId="ui-debug-hero-primary"
-                secondaryFocusId="ui-debug-hero-secondary"
-              />
-            </FocusSection>
           </ShowcaseCard>
         </div>
 
@@ -618,9 +608,9 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
         scroll={CONTENT_FIRST_ROW_SCROLL}
       >
         <SectionHeader
-          title="输入与说明样式"
-          description="这里主要放搜索输入面板、辅助文案和标签，便于对齐页面里的轻量 UI。"
-          actionLabel="用于搜索页 / 辅助说明文案"
+          title="输入与轻量说明"
+          description="保留搜索输入面板、辅助文字和统一后的轻量标签入口，不再陈列已经淘汰的旧变体。"
+          actionLabel="用于搜索页 / 空态提示 / 标签入口"
         />
 
         <div className="ui-debug-showcase-grid">
@@ -640,9 +630,9 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
           </ShowcaseCard>
 
           <ShowcaseCard
-            title="辅助文案 / 标签"
-            usedIn="用于：空态提示、区块说明、搜索历史提示、播放器抽屉说明文案。"
-            source="page-helper-text / section-header / detail-chip"
+            title="辅助文案 / 统一标签"
+            usedIn="用于：空态提示、搜索页轻量说明，以及热搜 / 搜索历史这类统一后的标签入口。"
+            source="page-helper-text / detail-chip"
           >
             <div className="ui-debug-copy-block">
               <p className="page-helper-text">还没有历史搜索，先试试热搜或默认词。</p>
@@ -651,19 +641,19 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                   variant="glass"
                   className="detail-chip"
                   sectionId="ui-debug-inputs"
-                  focusId="ui-debug-chip-create"
+                  focusId="ui-debug-chip-hot"
                 >
-                  新建
-                  <small>用于搜索热词 / 标签型入口</small>
+                  热搜
+                  <small>统一标签样式</small>
                 </FocusButton>
                 <FocusButton
-                  variant="secondary"
+                  variant="glass"
                   className="detail-chip"
                   sectionId="ui-debug-inputs"
                   focusId="ui-debug-chip-history"
                 >
                   搜索历史
-                  <small>用于本地历史与条件入口</small>
+                  <small>与热搜使用同一套样式</small>
                 </FocusButton>
               </div>
             </div>
@@ -674,7 +664,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
       <section className="content-section">
         <SectionHeader
           title="播放器复合模块"
-          description="这里把播放器里最容易反复改的条目单独铺开，方便你直接指“底部控制条”“右侧抽屉”“进度条”这种具体对象。"
+          description="这里把播放器里最容易反复调整的控件集中摆出来，重点看 OSD、设置抽屉和 CC 设置抽屉。"
           actionLabel="用于播放器页"
         />
 
@@ -699,7 +689,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
           id="ui-debug-player-controls"
           group="content"
           className="ui-debug-showcase-grid"
-          leaveFor={{ left: '@side-nav', up: '@ui-debug-inputs', down: '@ui-debug-player-drawer' }}
+          leaveFor={{ left: '@side-nav', up: '@ui-debug-inputs', down: '@ui-debug-player-panels' }}
           scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <ShowcaseCard
@@ -728,7 +718,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
 
         <FocusSection
           as="div"
-          id="ui-debug-player-drawer"
+          id="ui-debug-player-panels"
           group="content"
           className="ui-debug-showcase-grid"
           leaveFor={{ left: '@side-nav', up: '@ui-debug-player-controls' }}
@@ -742,7 +732,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
             <div className="ui-debug-drawer-stage">
               <div className="player-settings-drawer ui-debug-player-drawer">
                 <PlayerSettingsDrawer
-                  sectionId="ui-debug-player-drawer"
+                  sectionId="ui-debug-player-panels"
                   badge="播放设置"
                   qualityOptions={[
                     {
@@ -781,6 +771,31 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                     },
                   ]}
                   planText="1080P AVC -> 1080P HEVC -> 720P AVC"
+                />
+              </div>
+            </div>
+          </ShowcaseCard>
+
+          <ShowcaseCard
+            title="CC 字幕设置抽屉片段"
+            usedIn="用于：播放器字幕开关、轨道选择与样式设置，和播放设置抽屉共享同一套标题、间距与焦点规则。"
+            source="PlayerSubtitlePanel"
+          >
+            <div className="ui-debug-drawer-stage">
+              <div className="player-settings-drawer player-subtitle-drawer ui-debug-player-drawer">
+                <PlayerSubtitlePanel
+                  sectionId="ui-debug-player-panels"
+                  subtitleEnabled
+                  activeTrackId={1}
+                  tracks={SUBTITLE_TRACKS}
+                  styleSettings={SUBTITLE_STYLE}
+                  loadingState="ready"
+                  statusText="当前默认使用 中文（简体）"
+                  onToggleEnabled={() => {}}
+                  onSelectTrack={() => {}}
+                  onFontSizeChange={() => {}}
+                  onBottomOffsetChange={() => {}}
+                  onBackgroundOpacityChange={() => {}}
                 />
               </div>
             </div>

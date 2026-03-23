@@ -54,6 +54,7 @@ import {
   extractSubtitleBody,
   pickDefaultSubtitleTrack,
 } from './playerSubtitle';
+import { decidePlayerChromeRemoteAction } from './playerRemoteMode';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
 
 type PlayerNavigationTarget = {
@@ -332,6 +333,22 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     blurPlayerChromeFocus();
   }
 
+  function isPlayerControlFocused(): boolean {
+    const activeElement = document.activeElement;
+    return activeElement instanceof HTMLElement
+      && activeElement.dataset.focusSection === PLAYER_CONTROL_SECTION_ID;
+  }
+
+  function seekPlaybackBy(seconds: number): void {
+    seekVideo(videoRef.current, seconds);
+    setChromeActivityTick((previous) => previous + 1);
+  }
+
+  function togglePlaybackFromRemote(): void {
+    togglePlay(videoRef.current);
+    setChromeActivityTick((previous) => previous + 1);
+  }
+
   function openSettingsOverlay(): void {
     setOverlayMode('settings');
     setIsChromeVisible(false);
@@ -550,13 +567,39 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         return;
       }
 
-      if (!shouldShowPlayerChrome) {
-        revealPlayerChrome(true);
-        remoteEvent.preventDefault();
-        return;
+      const remoteDecision = decidePlayerChromeRemoteAction(action, isPlayerControlFocused());
+      switch (remoteDecision) {
+        case 'blur-controls':
+          blurPlayerChromeFocus();
+          setChromeActivityTick((previous) => previous + 1);
+          remoteEvent.preventDefault();
+          return;
+        case 'seek-backward':
+          revealPlayerChrome(false);
+          seekPlaybackBy(-10);
+          remoteEvent.preventDefault();
+          return;
+        case 'seek-forward':
+          revealPlayerChrome(false);
+          seekPlaybackBy(10);
+          remoteEvent.preventDefault();
+          return;
+        case 'toggle-play':
+          revealPlayerChrome(false);
+          togglePlaybackFromRemote();
+          remoteEvent.preventDefault();
+          return;
+        case 'focus-controls':
+          revealPlayerChrome(true);
+          remoteEvent.preventDefault();
+          return;
+        case 'keep-alive':
+          setChromeActivityTick((previous) => previous + 1);
+          return;
+        case 'delegate':
+        default:
+          return;
       }
-
-      setChromeActivityTick((previous) => previous + 1);
     };
 
     window.addEventListener(REMOTE_INTENT_EVENT, handleRemoteIntent as EventListener);
@@ -1311,12 +1354,11 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                 isPlaying={isPlaying}
                 subtitleAvailable={hasSubtitleTracks}
                 onBack={onBack}
-                onReplay={() => seekVideo(videoRef.current, -10)}
+                onReplay={() => seekPlaybackBy(-10)}
                 onTogglePlay={() => {
-                  togglePlay(videoRef.current);
-                  setChromeActivityTick((previous) => previous + 1);
+                  togglePlaybackFromRemote();
                 }}
-                onForward={() => seekVideo(videoRef.current, 10)}
+                onForward={() => seekPlaybackBy(10)}
                 onRestartFromBeginning={() => {
                   restartVideo(videoRef.current);
                   setChromeActivityTick((previous) => previous + 1);
