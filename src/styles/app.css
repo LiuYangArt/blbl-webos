@@ -430,10 +430,26 @@ button {
   color: var(--tv-secondary-soft);
 }
 
+.page-shell,
+.page-status {
+  border-radius: var(--tv-radius-lg);
+  background: var(--tv-surface-low);
+  box-shadow: var(--tv-shadow);
+  backdrop-filter: blur(16px);
+}
+
 .page-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 28px;
+  min-width: 0;
+  padding: 28px;
+  overflow: hidden;
+}
+
+.page-shell > * {
+  min-width: 0;
 }
 
 .page-shell--home {
@@ -452,15 +468,17 @@ button {
 .player-hero,
 .page-status {
   position: relative;
+}
+
+.hero-banner,
+.detail-hero,
+.player-hero,
+.page-status {
   overflow: hidden;
-  border-radius: var(--tv-radius-lg);
-  background: var(--tv-surface-low);
-  box-shadow: var(--tv-shadow);
 }
 
 .content-section {
-  padding: 28px;
-  backdrop-filter: blur(16px);
+  padding: 0;
 }
 
 .hero-banner {
@@ -517,7 +535,8 @@ button {
   background: radial-gradient(circle, rgba(0, 161, 214, 0.44), transparent 68%);
 }
 
-.tv-app-shell--webos .page-shell--home .content-section {
+.tv-app-shell--webos .page-shell,
+.tv-app-shell--webos .page-status {
   backdrop-filter: none;
   background: rgba(28, 27, 28, 0.96);
 }
@@ -956,7 +975,7 @@ button {
   display: grid;
   grid-template-columns: 420px minmax(0, 1fr);
   gap: 28px;
-  padding: 28px;
+  padding: 0;
 }
 
 .detail-hero::before {
