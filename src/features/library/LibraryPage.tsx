@@ -3,7 +3,9 @@ import { useAppStore } from '../../app/AppStore';
 import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
+import { SectionHeader } from '../../components/SectionHeader';
 import { VideoGridSection } from '../../components/VideoGridSection';
+import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import {
   fetchCurrentUserProfile,
   fetchFavoriteFolderDetail,
@@ -17,6 +19,13 @@ import {
 } from '../shared/videoListItems';
 import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
+import {
+  FAVORITE_FOLDER_SECTION_ID,
+  FAVORITE_VIDEO_SECTION_ID,
+  buildFavoriteFolderFocusId,
+  buildFavoriteFolderSectionLeaveFor,
+  buildFavoriteVideoSectionLeaveFor,
+} from './libraryFocus';
 
 type LibraryPageProps = {
   mode: 'later' | 'favorites';
@@ -73,6 +82,15 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
     }
 
     return folders.data.find((folder) => folder.id === activeFolderId) ?? folders.data[0] ?? null;
+  }, [activeFolderId, folders, mode]);
+
+  const activeFolderIndex = useMemo(() => {
+    if (mode !== 'favorites' || folders.status !== 'success') {
+      return null;
+    }
+
+    const matchedIndex = folders.data.findIndex((folder) => folder.id === activeFolderId);
+    return matchedIndex >= 0 ? matchedIndex : 0;
   }, [activeFolderId, folders, mode]);
 
   if (mode === 'later') {
@@ -166,34 +184,47 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
 
   return (
     <main className="page-shell">
+      <FocusSection
+        as="section"
+        id={FAVORITE_FOLDER_SECTION_ID}
+        group="content"
+        enterTo="last-focused"
+        className="content-section"
+        leaveFor={buildFavoriteFolderSectionLeaveFor()}
+        scroll={CONTENT_FIRST_ROW_SCROLL}
+      >
+        <SectionHeader title="收藏" />
+        <div className="library-folder-strip">
+          {folders.data.map((folder, index) => (
+            <FocusButton
+              key={folder.id}
+              variant={folder.id === activeFolderId ? 'primary' : 'glass'}
+              size="md"
+              className="detail-chip library-folder-chip"
+              sectionId={FAVORITE_FOLDER_SECTION_ID}
+              focusId={buildFavoriteFolderFocusId(index)}
+              defaultFocus={folder.id === activeFolderId}
+              onClick={() => setActiveFolderId(folder.id)}
+            >
+              <span>{folder.title}</span>
+              <small>{folder.mediaCount} 个视频</small>
+            </FocusButton>
+          ))}
+        </div>
+      </FocusSection>
+
       <VideoGridSection
-        sectionId="favorites-list"
-        title="收藏"
+        sectionId={FAVORITE_VIDEO_SECTION_ID}
+        title={activeFolder?.title ?? '收藏视频'}
+        showHeader={false}
         items={items}
         onOpenPlayer={onOpenPlayer}
         resetKey={String(activeFolderId ?? 'favorites')}
+        leaveFor={buildFavoriteVideoSectionLeaveFor(activeFolderIndex)}
         hasMore={favoriteItems.hasMore}
         isLoadingMore={favoriteItems.isLoadingMore}
         loadMoreError={favoriteItems.loadMoreError}
         onRequestMore={() => void favoriteItems.loadMore()}
-        beforeGrid={(
-          <div className="library-folder-strip">
-            {folders.data.map((folder, index) => (
-              <FocusButton
-                key={folder.id}
-                variant={folder.id === activeFolderId ? 'primary' : 'glass'}
-                size="md"
-                className="detail-chip library-folder-chip"
-                sectionId="favorites-list"
-                focusId={`favorite-folder-${index}`}
-                onClick={() => setActiveFolderId(folder.id)}
-              >
-                <span>{folder.title}</span>
-                <small>{folder.mediaCount} 个视频</small>
-              </FocusButton>
-            ))}
-          </div>
-        )}
         emptyState={<p className="page-helper-text">这个收藏夹里暂时还没有可展示的视频。</p>}
       />
     </main>
