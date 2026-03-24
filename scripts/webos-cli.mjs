@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { basename, resolve } from 'node:path';
+import { createInstallPlan } from './webos-cli-helpers.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const buildDir = resolve(root, 'build', 'webos');
@@ -454,7 +455,7 @@ const verifyInstalledEntry = () => {
 
   if (localEntry !== installedEntry) {
     throw new Error(
-      `电视安装内容仍不是当前构建。本地入口=${localEntry}，电视入口=${installedEntry}。请优先升 appinfo.json 版本后重新 package + reinstall。`,
+      `电视安装内容仍不是当前构建。本地入口=${localEntry}，电视入口=${installedEntry}。请优先升 appinfo.json 版本后重新 package，并使用 update/deploy 路径再次安装；只有排查残留问题时再改走 reinstall。`,
     );
   }
 
@@ -469,20 +470,44 @@ const packageApp = () => {
 
 const installPackage = () => {
   ensurePackageReady();
-  runCliWithNode16('ares-install', ['--device', device, packageFile]);
+  console.log('执行更新安装，尽量保留电视上的应用数据与登录态。');
+
+  const installPlan = createInstallPlan({
+    strategy: 'update',
+    device,
+    packageFile,
+    appId,
+  });
+
+  for (const step of installPlan) {
+    runCliWithNode16('ares-install', step.args);
+  }
 };
 
 const reinstallPackage = () => {
   ensurePackageReady();
+  console.log('执行清洁重装，将先卸载旧包。此操作可能清空本地数据与登录态。');
 
-  const removeStatus = runCliWithNode16AllowFailure('ares-install', ['--device', device, '--remove', appId]);
-  if (removeStatus === 0) {
-    console.log(`已先卸载旧包: ${appId}`);
-  } else {
-    console.log(`旧包卸载返回状态 ${removeStatus}，继续安装新包。`);
+  const installPlan = createInstallPlan({
+    strategy: 'clean',
+    device,
+    packageFile,
+    appId,
+  });
+
+  for (const step of installPlan) {
+    if (step.key === 'remove') {
+      const removeStatus = runCliWithNode16AllowFailure('ares-install', step.args);
+      if (removeStatus === 0) {
+        console.log(`已先卸载旧包: ${appId}`);
+      } else {
+        console.log(`旧包卸载返回状态 ${removeStatus}，继续安装新包。`);
+      }
+      continue;
+    }
+
+    runCliWithNode16('ares-install', step.args);
   }
-
-  runCliWithNode16('ares-install', ['--device', device, packageFile]);
 };
 
 const launchApp = () => {
@@ -511,6 +536,10 @@ switch (action) {
     installPackage();
     break;
   }
+  case 'update': {
+    installPackage();
+    break;
+  }
   case 'reinstall': {
     reinstallPackage();
     break;
@@ -526,7 +555,7 @@ switch (action) {
   case 'deploy': {
     const installWaitMs = parseWaitMs(installWaitMsRaw);
     packageApp();
-    reinstallPackage();
+    installPackage();
 
     if (installWaitMs > 0) {
       console.log(`等待电视完成写盘与索引刷新: ${installWaitMs}ms`);
@@ -571,7 +600,7 @@ switch (action) {
   }
   default: {
     console.log(
-      'Usage: node ./scripts/webos-cli.mjs <doctor|package|install|reinstall|verify-installed-entry|deploy|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--wait-ms 8000] [--simulator-version 25] [--simulator-path <path>] [--media-proxy-port 19033]',
+      'Usage: node ./scripts/webos-cli.mjs <doctor|package|install|update|reinstall|verify-installed-entry|deploy|launch|list|remove|hosted|simulator> [--device tv] [--params <json>] [--wait-ms 8000] [--simulator-version 25] [--simulator-path <path>] [--media-proxy-port 19033]',
     );
   }
 }
