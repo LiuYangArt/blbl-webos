@@ -19,6 +19,7 @@
 ## 参考项目源码
 bilibili安卓客户端
 F:\CodeProjects\bilibili_tv_android\PiliPlus
+F:\CodeProjects\bilibili_tv_android\JKVideo
 webos播放器示例
 F:\CodeProjects\bilibili_tv_android\MediaPlayback
 
