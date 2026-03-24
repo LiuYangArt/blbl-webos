@@ -55,6 +55,11 @@ import {
   pickDefaultSubtitleTrack,
 } from './playerSubtitle';
 import { shouldRevealChromeAfterPause } from './playerChromePause';
+import {
+  getPlayerAutoNextNotice,
+  resolvePlayerAutoNextTarget,
+  type PlayerAutoNextTarget,
+} from './playerAutoNext';
 import { decidePlayerChromeRemoteAction } from './playerRemoteMode';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
 
@@ -136,7 +141,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const subtitleTrackElementRef = useRef<HTMLTrackElement | null>(null);
   const subtitleCacheRef = useRef<Map<number, string>>(new Map());
   const onOpenPlayerRef = useRef(onOpenPlayer);
-  const nextEpisodeRef = useRef<PlayerNavigationTarget | null>(null);
+  const autoPlayNextTargetRef = useRef<PlayerAutoNextTarget | null>(null);
+  const autoPlayHandledRef = useRef(false);
   const lastPersistedProgressRef = useRef(-1);
   const resumeProgressRef = useRef(0);
   const savedProgressRef = useRef(0);
@@ -196,7 +202,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const play = playerDataValue?.play ?? null;
   const playInfo = playerDataValue?.playInfo ?? null;
   const playInfoError = playerDataValue?.playInfoError ?? null;
-  const related = playerDataValue?.related ?? [];
+  const related = useMemo(() => playerDataValue?.related ?? [], [playerDataValue?.related]);
   const detail = playerDataValue?.detail ?? null;
   const deviceInfo = playerDataValue?.deviceInfo ?? null;
   const capability = playerDataValue?.capability ?? null;
@@ -229,16 +235,14 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   }, [onOpenPlayer]);
 
   useEffect(() => {
-    const nextEpisode = currentEpisodeIndex >= 0 ? episodeEntries[currentEpisodeIndex + 1] : null;
-    nextEpisodeRef.current = nextEpisode
-      ? {
-          bvid,
-          cid: nextEpisode.cid,
-          title,
-          part: nextEpisode.part,
-        }
-      : null;
-  }, [bvid, currentEpisodeIndex, episodeEntries, title]);
+    autoPlayNextTargetRef.current = resolvePlayerAutoNextTarget({
+      bvid,
+      cid,
+      title,
+      episodeEntries,
+      related,
+    });
+  }, [bvid, cid, episodeEntries, related, title]);
 
   const playbackPlan = useMemo(() => {
     if (!play || !capability) {
@@ -460,6 +464,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     setSubtitleStatusText(null);
     setActiveSubtitleTrackId(null);
     suppressPauseChromeRef.current = false;
+    autoPlayHandledRef.current = false;
     subtitleCacheRef.current.clear();
   }, [bvid, cid, playbackPlan.warning, currentAttempt?.id, playInfoError]);
 
@@ -889,16 +894,17 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       setIsPlaying(false);
       setIsChromeVisible(true);
 
-      const nextEpisode = nextEpisodeRef.current;
-      if (!nextEpisode) {
+      const nextTarget = autoPlayNextTargetRef.current;
+      if (!nextTarget || autoPlayHandledRef.current) {
         return;
       }
 
+      autoPlayHandledRef.current = true;
       resumeProgressRef.current = 0;
       savedProgressRef.current = 0;
       lastPersistedProgressRef.current = -1;
-      setPlaybackNotice(`正在继续播放下一 P：${nextEpisode.part || '下一集'}`);
-      onOpenPlayerRef.current(nextEpisode);
+      setPlaybackNotice(getPlayerAutoNextNotice(nextTarget));
+      onOpenPlayerRef.current(nextTarget);
     };
 
     const handleVideoError = () => {
