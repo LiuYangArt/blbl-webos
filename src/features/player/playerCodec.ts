@@ -114,7 +114,7 @@ function resolveDeviceClass(modelName: string, platformVersion: string, userAgen
   const normalizedModel = modelName.toLowerCase();
   const normalizedUserAgent = userAgent.toLowerCase();
 
-  if (isWebOsSimulatorUserAgent(userAgent)) {
+  if (!hasPalmSystem() && isWebOsSimulatorUserAgent(userAgent)) {
     return 'webos-simulator';
   }
   if (normalizedModel.includes('browser-dev')) {
@@ -138,6 +138,10 @@ function resolveDeviceClass(modelName: string, platformVersion: string, userAgen
 function isWebOsSimulatorUserAgent(userAgent: string): boolean {
   const normalizedUserAgent = userAgent.toLowerCase();
   return normalizedUserAgent.includes('web0s') && normalizedUserAgent.includes('webappmanager');
+}
+
+function hasPalmSystem(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.PalmSystem);
 }
 
 export function getAutoCodecPriority(
@@ -201,6 +205,7 @@ export function buildPlaybackAttempts(
           [...dashResolution.attempts, ...compatibleResolution.attempts],
           playSource,
           capability,
+          dashResolution.effectivePreference,
           memory,
         ),
         effectivePreference: dashResolution.effectivePreference,
@@ -294,11 +299,7 @@ function buildCompatibleAttempts(
   effectivePreference: VideoCodecPreference;
   warning: string | null;
 } {
-  const source = playSource.compatibleSources.find((item) => item.quality === playSource.compatibleQuality)
-    ?? playSource.compatibleSources[0]
-    ?? null;
-
-  if (!source) {
+  if (playSource.compatibleSources.length === 0) {
     return {
       attempts: [],
       effectivePreference: codecPreference,
@@ -313,9 +314,14 @@ function buildCompatibleAttempts(
     ? `当前只有兼容流，无法强制 ${getCodecLabel(codecPreference)}，已按 AVC 兼容流处理。`
     : null;
   const codec = capability.support.avc ? 'avc' : 'unknown';
+  const orderedSources = orderCompatibleSources(
+    playSource.compatibleSources,
+    capability.deviceClass,
+    playSource.requestedQuality,
+  );
 
   return {
-    attempts: [{
+    attempts: orderedSources.map((source) => ({
       id: `${source.quality}:${source.url}`,
       mode: 'compatible',
       quality: source.quality,
@@ -326,15 +332,11 @@ function buildCompatibleAttempts(
       isCompatible: true,
       width: 0,
       height: 0,
-      candidates: source.candidateUrls.map((url, index) => ({
-        id: `compatible:${source.quality}:${index}`,
-        videoUrl: url,
-        audioUrl: null,
-      })),
+      candidates: buildCompatibleCandidates(source, capability.deviceClass),
       source,
       videoStream: null,
       audioStream: null,
-    }],
+    })),
     effectivePreference,
     warning,
   };
@@ -418,6 +420,21 @@ function buildDashCandidates(
     }));
 }
 
+function buildCompatibleCandidates(
+  source: PlayCompatibleSource,
+  deviceClass: string,
+): PlaybackSourceCandidate[] {
+  const rankedUrls = rankCompatibleCandidateUrls(source.candidateUrls);
+  const candidateLimit = getCompatibleCandidateLimit(source, deviceClass);
+  return rankedUrls
+    .slice(0, candidateLimit)
+    .map((candidate, index) => ({
+      id: `compatible:${source.quality}:${index}`,
+      videoUrl: candidate.url,
+      audioUrl: null,
+    }));
+}
+
 function getDashCandidateLimit(
   deviceClass: string,
   memory: PlayerCodecMemory | undefined,
@@ -438,12 +455,38 @@ function getDashCandidateLimit(
   return hasCompatibleFallback ? 3 : 4;
 }
 
+function getCompatibleCandidateLimit(
+  source: PlayCompatibleSource,
+  deviceClass: string,
+) {
+  if (!isRealWebOsDevice(deviceClass)) {
+    return 12;
+  }
+
+  const platform = getUrlHint(source.url, 'platform');
+  if (platform === 'html5') {
+    return 5;
+  }
+
+  return 3;
+}
+
 function rankCandidateUrls(urls: string[]) {
   return urls
     .map((url, index) => ({
       url,
       index,
       score: getCandidateScore(url) - index,
+    }))
+    .sort((left, right) => right.score - left.score);
+}
+
+function rankCompatibleCandidateUrls(urls: string[]) {
+  return urls
+    .map((url, index) => ({
+      url,
+      index,
+      score: getCompatibleCandidateScore(url) - index,
     }))
     .sort((left, right) => right.score - left.score);
 }
@@ -471,6 +514,28 @@ function getCandidateScore(url: string) {
   } catch {
     return 0;
   }
+}
+
+function getCompatibleCandidateScore(url: string) {
+  let score = getCandidateScore(url);
+  const platform = getUrlHint(url, 'platform');
+  const formatHint = getUrlHint(url, 'f');
+
+  if (platform === 'html5') {
+    score += 24;
+  } else if (platform === 'pc') {
+    score -= 12;
+  }
+
+  if (formatHint?.startsWith('T_')) {
+    score += 12;
+  } else if (formatHint?.startsWith('h_')) {
+    score += 8;
+  } else if (formatHint?.startsWith('u_')) {
+    score -= 6;
+  }
+
+  return score;
 }
 
 function orderStreamsByCodec(
@@ -501,13 +566,14 @@ function orderPlaybackAttempts(
   attempts: PlaybackAttempt[],
   playSource: PlaySource,
   capability: PlayerCodecCapability,
+  codecPreference: VideoCodecPreference,
   memory?: PlayerCodecMemory,
 ): PlaybackAttempt[] {
   return attempts
     .map((attempt, index) => ({
       attempt,
       index,
-      score: getPlaybackAttemptScore(attempt, playSource, capability, memory),
+      score: getPlaybackAttemptScore(attempt, playSource, capability, codecPreference, memory),
     }))
     .sort((left, right) => {
       if (right.score !== left.score) {
@@ -522,6 +588,7 @@ function getPlaybackAttemptScore(
   attempt: PlaybackAttempt,
   playSource: PlaySource,
   capability: PlayerCodecCapability,
+  codecPreference: VideoCodecPreference,
   memory?: PlayerCodecMemory,
 ) {
   const realWebOs = isRealWebOsDevice(capability.deviceClass);
@@ -540,6 +607,14 @@ function getPlaybackAttemptScore(
       score += 24;
     } else {
       score -= 24;
+    }
+  }
+
+  if (codecPreference !== 'auto' && attempt.mode === 'dash') {
+    if (attempt.codec === codecPreference) {
+      score += 24;
+    } else {
+      score -= 12;
     }
   }
 
@@ -591,6 +666,8 @@ function getPlaybackAttemptScore(
     if (compatibleBeatsDashFallback) {
       score += 10;
     }
+
+    score += getCompatibleAttemptStabilityScore(attempt.source);
   }
 
   if (realWebOs && attempt.mode === 'dash' && attempt.quality < playSource.requestedQuality) {
@@ -611,8 +688,67 @@ function attemptsOfMode(playSource: PlaySource, mode: 'dash' | 'compatible') {
   return playSource.compatibleSources;
 }
 
+function orderCompatibleSources(
+  sources: PlayCompatibleSource[],
+  deviceClass: string,
+  requestedQuality: number,
+) {
+  return [...sources].sort((left, right) => {
+    const rightScore = getCompatibleSourceScore(right, deviceClass, requestedQuality);
+    const leftScore = getCompatibleSourceScore(left, deviceClass, requestedQuality);
+    if (rightScore !== leftScore) {
+      return rightScore - leftScore;
+    }
+    return right.quality - left.quality;
+  });
+}
+
+function getCompatibleSourceScore(
+  source: PlayCompatibleSource,
+  deviceClass: string,
+  requestedQuality: number,
+) {
+  let score = source.quality;
+
+  if (!isRealWebOsDevice(deviceClass)) {
+    return score;
+  }
+
+  score += getCompatibleAttemptStabilityScore(source);
+  if (source.quality >= requestedQuality) {
+    score += 4;
+  }
+  return score;
+}
+
 function isRealWebOsDevice(deviceClass: string) {
   return deviceClass === 'webos-6' || deviceClass === 'webos-2021' || deviceClass === 'webos-generic';
+}
+
+function getCompatibleAttemptStabilityScore(source: PlayCompatibleSource | null) {
+  if (!source) {
+    return 0;
+  }
+
+  const platform = getUrlHint(source.url, 'platform');
+  const formatHint = getUrlHint(source.url, 'f');
+  let score = 0;
+
+  if (platform === 'html5') {
+    score += 32;
+  } else if (platform === 'pc') {
+    score -= 20;
+  }
+
+  if (formatHint?.startsWith('T_')) {
+    score += 16;
+  } else if (formatHint?.startsWith('h_')) {
+    score += 12;
+  } else if (formatHint?.startsWith('u_')) {
+    score -= 8;
+  }
+
+  return score;
 }
 
 function pickPreferredAudioStream(
@@ -721,6 +857,18 @@ function formatAudioCodecLabel(codecs: string): string {
     return 'FLAC';
   }
   return codecs || '未知音频';
+}
+
+function getUrlHint(url: string, key: string) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url).searchParams.get(key);
+  } catch {
+    return null;
+  }
 }
 
 export function getAvailableCodecsForQuality(playSource: PlaySource, quality: number): ParsedVideoCodec[] {

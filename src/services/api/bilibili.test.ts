@@ -681,6 +681,114 @@ describe('bilibili api mapping', () => {
     });
   });
 
+  it('fetchPlaySource 会把 html5 兼容流排在同档位 pc 兼容流前面', async () => {
+    fetchJsonMock.mockImplementation(async (url: string) => {
+      if (url.includes('fnval=1488')) {
+        return {
+          data: {
+            quality: 80,
+            format: 'dash',
+            timelength: 120000,
+            support_formats: [
+              {
+                quality: 80,
+                new_description: '1080P',
+                codecs: ['avc1.640028'],
+              },
+              {
+                quality: 64,
+                new_description: '720P',
+                codecs: ['avc1.640028'],
+              },
+            ],
+            dash: {
+              video: [{
+                id: 80,
+                base_url: 'http://upos-sz.bilivideo.com/video-avc.m4s',
+                mime_type: 'video/mp4',
+                codecs: 'avc1.640028',
+                segment_base: {
+                  initialization: '0-100',
+                  index_range: '101-200',
+                },
+                width: 1920,
+                height: 1080,
+                bandwidth: 2000000,
+                frame_rate: '60',
+              }],
+              audio: [{
+                id: 30216,
+                base_url: 'http://upos-sz.bilivideo.com/audio.m4s',
+                mime_type: 'audio/mp4',
+                codecs: 'mp4a.40.2',
+                segment_base: {
+                  initialization: '0-50',
+                  index_range: '51-99',
+                },
+                bandwidth: 128000,
+              }],
+            },
+          },
+        };
+      }
+
+      if (url.includes('fnval=0') && url.includes('platform=html5') && url.includes('qn=80')) {
+        return {
+          data: {
+            quality: 64,
+            format: 'mp4',
+            durl: [{
+              url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-720.mp4?platform=html5&high_quality=1&f=h_0_0',
+            }],
+          },
+        };
+      }
+
+      if (url.includes('fnval=0') && !url.includes('platform=html5') && url.includes('qn=80')) {
+        return {
+          data: {
+            quality: 80,
+            format: 'mp4',
+            durl: [{
+              url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+            }],
+          },
+        };
+      }
+
+      if (url.includes('fnval=0') && url.includes('platform=html5') && url.includes('qn=64')) {
+        return {
+          data: {
+            quality: 80,
+            format: 'mp4',
+            durl: [{
+              url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0',
+              backup_url: ['https://mcdn.example.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0'],
+            }],
+          },
+        };
+      }
+
+      throw new Error(`unexpected url: ${url}`);
+    });
+
+    const { fetchPlaySource } = await loadBilibiliModule();
+    const result = await fetchPlaySource('BV1xx411c7mD', 12345, 80);
+
+    expect(result.compatibleQuality).toBe(80);
+    expect(result.compatibleSources[0]).toEqual({
+      quality: 80,
+      qualityLabel: '1080P',
+      format: 'mp4',
+      url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0',
+      candidateUrls: [
+        'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0',
+        'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+        'https://mcdn.example.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0',
+      ],
+    });
+  });
+
   it('fetchCurrentUserProfile 会整合 nav 与 nav/stat 响应', async () => {
     fetchJsonMock.mockImplementation(async (url: string) => {
       if (url.endsWith('/nav')) {

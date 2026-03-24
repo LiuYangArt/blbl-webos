@@ -1907,6 +1907,16 @@ function buildEnvironmentDetails(
     videoStreamCount: play.videoStreams.length,
     audioStreamCount: play.audioStreams.length,
     compatibleSourceCount: play.compatibleSources.length,
+    compatibleSources: play.compatibleSources.map((source) => ({
+      quality: source.quality,
+      qualityLabel: source.qualityLabel,
+      host: getUrlHost(source.url),
+      urlHints: getUrlDebugHints(source.url),
+      candidateHints: source.candidateUrls.slice(0, 6).map((url) => ({
+        host: getUrlHost(url),
+        ...getUrlDebugHints(url),
+      })),
+    })),
     compatibleSourceHosts: play.compatibleSources.map((source) => getUrlHost(source.url)),
     compatibleCandidateHosts: play.compatibleSources.flatMap((source) => source.candidateUrls.map(getUrlHost)),
     dashVideoHosts: play.videoStreams.flatMap((stream) => [stream.url, ...stream.backupUrls].map(getUrlHost)),
@@ -1930,6 +1940,8 @@ function buildEnvironmentDetails(
       audioHost: getUrlHost(attempt.audioStream?.url ?? ''),
       firstVideoHost: getUrlHost(attempt.candidates[0]?.videoUrl ?? ''),
       firstAudioHost: getUrlHost(attempt.candidates[0]?.audioUrl ?? ''),
+      firstVideoHints: getUrlDebugHints(attempt.candidates[0]?.videoUrl ?? ''),
+      firstAudioHints: getUrlDebugHints(attempt.candidates[0]?.audioUrl ?? ''),
     })),
     playbackAttemptModes: attempts.map((attempt) => attempt.mode),
     playbackAttemptIds: attempts.map((attempt) => attempt.id),
@@ -1957,5 +1969,40 @@ function buildAttemptDebugDetails(
     rawAudioHost: getUrlHost(rawCandidate?.audioUrl ?? ''),
     resolvedVideoHost: getUrlHost(resolvedCandidate?.videoUrl ?? ''),
     resolvedAudioHost: getUrlHost(resolvedCandidate?.audioUrl ?? ''),
+    rawVideoHints: getUrlDebugHints(rawCandidate?.videoUrl ?? ''),
+    rawAudioHints: getUrlDebugHints(rawCandidate?.audioUrl ?? ''),
+    resolvedVideoHints: getUrlDebugHints(resolvedCandidate?.videoUrl ?? ''),
+    resolvedAudioHints: getUrlDebugHints(resolvedCandidate?.audioUrl ?? ''),
   };
+}
+
+function getUrlDebugHints(url: string) {
+  if (!url) {
+    return {
+      platform: null,
+      formatHint: null,
+      orderId: null,
+      os: null,
+      og: null,
+    };
+  }
+
+  try {
+    const parsed = new URL(url);
+    return {
+      platform: parsed.searchParams.get('platform'),
+      formatHint: parsed.searchParams.get('f'),
+      orderId: parsed.searchParams.get('orderid'),
+      os: parsed.searchParams.get('os'),
+      og: parsed.searchParams.get('og'),
+    };
+  } catch {
+    return {
+      platform: null,
+      formatHint: null,
+      orderId: null,
+      os: null,
+      og: null,
+    };
+  }
 }

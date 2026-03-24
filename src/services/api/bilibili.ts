@@ -384,7 +384,7 @@ function getPlayCandidateUrls(segment: RawPlaySegment | undefined) {
   ]
     .filter((item): item is string => Boolean(item))
     .map(normalizeMediaUrl);
-  return sortMediaCandidateUrls(Array.from(new Set(rawCandidates)));
+  return sortCompatibleCandidateUrls(Array.from(new Set(rawCandidates)));
 }
 
 function getDashCandidateUrls(stream: RawDashStream | undefined) {
@@ -401,6 +401,10 @@ function getDashCandidateUrls(stream: RawDashStream | undefined) {
 
 function sortMediaCandidateUrls(urls: string[]) {
   return [...urls].sort((left, right) => getMediaCandidateScore(right) - getMediaCandidateScore(left));
+}
+
+function sortCompatibleCandidateUrls(urls: string[]) {
+  return [...urls].sort((left, right) => getCompatibleMediaCandidateScore(right) - getCompatibleMediaCandidateScore(left));
 }
 
 function getMediaCandidateScore(url: string) {
@@ -426,6 +430,37 @@ function getMediaCandidateScore(url: string) {
   } catch {
     return 0;
   }
+}
+
+function getCompatibleMediaCandidateScore(url: string) {
+  let score = getMediaCandidateScore(url);
+
+  try {
+    const parsedUrl = new URL(url);
+    const platform = parsedUrl.searchParams.get('platform');
+    const highQuality = parsedUrl.searchParams.get('high_quality');
+    const formatHint = parsedUrl.searchParams.get('f');
+
+    if (platform === 'html5') {
+      score += 24;
+    } else if (platform === 'pc') {
+      score -= 6;
+    }
+
+    if (highQuality === '1') {
+      score += 8;
+    }
+
+    if (formatHint?.startsWith('h_')) {
+      score += 6;
+    } else if (formatHint?.startsWith('u_')) {
+      score -= 2;
+    }
+  } catch {
+    return score;
+  }
+
+  return score;
 }
 
 function parseVideoCodec(codecs: string | undefined): ParsedVideoCodec {
@@ -1081,8 +1116,8 @@ async function fetchCompatibleSources(
 
   const sourceByQuality = new Map<number, PlayCompatibleSource>();
 
-  for (const quality of preferredQualities) {
-    for (const variant of COMPATIBLE_REQUEST_VARIANTS) {
+  for (const variant of COMPATIBLE_REQUEST_VARIANTS) {
+    for (const quality of preferredQualities) {
       try {
         const data = await requestPlaySource(bvid, cid, quality, variant.fnval, {
           platform: variant.platform,
@@ -1111,10 +1146,11 @@ async function fetchCompatibleSources(
           ...existing.candidateUrls,
           ...candidateUrls,
         ]));
+        const orderedCandidateUrls = sortCompatibleCandidateUrls(mergedCandidateUrls);
         sourceByQuality.set(actualQuality, {
           ...existing,
-          url: mergedCandidateUrls[0] ?? existing.url,
-          candidateUrls: mergedCandidateUrls,
+          url: orderedCandidateUrls[0] ?? existing.url,
+          candidateUrls: orderedCandidateUrls,
         });
       } catch {
         // 兼容流按档位逐级尝试，单档失败不应中断整个播放计划。

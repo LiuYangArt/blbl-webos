@@ -183,6 +183,79 @@ Issue `#9` 与后续联调中，用户反馈的核心现象是：
 3. `npm run typecheck`
 4. `npm run build`
 
+## 追加：真机联调补记
+
+在后续 LG C1 真机联调里，又补上了两条之前没有完全看清的事实：
+
+### 1. telemetry 一度“失效”并不是前端上报逻辑坏了
+
+真机曾出现过只看到旧 telemetry 或完全收不到播放器事件的现象。最终确认根因是：
+
+1. 启动真机 debug 时，之前的 app 进程没有真正关闭
+2. 后续虽然重新 launch 了新参数，但电视端运行时并没有冷启动
+3. `debugTelemetryUrl` 等 launch params 没有真正进入当前会话
+
+对应修复是：
+
+1. `scripts/webos-debug-player.mjs` 默认在 launch 前先关闭正在运行的 app
+2. 只保留 `--keep-running-app` 作为显式例外
+
+这条经验很重要，因为它说明：
+
+- 真机 telemetry “失效”时，先查冷启动和 launch params 是否真的生效
+- 不要第一时间怀疑前端 telemetry 代码本身
+
+### 2. 这条视频在真机登录态下，`1080 compatible` 和 `720 compatible` 不是同一种链接形态
+
+针对测试视频 `BV1Sf4y1q7H9` 的真机 telemetry，最终看到了更细的兼容流事实：
+
+1. `compatible 1080P` 对这台真机当前登录态返回的是 `platform=pc + f=u_0_0`
+2. `compatible 720P` 返回的是 `platform=html5 + f=T_0_0`
+3. 旧播放器逻辑只保留“最高兼容档位”这一条 attempt
+4. 于是它会一直卡在 `1080 compatible (pc)` 上尝试，最后超时
+5. 真正更容易起播的 `720 compatible (html5)` 根本没有机会执行
+
+这解释了为什么：
+
+1. 同一条视频历史上可能出现过 `1080 compatible` 能播
+2. 但这次真机登录态下又完全播不出来
+
+问题不再是简单的“接口有没有给 1080”，而是：
+
+- **同一视频、同一设备，在不同上下文下，兼容流的“档位”与“可播形态”并不总是绑定在一起**
+
+### 3. 最终真机修复不是“强保 1080 compatible”，而是“允许稳定 compatible attempt 先被尝试”
+
+在看清上面这条事实后，播放器策略继续收敛为：
+
+1. `compatible` 不再只保留一条最高档位 attempt
+2. 而是把多个兼容档位都保留下来
+3. 真机 webOS 上，对 `platform=html5 / f=T_0_0` 这类更稳定的 compatible 链接给予更高优先级
+4. 对 `platform=pc / f=u_0_0` 的 compatible 链接降权，并减少单个 attempt 的候选数量
+
+这样做之后，真机上这条视频的执行链路变成了：
+
+1. 先尝试 `DASH`
+2. `DASH` 失败后
+3. 转到 `720P compatible (html5)`
+4. 收到 `loadedmetadata + play`
+
+结果是：
+
+1. 这条视频从“真机完全起不来”恢复为“真机稳定起播”
+2. 代价是当前回退到 `720P compatible`
+3. 但它比卡死在 `1080 compatible (pc)` 要更符合真实用户可用性
+
+### 4. 另一条公开视频也验证了同一策略
+
+补测 `BV1wqoGYxEox` 时，真机上也出现了相同模式：
+
+1. `DASH 1080P` 先尝试
+2. 失败后回退到 `720P compatible (html5)`
+3. 收到 `loadedmetadata + play`
+
+这说明本次改动不是只对单个视频硬编码，而是对“真机上 compatible 高档位不可播、低一档 html5 可播”的一类问题都有帮助。
+
 ## 经验沉淀
 
 以后处理播放器画质相关问题时，优先遵守下面几条：
@@ -193,6 +266,8 @@ Issue `#9` 与后续联调中，用户反馈的核心现象是：
 4. Simulator 和电视可以有底层媒介接入差异，但高层播放优先级不能分叉成两套
 5. 历史成功记忆只能做启发式微调，不能压过“接口这次已经明确返回了更高档位”这个事实
 6. 任何播放器诊断面板都必须直接反映真实决策链，不能再依赖模糊聚合字段
+7. 真机 debug 脚本必须确保 app 真正冷启动，否则 launch params 和 telemetry 结论都不可信
+8. 在真机上看 compatible 能否播放时，不能只看“档位更高”，还要同时看 URL 形态是不是 `html5` 还是 `pc`
 
 ## 后续约束
 

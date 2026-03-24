@@ -63,6 +63,28 @@ const videoStreams: PlayVideoStream[] = [
   },
 ];
 
+const videoStreamsWithAv1: PlayVideoStream[] = [
+  ...videoStreams,
+  {
+    id: 103,
+    quality: 80,
+    qualityLabel: '1080P',
+    codec: 'av1',
+    codecs: 'av01.0.08M.08',
+    url: 'https://upos-sz.bilivideo.com/video-av1.m4s',
+    backupUrls: [],
+    mimeType: 'video/mp4',
+    segmentBase: {
+      initialization: '0-100',
+      indexRange: '101-200',
+    },
+    width: 1920,
+    height: 1080,
+    bandwidth: 1_300_000,
+    frameRate: 60,
+  },
+];
+
 const audioStreams: PlayAudioStream[] = [
   {
     id: 201,
@@ -159,6 +181,47 @@ describe('playerCodec', () => {
     expect(formatAttemptResolution(result.attempts[0]!)).toBe('1920 x 1080');
   });
 
+  it('显式选择 HEVC 时，会优先生成 HEVC 分轨的首个尝试', () => {
+    const result = buildPlaybackAttempts(
+      playSource,
+      'hevc',
+      {
+        deviceKey: 'oled55c1:6.0',
+        deviceLabel: 'LG C1',
+        deviceClass: 'webos-2021',
+        support: { avc: true, hevc: true, av1: false },
+      },
+    );
+
+    expect(result.effectivePreference).toBe('hevc');
+    expect(result.attempts[0]?.mode).toBe('dash');
+    expect(result.attempts[0]?.codec).toBe('hevc');
+  });
+
+  it('显式选择 AV1 且当前分轨可用时，会优先生成 AV1 分轨的首个尝试', () => {
+    const result = buildPlaybackAttempts(
+      {
+        ...playSource,
+        qualities: [{
+          ...qualities[0],
+          codecs: ['avc', 'hevc', 'av1'],
+        }],
+        videoStreams: videoStreamsWithAv1,
+      },
+      'av1',
+      {
+        deviceKey: 'oled55c1:6.0',
+        deviceLabel: 'LG C1',
+        deviceClass: 'webos-2021',
+        support: { avc: true, hevc: true, av1: true },
+      },
+    );
+
+    expect(result.effectivePreference).toBe('av1');
+    expect(result.attempts[0]?.mode).toBe('dash');
+    expect(result.attempts[0]?.codec).toBe('av1');
+  });
+
   it('兼容流档位较低时，真实 webOS 设备仍优先保留 DASH 的实际返回档位', () => {
     const result = buildPlaybackAttempts(
       {
@@ -189,11 +252,67 @@ describe('playerCodec', () => {
     expect(result.attempts.some((item) => item.mode === 'compatible' && item.quality === 64)).toBe(true);
   });
 
+  it('真实 webOS 设备会优先尝试更稳定的 html5 兼容流，而不是只盯住更高但不稳定的 pc 兼容流', () => {
+    const result = buildPlaybackAttempts(
+      {
+        ...playSource,
+        mode: 'durl',
+        videoStreams: [],
+        audioStreams: [],
+        returnedQuality: 80,
+        returnedQualityLabel: '1080P',
+        compatibleQuality: 80,
+        compatibleQualityLabel: '1080P',
+        compatibleSources: [
+          {
+            quality: 80,
+            qualityLabel: '1080P',
+            format: 'mp4',
+            url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+            candidateUrls: [
+              'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+              'https://upos-sz-mirror08c.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+            ],
+          },
+          {
+            quality: 64,
+            qualityLabel: '720P',
+            format: 'mp4',
+            url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-720.mp4?platform=html5&f=T_0_0',
+            candidateUrls: [
+              'https://upos-sz-estghw.bilivideo.com/video-compatible-720.mp4?platform=html5&f=T_0_0',
+              'https://upos-sz-mirror08c.bilivideo.com/video-compatible-720.mp4?platform=html5&f=T_0_0',
+            ],
+          },
+        ],
+        candidateUrls: [],
+      },
+      'auto',
+      {
+        deviceKey: 'oled55c1:6.0',
+        deviceLabel: 'LG C1',
+        deviceClass: 'webos-2021',
+        support: { avc: true, hevc: true, av1: false },
+      },
+    );
+
+    expect(result.attempts[0]?.mode).toBe('compatible');
+    expect(result.attempts[0]?.quality).toBe(64);
+    expect(result.attempts[0]?.source?.url).toContain('platform=html5');
+    expect(result.attempts[1]?.quality).toBe(80);
+    expect(result.attempts[1]?.source?.url).toContain('platform=pc');
+  });
+
   it('带有 WebAppManager 的 UA 会被识别为 webos-simulator', () => {
     const originalUserAgent = navigator.userAgent;
+    const originalPalmSystem = window.PalmSystem;
     Object.defineProperty(navigator, 'userAgent', {
       configurable: true,
       value: 'Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 Chrome/79.0.3945.79 Safari/537.36 WebAppManager',
+    });
+    Object.defineProperty(window, 'PalmSystem', {
+      configurable: true,
+      value: undefined,
     });
 
     try {
@@ -203,6 +322,37 @@ describe('playerCodec', () => {
       Object.defineProperty(navigator, 'userAgent', {
         configurable: true,
         value: originalUserAgent,
+      });
+      Object.defineProperty(window, 'PalmSystem', {
+        configurable: true,
+        value: originalPalmSystem,
+      });
+    }
+  });
+
+  it('真实 webOS 环境带有 PalmSystem 时，不会被误识别为 webos-simulator', () => {
+    const originalUserAgent = navigator.userAgent;
+    const originalPalmSystem = window.PalmSystem;
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 Chrome/79.0.3945.79 Safari/537.36 WebAppManager',
+    });
+    Object.defineProperty(window, 'PalmSystem', {
+      configurable: true,
+      value: {},
+    });
+
+    try {
+      const capability = buildPlayerCodecCapability(null);
+      expect(capability.deviceClass).toBe('webos-6');
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        value: originalUserAgent,
+      });
+      Object.defineProperty(window, 'PalmSystem', {
+        configurable: true,
+        value: originalPalmSystem,
       });
     }
   });
