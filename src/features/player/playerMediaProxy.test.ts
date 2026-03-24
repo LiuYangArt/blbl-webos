@@ -116,4 +116,15 @@ describe('playerMediaProxy', () => {
     expect(new URL(resolved!.videoUrl).pathname).toBe('/media');
     expect(new URL(resolved!.videoUrl).searchParams.get('url')).toBe('https://upos-sz.bilivideo.com/video.mp4');
   });
+
+  it('显式 launch param 提供媒体代理时，会优先于 relay 自动代理', () => {
+    mockReadMediaProxyOrigin.mockReturnValue('http://127.0.0.1:19034');
+
+    const origin = resolvePlayerMediaProxyOrigin('webos-2021', {
+      preferRelayProxy: true,
+    });
+
+    expect(origin).toBe('http://127.0.0.1:19034');
+    expect(mockReadRelaySettings).not.toHaveBeenCalled();
+  });
 });

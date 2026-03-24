@@ -336,6 +336,35 @@ func TestRelayMediaProxyForwardsHeadersAndCookies(t *testing.T) {
 	}
 }
 
+func TestRelayMediaProxyRejectsUnauthorizedRequest(t *testing.T) {
+	config := Config{
+		AccessToken:     "token",
+		RequestTimeout:  time.Second,
+		UserAgent:       "relay-test",
+		BiliAPIBaseURL:  "https://example.com",
+		BiliPassportURL: "https://example.com",
+	}
+
+	store, err := NewStateStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := NewServer(&config, store, NewBilibiliClient(config), log.New(io.Discard, "", 0))
+	app := httptest.NewServer(server.routes())
+	defer app.Close()
+
+	response, err := http.Get(app.URL + "/media?url=" + url.QueryEscape("https://upos-sz.bilivideo.com/video.m4s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", response.StatusCode)
+	}
+}
+
 type httpResult struct {
 	StatusCode int
 	Body       string
