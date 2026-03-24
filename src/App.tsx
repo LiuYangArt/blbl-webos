@@ -26,6 +26,8 @@ import { focusById, focusFirst, focusSection, isFocusableElement, readFocusGroup
 import { attachRemoteControl } from './platform/remote';
 import { appendRuntimeDiagnostic } from './services/debug/runtimeDiagnostics';
 import { platformBack } from './platform/webos';
+import { ensureRelaySession } from './services/relay/client';
+import { readRelayAuthMaterial, readRelaySettings } from './services/relay/settings';
 
 function markBootMounted() {
   const diagnostics = (window as typeof window & {
@@ -48,6 +50,7 @@ function AppContent() {
   const lastRouteKeyRef = useRef<string>('');
   const nextRouteKeepsNavFocusRef = useRef(false);
   const nextNavFocusIdRef = useRef<string | null>(null);
+  const lastRelaySyncKeyRef = useRef<string>('');
 
   const focusKey = useMemo(() => {
     switch (currentPage.name) {
@@ -67,6 +70,27 @@ function AppContent() {
   useEffect(() => {
     void refreshAuth();
   }, [refreshAuth]);
+
+  useEffect(() => {
+    if (auth.status !== 'authenticated' || !auth.profile) {
+      lastRelaySyncKeyRef.current = '';
+      return;
+    }
+
+    const settings = readRelaySettings();
+    if (!settings.enabled || !settings.host) {
+      lastRelaySyncKeyRef.current = '';
+      return;
+    }
+
+    const syncKey = `${auth.profile.mid}:${settings.host}:${settings.port}`;
+    if (lastRelaySyncKeyRef.current === syncKey) {
+      return;
+    }
+    lastRelaySyncKeyRef.current = syncKey;
+
+    void ensureRelaySession(settings, auth.profile, readRelayAuthMaterial(), 'app-start');
+  }, [auth.profile, auth.status]);
 
   useEffect(() => {
     const currentRouteKey = summarizeRoute(currentPage);

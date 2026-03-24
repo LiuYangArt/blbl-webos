@@ -118,6 +118,8 @@ npm run webos:launch -- --device lgtv
 
 - `scripts/player-telemetry-server.mjs`
 - `npm run webos:debug:player -- --url <bilibili-url>`
+- `npm run webos:debug:player:macos -- --url <bilibili-url>`
+- `npm run webos:debug:player:windows -- --url <bilibili-url>`
 
 其中 `webos:debug:player` 会自动：
 
@@ -125,6 +127,13 @@ npm run webos:launch -- --device lgtv
 - 为电视生成 `player` 启动参数
 - 自动给真机注入 `debugTelemetryUrl`
 - 在本机临时起 telemetry server，并输出本轮总结到 `_dev/real-tv-debug/*.summary.json`
+
+平台约定：
+
+- 默认优先用 `npm run webos:debug:player`
+- 在 `macOS` 上如果你想显式使用独立入口，可用 `npm run webos:debug:player:macos`
+- 在 `Windows` 上如果你想显式使用独立入口，可用 `npm run webos:debug:player:windows`
+- 三者的业务逻辑保持一致，区别只是为后续平台排障保留独立入口名，避免再次把某一端脚本覆盖掉
 
 ### 2. 如何读事件
 
@@ -136,6 +145,11 @@ npm run webos:launch -- --device lgtv
   重点看 error message 里失败的真实 URL
 - `媒体加载超时`
   说明既没拿到元信息，也没抛出可读的底层错误
+- `attempt-failure`
+  说明当前候选已经失败，重点看：
+  - `failureStage`
+  - `resolvedVideoHost / resolvedAudioHost`
+  - `runtime.readyState / runtime.networkState`
 
 ## 真机播放问题快速分类
 
@@ -154,6 +168,11 @@ npm run webos:launch -- --device lgtv
 
 这种情况可以临时用代理验证根因，但**不要**把电脑代理当最终方案。
 
+如果当前仓库已经启用了 relay `/media`，则应优先看：
+
+- `resolvedVideoHost` 是否已经变成 relay 地址
+- relay 本机是否能对同一条媒体 URL 返回 `206 Partial Content`
+
 ### 2. DASH 黑屏且出现 `Shaka Error 1002`
 
 优先看错误 URL：
@@ -164,6 +183,13 @@ npm run webos:launch -- --device lgtv
   优先尝试更保守的 `AAC` 音频轨
 - 如果同一视频轨不断切候选
   优先检查候选 host 排序与回退逻辑
+
+如果错误里已经明确出现 `403`，不要再把它简单解释成“电视不支持 HEVC”。
+先判断：
+
+1. `playurl` 是不是已经来自 relay
+2. 媒体分片是不是仍然由电视直连 bilivideo
+3. 是否需要把高码率媒体请求也接到 relay `/media`
 
 ### 3. 收藏夹点开后报错
 
@@ -194,6 +220,21 @@ npm run webos:launch -- --device lgtv
 - `npm run webos:list -- --device lgtv`
 - 真机文件系统里的 `index-legacy-*.js`
 - 运行时 telemetry 是否来自当前版本
+
+### 4. `playurl relay` 不等于“高清一定能播”
+
+当前仓库已经验证过一类非常关键的真机问题：
+
+1. relay 账号同步正常
+2. `playurl` 已经返回 `1080P / HEVC`
+3. 但电视直连这些高码率媒体 URL 仍然会遇到 `403` 或超时
+
+所以以后再看到：
+
+- `latestEnvironment` 里已经是 `1080P + HEVC`
+- 但 `attempt-failure` 仍然持续出现
+
+不要只盯着 `playurl` 这一层，而要继续核对媒体请求是否已经走 relay `/media`。
 
 ## 电视待机 / 断连处理
 

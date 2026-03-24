@@ -5,6 +5,8 @@ import {
   formatAttemptResolution,
   getAutoCodecPriority,
   parseVideoCodec,
+  isCodecSupportedByCapability,
+  normalizeCodecPreferenceForCapability,
 } from './playerCodec';
 import type {
   PlayAudioStream,
@@ -145,6 +147,18 @@ const compatibleSources: PlayCompatibleSource[] = [
 
 const playSource: PlaySource = {
   mode: 'dash',
+  playurlSource: 'direct',
+  playurlFallbackReason: null,
+  relayStatus: {
+    enabled: false,
+    configured: false,
+    healthOk: null,
+    authState: 'disabled',
+    relayMid: null,
+    expectedMid: null,
+    autoSyncTriggered: false,
+    autoSyncReason: null,
+  },
   qualityLabel: '1080P',
   currentQuality: 80,
   returnedQuality: 80,
@@ -227,6 +241,31 @@ describe('playerCodec', () => {
     expect(result.effectivePreference).toBe('hevc');
     expect(result.attempts[0]?.mode).toBe('dash');
     expect(result.attempts[0]?.codec).toBe('hevc');
+  });
+
+  it('设备能力不支持 HEVC 时，会把手动偏好纠正回自动', () => {
+    expect(normalizeCodecPreferenceForCapability('hevc', {
+      deviceKey: 'simulator:6.0',
+      deviceLabel: 'Simulator',
+      deviceClass: 'webos-simulator',
+      support: { avc: true, hevc: false, av1: false },
+    })).toEqual({
+      codecPreference: 'auto',
+      warning: '当前设备能力探测不支持 HEVC，已自动切回自动模式。',
+    });
+  });
+
+  it('编码可用性会同时参考设备能力探测结果', () => {
+    const capability = {
+      deviceKey: 'simulator:6.0',
+      deviceLabel: 'Simulator',
+      deviceClass: 'webos-simulator',
+      support: { avc: true, hevc: false, av1: false },
+    };
+
+    expect(isCodecSupportedByCapability('auto', capability)).toBe(true);
+    expect(isCodecSupportedByCapability('avc', capability)).toBe(true);
+    expect(isCodecSupportedByCapability('hevc', capability)).toBe(false);
   });
 
   it('显式选择 AV1 且当前分轨可用时，会优先生成 AV1 分轨的首个尝试', () => {

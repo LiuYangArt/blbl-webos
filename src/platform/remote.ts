@@ -1,4 +1,4 @@
-import { activateFocused, moveFocus } from './focus';
+import { activateFocused, isFocusableElement, moveFocus } from './focus';
 import { REMOTE_KEYS } from './webos';
 
 export const REMOTE_INTENT_EVENT = 'tv-remote-intent';
@@ -53,15 +53,22 @@ export function attachRemoteControl({ onBack }: RemoteHandlers) {
     }
 
     const activeElement = document.activeElement;
-    if (
-      event.keyCode !== REMOTE_KEYS.BACK
-      && activeElement instanceof HTMLElement
+    const isEditableFocused = activeElement instanceof HTMLElement
       && (
         activeElement instanceof HTMLInputElement
         || activeElement instanceof HTMLTextAreaElement
         || activeElement instanceof HTMLSelectElement
         || activeElement.isContentEditable
-      )
+      );
+    const isDirectionalKey = event.keyCode === REMOTE_KEYS.LEFT
+      || event.keyCode === REMOTE_KEYS.RIGHT
+      || event.keyCode === REMOTE_KEYS.UP
+      || event.keyCode === REMOTE_KEYS.DOWN;
+
+    if (
+      event.keyCode !== REMOTE_KEYS.BACK
+      && isEditableFocused
+      && !(isDirectionalKey && activeElement instanceof HTMLElement && isFocusableElement(activeElement))
     ) {
       return;
     }

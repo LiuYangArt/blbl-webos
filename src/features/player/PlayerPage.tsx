@@ -27,6 +27,8 @@ import {
   getAvailableCodecsForQuality,
   getCodecLabel,
   getReturnedCodecsForQuality,
+  isCodecSupportedByCapability,
+  normalizeCodecPreferenceForCapability,
 } from './playerCodec';
 import type { PlaybackAttempt, PlaybackSourceCandidate, PlayerCodecCapability } from './playerCodec';
 import { createDashManifestSource } from './playerDashManifest';
@@ -205,6 +207,11 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const codecMemory = useMemo(() => (
     capability ? readPlayerCodecMemory(capability.deviceKey) : createDefaultPlayerCodecMemory()
   ), [capability]);
+  const normalizedCodecPreference = useMemo(
+    () => normalizeCodecPreferenceForCapability(codecPreference, capability),
+    [capability, codecPreference],
+  );
+  const resolvedCodecPreference = normalizedCodecPreference.codecPreference;
 
   const episodeEntries = useMemo<VideoPart[]>(() => {
     if (!detail) {
@@ -244,18 +251,20 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     if (!play || !capability) {
       return {
         attempts: [],
-        effectivePreference: codecPreference,
+        effectivePreference: resolvedCodecPreference,
         warning: null as string | null,
       };
     }
-    return buildPlaybackAttempts(play, codecPreference, capability, codecMemory);
-  }, [capability, codecMemory, codecPreference, play]);
+    return buildPlaybackAttempts(play, resolvedCodecPreference, capability, codecMemory);
+  }, [capability, codecMemory, play, resolvedCodecPreference]);
 
   const currentAttempt = playbackPlan.attempts[activeAttemptIndex] ?? null;
   const rawCurrentCandidate = currentAttempt?.candidates[activeCandidateIndex] ?? null;
   const currentCandidate = useMemo(
-    () => resolvePlaybackCandidateUrls(rawCurrentCandidate, capability?.deviceClass),
-    [capability?.deviceClass, rawCurrentCandidate],
+    () => resolvePlaybackCandidateUrls(rawCurrentCandidate, capability?.deviceClass, {
+      preferRelayProxy: play?.playurlSource === 'relay' && play.relayStatus.authState === 'synced',
+    }),
+    [capability?.deviceClass, play, rawCurrentCandidate],
   );
   const currentSourceUrl = currentCandidate?.videoUrl ?? '';
   const currentCandidateHost = getUrlHost(rawCurrentCandidate?.videoUrl ?? '');
@@ -268,17 +277,28 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const selectableCodecs = useMemo(() => {
     const codecs = new Set<VideoCodecPreference>(['auto']);
     if (currentAttempt?.mode === 'compatible') {
-      codecs.add('avc');
+      if (isCodecSupportedByCapability('avc', capability)) {
+        codecs.add('avc');
+      }
       return codecs;
     }
 
     for (const codec of returnedCodecs) {
-      if (codec !== 'unknown') {
+      if (codec !== 'unknown' && isCodecSupportedByCapability(codec, capability)) {
         codecs.add(codec);
       }
     }
     return codecs;
-  }, [currentAttempt?.mode, returnedCodecs]);
+  }, [capability, currentAttempt?.mode, returnedCodecs]);
+
+  useEffect(() => {
+    if (normalizedCodecPreference.codecPreference === codecPreference) {
+      return;
+    }
+
+    setCodecPreference(normalizedCodecPreference.codecPreference);
+    setPlaybackNotice(normalizedCodecPreference.warning);
+  }, [codecPreference, normalizedCodecPreference]);
 
   const recommendationPageCount = getPageCount(related.length, STRIP_PAGE_SIZE);
   const episodePageCount = getPageCount(episodeEntries.length, STRIP_PAGE_SIZE);
@@ -709,7 +729,11 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       });
     };
 
-    const finalizeFailure = (message: string, code: number | null = null) => {
+    const finalizeFailure = (
+      message: string,
+      code: number | null = null,
+      failureStage: string = 'unknown',
+    ) => {
       if (cancelled || failed) {
         return;
       }
@@ -723,6 +747,33 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       resumeProgressRef.current = nextResumePoint;
 
       const nextCandidateIndex = activeCandidateIndex + 1;
+      const nextAttemptIndex = activeAttemptIndex + 1;
+      const willSwitchCandidate = nextCandidateIndex < currentAttempt.candidates.length;
+      const willSwitchAttempt = !willSwitchCandidate && nextAttemptIndex < playbackPlan.attempts.length;
+
+      reportPlayerDebugEvent({
+        type: 'attempt-failure',
+        bvid,
+        cid,
+        sourceUrl: currentSourceUrl,
+        quality: currentAttempt.qualityLabel,
+        codec: currentAttempt.codecLabel,
+        mimeType: currentMimeType,
+        sourceTypeLabel: engineLabel,
+        message,
+        code,
+        details: {
+          ...buildAttemptDebugDetails(currentAttempt, rawCurrentCandidate, currentCandidate, activeCandidateIndex),
+          failureStage,
+          willSwitchCandidate,
+          willSwitchAttempt,
+          nextCandidateIndex: willSwitchCandidate ? nextCandidateIndex : null,
+          nextAttemptIndex: willSwitchAttempt ? nextAttemptIndex : null,
+          runtime: buildPlaybackRuntimeDebugDetails(video),
+        },
+        ...getDebugSnapshot(),
+      });
+
       if (nextCandidateIndex < currentAttempt.candidates.length) {
         setPlaybackNotice(`当前地址不可用，正在切换备选线路 #${nextCandidateIndex + 1}`);
         setActiveCandidateIndex(nextCandidateIndex);
@@ -730,7 +781,6 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         return;
       }
 
-      const nextAttemptIndex = activeAttemptIndex + 1;
       if (nextAttemptIndex < playbackPlan.attempts.length) {
         recordPlayerAttemptFailure(capability.deviceKey, {
           codec: currentAttempt.codec,
@@ -903,7 +953,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
     const handleVideoError = () => {
       const mediaError = video.error;
-      finalizeFailure(mediaError?.message ?? '媒体播放失败', mediaError?.code ?? null);
+      finalizeFailure(mediaError?.message ?? '媒体播放失败', mediaError?.code ?? null, 'html5-video-error');
     };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -928,7 +978,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     });
 
     loadWatchdogId = window.setTimeout(() => {
-      finalizeFailure('媒体加载超时');
+      finalizeFailure('媒体加载超时', null, 'load-timeout');
     }, PLAYER_LOAD_TIMEOUT_MS);
 
     const bootPlayer = async () => {
@@ -937,7 +987,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
       if (currentAttempt.mode === 'dash') {
         if (!currentAttempt.videoStream) {
-          finalizeFailure('当前 DASH 视频轨为空，无法开始播放。');
+          finalizeFailure('当前 DASH 视频轨为空，无法开始播放。', null, 'dash-missing-video-stream');
           return;
         }
 
@@ -953,7 +1003,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         const shakaSession = await createShakaPlayer(
           video,
           (error) => {
-            finalizeFailure(error.message, error.code);
+            finalizeFailure(error.message, error.code, 'shaka-session-error');
           },
         );
         destroyPlayer = () => shakaSession.destroy();
@@ -966,7 +1016,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
 
     void bootPlayer().catch((error) => {
       const shakaError = formatShakaError(error);
-      finalizeFailure(shakaError.message, shakaError.code);
+      finalizeFailure(shakaError.message, shakaError.code, 'boot-player-error');
     });
 
     return () => {
@@ -1221,6 +1271,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     onClick: () => {
       const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
       resumeProgressRef.current = currentTime;
+      if (!isCodecSupportedByCapability(option, capability)) {
+        setPlaybackNotice(`当前设备能力探测不支持 ${getCodecLabel(option)}，请改用自动或 AVC。`);
+        setOverlayMode('none');
+        setIsChromeVisible(true);
+        return;
+      }
       const previewPlan = play && capability
         ? buildPlaybackAttempts(play, option, capability, codecMemory)
         : null;
@@ -1247,7 +1303,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       value: compatibleQualityOption?.label ?? play.compatibleQualityLabel ?? '无',
     },
     { key: 'current-execution-quality', label: '当前执行画质', value: currentAttempt.qualityLabel },
-    { key: 'codec-preference', label: '编码偏好', value: getCodecLabel(codecPreference) },
+    { key: 'codec-preference', label: '编码偏好', value: getCodecLabel(resolvedCodecPreference) },
     { key: 'quality-limit-reason', label: '接口限制码', value: play.qualityLimitReason || '0' },
     { key: 'effective-strategy', label: '当前执行策略', value: getCodecLabel(playbackPlan.effectivePreference) },
     { key: 'current-codec', label: '当前执行 codec', value: currentAttempt.codecLabel },
@@ -1844,6 +1900,36 @@ function readDecodedVideoFrames(video: HTMLVideoElement): number | null {
   return typeof frameCount === 'number' ? frameCount : null;
 }
 
+function buildPlaybackRuntimeDebugDetails(video: HTMLVideoElement) {
+  return {
+    currentSrc: video.currentSrc || null,
+    readyState: video.readyState,
+    networkState: video.networkState,
+    paused: video.paused,
+    ended: video.ended,
+    duration: Number.isFinite(video.duration) ? video.duration : null,
+    buffered: readTimeRanges(video.buffered),
+    seekable: readTimeRanges(video.seekable),
+    mediaErrorCode: video.error?.code ?? null,
+    mediaErrorMessage: video.error?.message ?? null,
+  };
+}
+
+function readTimeRanges(ranges: TimeRanges | null | undefined) {
+  if (!ranges) {
+    return [];
+  }
+
+  const values: Array<{ start: number; end: number }> = [];
+  for (let index = 0; index < ranges.length; index += 1) {
+    values.push({
+      start: Number(ranges.start(index).toFixed(3)),
+      end: Number(ranges.end(index).toFixed(3)),
+    });
+  }
+  return values;
+}
+
 function formatAudioStreamLabel(audioStream: PlayAudioStream | null): string {
   if (!audioStream) {
     return '未提供独立音频轨';
@@ -1949,6 +2035,9 @@ function buildEnvironmentDetails(
     playbackAttemptModes: attempts.map((attempt) => attempt.mode),
     playbackAttemptIds: attempts.map((attempt) => attempt.id),
     playbackWarning: warning,
+    playurlSource: play.playurlSource,
+    playurlFallbackReason: play.playurlFallbackReason,
+    relayStatus: play.relayStatus,
     requestTrace: play.requestTrace,
   };
 }

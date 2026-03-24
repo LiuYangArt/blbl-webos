@@ -226,11 +226,28 @@ export type PlayRequestTrace = {
   fnval: number;
   platform: 'html5' | null;
   highQuality: boolean;
+  source?: 'direct' | 'relay';
   resultQuality?: number | null;
   resultFormat?: string | null;
   resultHost?: string | null;
   resultPlatformHint?: string | null;
   resultFormatHint?: string | null;
+  relayQuality?: number | null;
+  relayFormat?: string | null;
+  relayHost?: string | null;
+  relayPlatformHint?: string | null;
+  relayFormatHint?: string | null;
+};
+
+export type PlayRelayStatus = {
+  enabled: boolean;
+  configured: boolean;
+  healthOk: boolean | null;
+  authState: string;
+  relayMid: number | null;
+  expectedMid: number | null;
+  autoSyncTriggered: boolean;
+  autoSyncReason: string | null;
 };
 
 export type PlaySubtitleTrack = {
@@ -247,6 +264,9 @@ export type PlayInfo = {
 
 export type PlaySource = {
   mode: 'dash' | 'durl';
+  playurlSource: 'direct' | 'relay';
+  playurlFallbackReason: string | null;
+  relayStatus: PlayRelayStatus;
   qualityLabel: string;
   currentQuality: number;
   returnedQuality: number;

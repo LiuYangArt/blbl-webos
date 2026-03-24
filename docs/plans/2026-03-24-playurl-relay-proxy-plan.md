@@ -105,16 +105,16 @@ relay 账号缺失 / 过期 / 与 TV 不一致
 
 建议：
 
-1. `Node.js + TypeScript`
-2. `Express` 或 `Fastify`
+1. `Go`
+2. 标准库 `net/http`
 3. `Docker` 单容器部署
 
 理由：
 
-1. 和当前仓库技术栈接近
-2. 好调试
-3. 好部署
-4. 后续真要扩展也不费劲
+1. 这次 relay 只是最小 HTTP 服务，不需要额外运行时
+2. 常驻在 `Mac mini + Docker` 上时，空载内存与镜像体积更友好
+3. 单二进制部署更稳，重启与迁移成本低
+4. 对 TV 端来说后端语言透明，不影响接口协议
 
 ### 6.2 API 设计
 
@@ -160,12 +160,17 @@ relay 账号缺失 / 过期 / 与 TV 不一致
 
 第一版建议同步内容：
 
-1. `SESSDATA`
-2. `bili_jct`
-3. `DedeUserID`
-4. `DedeUserID__ckMd5`
-5. `buvid3 / buvid4`（如当前 App 已持有）
-6. 账号摘要信息：`mid / uname / vip label`
+1. Web 扫码登录成功后，`poll` 响应返回的登录完成 `url`
+2. `refresh_token`
+3. 登录完成时间戳
+4. 账号摘要信息：`mid / uname / vip label`
+
+实现约束：
+
+1. 当前 webOS Web App 没有现成能力直接读取 `SESSDATA / bili_jct / DedeUserID` 这些 cookie 值
+2. 因此第一期不要求 TV 把原始 cookie 明文同步给 relay
+3. relay 收到登录完成 `url` 后，自行建立一次 Web 登录会话，并从响应 cookie jar 中提取后续 `playurl` 所需 cookie
+4. relay 再把筛选后的 cookie 本地持久化，供后续 `/api/playurl` 使用
 
 要求：
 
@@ -173,6 +178,7 @@ relay 账号缺失 / 过期 / 与 TV 不一致
 2. 同一时间只服务一个当前账号，不做多用户切换设计
 3. TV 登出时必须调用同步清空或显式登出接口
 4. 只要 TV 刷新登录态，也要重新同步一次
+5. relay 本地要把账号摘要和 cookie 持久化到 Docker volume，避免容器重启后丢状态
 
 #### `POST /api/auth/logout`
 
@@ -235,11 +241,11 @@ relay 账号缺失 / 过期 / 与 TV 不一致
 
 也就是说，relay 的登录态来源只能是：
 
-- **TV App 主动同步**
+- **TV App 主动同步扫码登录结果**
 
 而不能是：
 
-- relay 自己私下保存另一份独立 Cookie
+- relay 自己私下维护另一份独立账号
 
 这样才能保证：
 
@@ -254,6 +260,7 @@ relay 账号缺失 / 过期 / 与 TV 不一致
 2. 日志中绝不能打印完整 Cookie
 3. `auth/sync` 必须校验访问 token
 4. relay 只监听局域网，不开放公网
+5. TV 端本地只保存“可用于 relay 建立会话的登录完成信息”，不在前端日志里打印完整 `url` 或 `refresh_token`
 
 ## 7. TV 端改造设计
 
@@ -294,6 +301,11 @@ TV 端需要在下面几个时机主动调用 `auth/sync`：
 3. 登录态刷新后
 4. 用户手动点击“重新同步当前登录账号”时
 
+补充说明：
+
+1. 第一优先级同步来源，是扫码登录成功时拿到的登录完成 `url`
+2. 如果用户是在本功能上线前就已经登录，且本地没有这份同步材料，那么首次使用 relay 时需要重新扫码一次，建立 relay 会话
+
 TV 端需要在下面几个时机主动调用 `auth/logout`：
 
 1. 用户退出登录
@@ -320,7 +332,7 @@ TV 端需要在下面几个时机主动调用 `auth/logout`：
 
 具体规则：
 
-1. App 本地始终保留当前登录态摘要和认证数据
+1. App 本地始终保留当前登录态摘要，以及最近一次可用于 relay 建立会话的同步材料
 2. 每次 App 启动后，如果本地是已登录状态，就自动执行：
    - `GET /health`
    - `GET /api/auth/status`
@@ -334,9 +346,9 @@ TV 端需要在下面几个时机主动调用 `auth/logout`：
 
 一句话说：
 
-- `App 已登录 + relay 没状态 = App 自动补传`
+- `App 已登录 + 本地还持有最近一次登录完成材料 + relay 没状态 = App 自动补传`
 
-这样即使服务器重启，用户也不用重新扫码一次。
+这样即使服务器重启，只要本地仍保留最近一次同步材料，用户也不需要重新扫码一次。
 
 ### 7.4 播放前自愈校验
 
@@ -370,6 +382,12 @@ TV 端拿播放源时，顺序建议如下：
 5. 只有补传后仍失败，才真正 fallback 到直连
 
 这样即使出现“服务器刚重启，App 还没来得及预同步”的窗口，也能在真正播放时自愈一次。
+
+如果 TV 当前已登录，但本地已经没有可复用的登录完成材料，则：
+
+1. 本次播放直接 fallback 到直连
+2. telemetry 明确记录 `relay sync material missing`
+3. 设置页提示“需要重新扫码一次以建立 relay 会话”
 
 ### 7.5 fallback 原则
 
@@ -462,7 +480,7 @@ relay 接入后，需要新增几类 telemetry，方便以后判断是不是 rel
 
 验收：
 
-1. 本机请求 relay，能同步一份测试账号 Cookie
+1. 本机请求 relay，能通过登录完成 `url` 建立一份测试账号 Web 会话
 2. 同步后 `auth/status` 能正确返回账号摘要
 3. 本机请求 relay，能拿到和直接请求 B 站一致或更优的 `playurl` 数据
 4. 响应中可看到 `quality / format / host`
