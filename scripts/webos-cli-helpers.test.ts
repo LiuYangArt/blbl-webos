@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createInstallPlan } from './webos-cli-helpers.mjs';
+import {
+  createInstallPlan,
+  parseJsonObjectArg,
+  withSimulatorMediaProxyParam,
+} from './webos-cli-helpers.mjs';
 
 describe('webos-cli helpers', () => {
   it('更新安装只执行安装步骤，以尽量保留应用数据', () => {
@@ -44,5 +48,29 @@ describe('webos-cli helpers', () => {
       packageFile: 'app.ipk',
       appId: 'app.id',
     })).toThrow('未知安装策略: unknown');
+  });
+
+  it('空字符串参数会被解析为空对象，便于追加 simulator 默认参数', () => {
+    expect(parseJsonObjectArg('')).toEqual({});
+  });
+
+  it('非 JSON 参数串保持原样，避免破坏已有 CLI 透传行为', () => {
+    expect(parseJsonObjectArg('route=ui-debug')).toBeNull();
+    expect(withSimulatorMediaProxyParam('route=ui-debug', '19033')).toBe('route=ui-debug');
+  });
+
+  it('simulator 启动参数会自动补上本地媒体代理地址', () => {
+    expect(withSimulatorMediaProxyParam('{"route":"player"}', '19033')).toBe(
+      '{"route":"player","mediaProxyOrigin":"http://127.0.0.1:19033"}',
+    );
+  });
+
+  it('如果用户已经手动指定媒体代理地址，则保留原值不覆盖', () => {
+    expect(
+      withSimulatorMediaProxyParam(
+        '{"route":"player","mediaProxyOrigin":"http://192.168.50.81:19091"}',
+        '19033',
+      ),
+    ).toBe('{"route":"player","mediaProxyOrigin":"http://192.168.50.81:19091"}');
   });
 });

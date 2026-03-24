@@ -1,7 +1,10 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { basename, resolve } from 'node:path';
-import { createInstallPlan } from './webos-cli-helpers.mjs';
+import {
+  createInstallPlan,
+  withSimulatorMediaProxyParam,
+} from './webos-cli-helpers.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const buildDir = resolve(root, 'build', 'webos');
@@ -93,6 +96,7 @@ const simulatorParams = getArg('--params', '{}');
 const launchParams = getArg('--params', '');
 const simulatorMediaProxyPort = getArg('--media-proxy-port', process.env.WEBOS_SIMULATOR_MEDIA_PROXY_PORT ?? '19033');
 const installWaitMsRaw = getArg('--wait-ms', process.env.WEBOS_INSTALL_WAIT_MS ?? '8000');
+const simulatorParamsWithMediaProxy = withSimulatorMediaProxyParam(simulatorParams, simulatorMediaProxyPort);
 
 const run = (command, args, options = {}) => {
   const result = runProcess(command, args, {
@@ -291,6 +295,62 @@ foreach ($process in $processes) {
     .filter(Boolean).length;
 };
 
+const listUnixProcessIdsByPattern = (pattern) => {
+  const result = runProcess('pgrep', ['-f', pattern], {
+    encoding: 'utf8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if ((result.status ?? 1) !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split(/\r?\n/u)
+    .map((line) => Number(line.trim()))
+    .filter((pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
+};
+
+const killUnixProcesses = (pids, signal) => {
+  if (pids.length === 0) {
+    return 0;
+  }
+
+  const result = runProcess('kill', [`-${signal}`, ...pids.map(String)], {
+    stdio: 'ignore',
+    shell: false,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return (result.status ?? 1) === 0 ? pids.length : 0;
+};
+
+const killUnixProcessesByPattern = async (pattern) => {
+  const initialPids = listUnixProcessIdsByPattern(pattern);
+  if (initialPids.length === 0) {
+    return 0;
+  }
+
+  killUnixProcesses(initialPids, 'TERM');
+  await sleep(300);
+
+  const remainingPids = listUnixProcessIdsByPattern(pattern);
+  if (remainingPids.length > 0) {
+    killUnixProcesses(remainingPids, 'KILL');
+    await sleep(200);
+  }
+
+  return initialPids.length;
+};
+
 const cleanupSimulatorProcesses = async (simulatorExecutable) => {
   let cleaned = false;
 
@@ -309,6 +369,18 @@ const cleanupSimulatorProcesses = async (simulatorExecutable) => {
     }
 
     const killedProxyCount = killWindowsNodeProcessesByCommandLineFragment(simulatorMediaProxyScript);
+    if (killedProxyCount > 0) {
+      cleaned = true;
+      console.log(`已关闭旧 simulator media proxy: ${killedProxyCount} 个进程`);
+    }
+  } else {
+    const killedSimulatorCount = await killUnixProcessesByPattern(simulatorExecutable);
+    if (killedSimulatorCount > 0) {
+      cleaned = true;
+      console.log(`已关闭旧 Simulator 进程: ${killedSimulatorCount} 个`);
+    }
+
+    const killedProxyCount = await killUnixProcessesByPattern(simulatorMediaProxyScript);
     if (killedProxyCount > 0) {
       cleaned = true;
       console.log(`已关闭旧 simulator media proxy: ${killedProxyCount} 个进程`);
@@ -589,12 +661,12 @@ switch (action) {
       cwd: root,
     });
 
-    runDetached(simulatorExecutable, [buildDir, simulatorParams], {
+    runDetached(simulatorExecutable, [buildDir, simulatorParamsWithMediaProxy], {
       cwd: simulatorPath,
     });
     console.log(`已启动 Simulator ${simulatorVersion}: ${simulatorExecutable}`);
     console.log(`应用目录: ${buildDir}`);
-    console.log(`启动参数: ${simulatorParams}`);
+    console.log(`启动参数: ${simulatorParamsWithMediaProxy}`);
     console.log(`媒体代理: http://127.0.0.1:${simulatorMediaProxyPort}`);
     break;
   }
