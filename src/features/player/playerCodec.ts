@@ -114,7 +114,7 @@ function resolveDeviceClass(modelName: string, platformVersion: string, userAgen
   const normalizedModel = modelName.toLowerCase();
   const normalizedUserAgent = userAgent.toLowerCase();
 
-  if (normalizedModel.includes('browser-dev') && isWebOsSimulatorUserAgent(userAgent)) {
+  if (isWebOsSimulatorUserAgent(userAgent)) {
     return 'webos-simulator';
   }
   if (normalizedModel.includes('browser-dev')) {
@@ -186,28 +186,10 @@ export function buildPlaybackAttempts(
   effectivePreference: VideoCodecPreference;
   warning: string | null;
 } {
-  if (capability.deviceClass === 'webos-simulator') {
-    const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
-    if (compatibleResolution.attempts.length > 0) {
-      const warningMessages = [
-        'Simulator 当前优先使用兼容 MP4 线路；媒体请求会走本地代理补充必要请求头，避免 bilivideo 403。',
-      ];
-      if (compatibleResolution.warning) {
-        warningMessages.push(compatibleResolution.warning);
-      }
-      return {
-        attempts: compatibleResolution.attempts,
-        effectivePreference: compatibleResolution.effectivePreference,
-        warning: warningMessages.join(' '),
-      };
-    }
-  }
-
   const dashResolution = buildDashAttempts(playSource, codecPreference, capability, memory);
   const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
   if (dashResolution.attempts.length > 0) {
     const shouldAppendCompatibleFallback = capability.deviceClass !== 'browser-dev'
-      && capability.deviceClass !== 'webos-simulator'
       && compatibleResolution.attempts.length > 0;
     if (shouldAppendCompatibleFallback) {
       const warningMessages = [
@@ -242,10 +224,10 @@ function buildDashAttempts(
   warning: string | null;
 } {
   const targetStreams = getResolvedDashStreams(playSource);
-  const quality = targetStreams[0]?.quality ?? playSource.currentQuality;
+  const quality = targetStreams[0]?.quality ?? playSource.returnedQuality;
   const qualityLabel = targetStreams[0]?.qualityLabel
     ?? playSource.qualities.find((item) => item.qn === quality)?.label
-    ?? playSource.qualityLabel;
+    ?? playSource.returnedQualityLabel;
 
   const uniqueStreams = pickBestStreamPerCodec(targetStreams);
   if (uniqueStreams.length === 0) {
@@ -312,7 +294,7 @@ function buildCompatibleAttempts(
   effectivePreference: VideoCodecPreference;
   warning: string | null;
 } {
-  const source = playSource.compatibleSources.find((item) => item.quality === playSource.currentQuality)
+  const source = playSource.compatibleSources.find((item) => item.quality === playSource.compatibleQuality)
     ?? playSource.compatibleSources[0]
     ?? null;
 
@@ -380,7 +362,7 @@ function pickBestStreamPerCodec(streams: PlayVideoStream[]): PlayVideoStream[] {
 }
 
 function getResolvedDashStreams(playSource: PlaySource): PlayVideoStream[] {
-  const streamsAtCurrentQuality = playSource.videoStreams.filter((stream) => stream.quality === playSource.currentQuality);
+  const streamsAtCurrentQuality = playSource.videoStreams.filter((stream) => stream.quality === playSource.returnedQuality);
   if (streamsAtCurrentQuality.length > 0) {
     return streamsAtCurrentQuality;
   }
@@ -553,6 +535,14 @@ function getPlaybackAttemptScore(
   );
   let score = attempt.mode === 'dash' ? 12 : 6;
 
+  if (playSource.mode === 'dash') {
+    if (attempt.mode === 'dash') {
+      score += 24;
+    } else {
+      score -= 24;
+    }
+  }
+
   if (attempt.codec === 'avc') {
     score += 4;
   } else if (attempt.codec === 'hevc') {
@@ -605,6 +595,10 @@ function getPlaybackAttemptScore(
 
   if (realWebOs && attempt.mode === 'dash' && attempt.quality < playSource.requestedQuality) {
     score -= 8;
+  }
+
+  if (playSource.mode === 'dash' && attempt.mode === 'compatible' && bestDashQuality >= playSource.requestedQuality) {
+    score -= 24;
   }
 
   return score;

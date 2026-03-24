@@ -29,6 +29,7 @@ import type {
   PlayInfo,
   PlayQualityOption,
   PlayQualityTier,
+  PlayRequestTrace,
   PlaySource,
   PlaySubtitleTrack,
   PlayVideoStream,
@@ -992,8 +993,16 @@ async function requestPlaySource(
   options?: {
     platform?: 'html5';
     highQuality?: boolean;
+    trace?: PlayRequestTrace[];
   },
 ) {
+  options?.trace?.push({
+    qn: quality,
+    fnval,
+    platform: options.platform ?? null,
+    highQuality: Boolean(options.highQuality),
+  });
+
   const params = new URLSearchParams({
     bvid,
     cid: String(cid),
@@ -1017,26 +1026,46 @@ async function requestPlaySource(
   return unwrapData(payload);
 }
 
-async function requestDashPlaySource(bvid: string, cid: number, quality: number) {
-  const candidates = [4048, 16];
-  let lastError: unknown = null;
+const DASH_FNVAL_CANDIDATES = Array.from(new Set([16 | 64 | 128 | 256 | 1024, 4048, 16]));
 
-  for (const fnval of candidates) {
+const COMPATIBLE_REQUEST_VARIANTS: Array<{
+  fnval: number;
+  platform?: 'html5';
+  highQuality?: boolean;
+}> = [
+  {
+    fnval: 0,
+    platform: 'html5',
+    highQuality: true,
+  },
+  {
+    fnval: 0,
+  },
+];
+
+async function requestDashPlaySource(bvid: string, cid: number, quality: number) {
+  const requestTrace: PlayRequestTrace[] = [];
+
+  for (const fnval of DASH_FNVAL_CANDIDATES) {
     try {
-      const data = await requestPlaySource(bvid, cid, quality, fnval);
+      const data = await requestPlaySource(bvid, cid, quality, fnval, {
+        trace: requestTrace,
+      });
       if (data.dash?.video?.length) {
-        return data;
+        return {
+          data,
+          requestTrace,
+        };
       }
-    } catch (error) {
-      lastError = error;
+    } catch {
+      // DASH 请求按能力位逐级尝试，单次失败后继续探测下一组参数。
     }
   }
 
-  if (lastError) {
-    return null;
-  }
-
-  return null;
+  return {
+    data: null,
+    requestTrace,
+  };
 }
 
 async function fetchCompatibleSources(
@@ -1045,6 +1074,7 @@ async function fetchCompatibleSources(
   qualities: PlayQualityOption[],
   fallbackQuality: number,
 ) {
+  const requestTrace: PlayRequestTrace[] = [];
   const preferredQualities = [fallbackQuality, ...qualities.map((item) => item.qn), 32, 16]
     .filter((item, index, list) => list.indexOf(item) === index)
     .sort((left, right) => right - left);
@@ -1052,26 +1082,12 @@ async function fetchCompatibleSources(
   const sourceByQuality = new Map<number, PlayCompatibleSource>();
 
   for (const quality of preferredQualities) {
-    const variants: Array<{
-      fnval: number;
-      platform?: 'html5';
-      highQuality?: boolean;
-    }> = [
-      {
-        fnval: 0,
-        platform: 'html5',
-        highQuality: true,
-      },
-      {
-        fnval: 0,
-      },
-    ];
-
-    for (const variant of variants) {
+    for (const variant of COMPATIBLE_REQUEST_VARIANTS) {
       try {
         const data = await requestPlaySource(bvid, cid, quality, variant.fnval, {
           platform: variant.platform,
           highQuality: variant.highQuality,
+          trace: requestTrace,
         });
         const candidateUrls = getPlayCandidateUrls(data.durl?.[0]);
         const actualQuality = Number(data.quality ?? quality);
@@ -1106,32 +1122,115 @@ async function fetchCompatibleSources(
     }
   }
 
-  return preferredQualities
-    .map((quality) => sourceByQuality.get(quality))
-    .filter((item): item is PlayCompatibleSource => Boolean(item));
+  return {
+    sources: preferredQualities
+      .map((quality) => sourceByQuality.get(quality))
+      .filter((item): item is PlayCompatibleSource => Boolean(item)),
+    requestTrace,
+  };
+}
+
+function getQualityLimitReason(qualities: PlayQualityOption[], requestedQuality: number, returnedQuality: number) {
+  return Number(
+    qualities.find((item) => item.qn === requestedQuality)?.limitReason
+    ?? qualities.find((item) => item.qn === returnedQuality)?.limitReason
+    ?? 0,
+  );
+}
+
+function getReturnedDashQuality(data: RawPlaySource, quality: number, videoStreams: PlayVideoStream[]) {
+  const qualityFromPayload = Number(data.quality ?? 0);
+  if (qualityFromPayload > 0) {
+    return qualityFromPayload;
+  }
+
+  const highestQuality = videoStreams.reduce(
+    (best, stream) => Math.max(best, stream.quality),
+    0,
+  );
+
+  return highestQuality > 0 ? highestQuality : quality;
+}
+
+function describePlayQualityReason(input: {
+  mode: 'dash' | 'durl';
+  requestedQuality: number;
+  requestedQualityLabel: string;
+  returnedQuality: number;
+  returnedQualityLabel: string;
+  compatibleQuality: number | null;
+  compatibleQualityLabel: string | null;
+  qualityLimitReason: number;
+}) {
+  if (input.mode === 'durl') {
+    if (input.requestedQuality === input.returnedQuality) {
+      return `当前直接按 ${input.returnedQualityLabel} 兼容流返回播放源。`;
+    }
+
+    if (input.qualityLimitReason) {
+      return `已请求 ${input.requestedQualityLabel}，但接口本次只返回 ${input.returnedQualityLabel} 兼容流。限制码：${input.qualityLimitReason}。`;
+    }
+
+    return `已请求 ${input.requestedQualityLabel}，但接口本次只返回 ${input.returnedQualityLabel} 兼容流。`;
+  }
+
+  if (input.requestedQuality !== input.returnedQuality) {
+    if (input.qualityLimitReason) {
+      return `已请求 ${input.requestedQualityLabel}，但接口本次只返回 ${input.returnedQualityLabel} DASH 分轨。限制码：${input.qualityLimitReason}。`;
+    }
+
+    return `已请求 ${input.requestedQualityLabel}，但接口本次实际返回 ${input.returnedQualityLabel} DASH 分轨。`;
+  }
+
+  if (
+    input.compatibleQuality !== null
+    && input.compatibleQuality !== input.returnedQuality
+    && input.compatibleQualityLabel
+  ) {
+    return `接口已返回 ${input.returnedQualityLabel} DASH 分轨；兼容流最高仅 ${input.compatibleQualityLabel}，仅在 DASH 失败时作为回退。`;
+  }
+
+  return `接口已返回 ${input.returnedQualityLabel} 播放源。`;
 }
 
 export async function fetchPlaySource(bvid: string, cid: number, quality = 80): Promise<PlaySource> {
-  const dashData = await requestDashPlaySource(bvid, cid, quality);
+  const dashResult = await requestDashPlaySource(bvid, cid, quality);
+  const dashData = dashResult.data;
   if (!dashData) {
-    const durlData = await requestPlaySource(bvid, cid, quality, 0);
+    const directRequestTrace: PlayRequestTrace[] = [];
+    const durlData = await requestPlaySource(bvid, cid, quality, 0, {
+      trace: directRequestTrace,
+    });
     const candidateUrls = getPlayCandidateUrls(durlData.durl?.[0]);
     if (!candidateUrls.length) {
       throw new Error('当前视频没有可用播放地址');
     }
     const qualities = buildPlayQualities(durlData);
     const currentQuality = Number(durlData.quality ?? quality);
+    const requestedQualityLabel = pickQualityLabel(qualities, quality);
+    const returnedQualityLabel = pickQualityLabel(qualities, currentQuality, durlData.format);
+    const qualityLimitReason = getQualityLimitReason(qualities, quality, currentQuality);
     return {
       mode: 'durl',
-      qualityLabel: pickQualityLabel(qualities, currentQuality, durlData.format),
+      qualityLabel: returnedQualityLabel,
       currentQuality,
+      returnedQuality: currentQuality,
+      returnedQualityLabel,
+      compatibleQuality: currentQuality,
+      compatibleQualityLabel: returnedQualityLabel,
       requestedQuality: quality,
-      requestedQualityLabel: pickQualityLabel(qualities, quality),
-      qualityLimitReason: Number(
-        qualities.find((item) => item.qn === quality)?.limitReason
-        ?? qualities.find((item) => item.qn === currentQuality)?.limitReason
-        ?? 0,
-      ),
+      requestedQualityLabel,
+      qualityLimitReason,
+      qualityReason: describePlayQualityReason({
+        mode: 'durl',
+        requestedQuality: quality,
+        requestedQualityLabel,
+        returnedQuality: currentQuality,
+        returnedQualityLabel,
+        compatibleQuality: currentQuality,
+        compatibleQualityLabel: returnedQualityLabel,
+        qualityLimitReason,
+      }),
       durationMs: Number(durlData.timelength ?? 0),
       qualities,
       videoStreams: [],
@@ -1144,41 +1243,65 @@ export async function fetchPlaySource(bvid: string, cid: number, quality = 80): 
         candidateUrls,
       }],
       candidateUrls,
+      requestTrace: {
+        dash: dashResult.requestTrace,
+        compatible: directRequestTrace,
+      },
     };
   }
   const qualities = buildPlayQualities(dashData);
   const videoStreams = buildVideoStreams(dashData, qualities);
   const audioStreams = buildAudioStreams(dashData);
-  const compatibleSources = await fetchCompatibleSources(
+  const returnedQuality = getReturnedDashQuality(dashData, quality, videoStreams);
+  const compatibleResult = await fetchCompatibleSources(
     bvid,
     cid,
     qualities,
-    Number(dashData.quality ?? quality),
+    returnedQuality,
   );
+  const compatibleSources = compatibleResult.sources;
 
   if (!videoStreams.length && compatibleSources.length === 0) {
     throw new Error('当前视频没有可用播放地址');
   }
 
-  const currentQuality = compatibleSources[0]?.quality ?? Number(dashData.quality ?? quality);
+  const currentQuality = returnedQuality;
   const qualityLabel = pickQualityLabel(qualities, currentQuality, dashData.format);
+  const requestedQualityLabel = pickQualityLabel(qualities, quality);
+  const compatibleQuality = compatibleSources[0]?.quality ?? null;
+  const compatibleQualityLabel = compatibleSources[0]?.qualityLabel ?? null;
+  const qualityLimitReason = getQualityLimitReason(qualities, quality, currentQuality);
   return {
     mode: videoStreams.length > 0 ? 'dash' : 'durl',
     qualityLabel,
     currentQuality,
+    returnedQuality: currentQuality,
+    returnedQualityLabel: qualityLabel,
+    compatibleQuality,
+    compatibleQualityLabel,
     requestedQuality: quality,
-    requestedQualityLabel: pickQualityLabel(qualities, quality),
-    qualityLimitReason: Number(
-      qualities.find((item) => item.qn === quality)?.limitReason
-      ?? qualities.find((item) => item.qn === currentQuality)?.limitReason
-      ?? 0,
-    ),
+    requestedQualityLabel,
+    qualityLimitReason,
+    qualityReason: describePlayQualityReason({
+      mode: videoStreams.length > 0 ? 'dash' : 'durl',
+      requestedQuality: quality,
+      requestedQualityLabel,
+      returnedQuality: currentQuality,
+      returnedQualityLabel: qualityLabel,
+      compatibleQuality,
+      compatibleQualityLabel,
+      qualityLimitReason,
+    }),
     durationMs: Number(dashData.timelength ?? 0),
     qualities,
     videoStreams,
     audioStreams,
     compatibleSources,
-    candidateUrls: compatibleSources[0]?.candidateUrls ?? [],
+    candidateUrls: compatibleSources.find((source) => source.quality === currentQuality)?.candidateUrls ?? compatibleSources[0]?.candidateUrls ?? [],
+    requestTrace: {
+      dash: dashResult.requestTrace,
+      compatible: compatibleResult.requestTrace,
+    },
   };
 }
 

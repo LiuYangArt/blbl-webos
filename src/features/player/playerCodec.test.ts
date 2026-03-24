@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildPlayerCodecCapability,
   buildPlaybackAttempts,
   formatAttemptResolution,
   getAutoCodecPriority,
@@ -93,15 +94,24 @@ const playSource: PlaySource = {
   mode: 'dash',
   qualityLabel: '1080P',
   currentQuality: 80,
+  returnedQuality: 80,
+  returnedQualityLabel: '1080P',
+  compatibleQuality: 80,
+  compatibleQualityLabel: '1080P',
   requestedQuality: 80,
   requestedQualityLabel: '1080P',
   qualityLimitReason: 0,
+  qualityReason: '接口已返回 1080P 播放源。',
   durationMs: 120_000,
   qualities,
   videoStreams,
   audioStreams,
   compatibleSources,
   candidateUrls: compatibleSources[0].candidateUrls,
+  requestTrace: {
+    dash: [],
+    compatible: [],
+  },
 };
 
 describe('playerCodec', () => {
@@ -149,22 +159,79 @@ describe('playerCodec', () => {
     expect(formatAttemptResolution(result.attempts[0]!)).toBe('1920 x 1080');
   });
 
-  it('模拟器优先兼容 MP4，并在强制 HEVC 时回落到 AVC 兼容流', () => {
+  it('兼容流档位较低时，真实 webOS 设备仍优先保留 DASH 的实际返回档位', () => {
+    const result = buildPlaybackAttempts(
+      {
+        ...playSource,
+        compatibleQuality: 64,
+        compatibleQualityLabel: '720P',
+        compatibleSources: [{
+          quality: 64,
+          qualityLabel: '720P',
+          format: 'mp4',
+          url: 'https://upos-sz.bilivideo.com/video-compatible-720.mp4',
+          candidateUrls: ['https://upos-sz.bilivideo.com/video-compatible-720.mp4'],
+        }],
+        candidateUrls: ['https://upos-sz.bilivideo.com/video-compatible-720.mp4'],
+        qualityReason: '接口已返回 1080P DASH 分轨；兼容流最高仅 720P，仅在 DASH 失败时作为回退。',
+      },
+      'auto',
+      {
+        deviceKey: 'oled55c1:6.0',
+        deviceLabel: 'LG C1',
+        deviceClass: 'webos-2021',
+        support: { avc: true, hevc: true, av1: false },
+      },
+    );
+
+    expect(result.attempts[0]?.mode).toBe('dash');
+    expect(result.attempts[0]?.quality).toBe(80);
+    expect(result.attempts.some((item) => item.mode === 'compatible' && item.quality === 64)).toBe(true);
+  });
+
+  it('带有 WebAppManager 的 UA 会被识别为 webos-simulator', () => {
+    const originalUserAgent = navigator.userAgent;
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 Chrome/79.0.3945.79 Safari/537.36 WebAppManager',
+    });
+
+    try {
+      const capability = buildPlayerCodecCapability(null);
+      expect(capability.deviceClass).toBe('webos-simulator');
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        value: originalUserAgent,
+      });
+    }
+  });
+
+  it('模拟器与电视共用同一套播放优先级，DASH 可用时仍先尝试 DASH', () => {
     const result = buildPlaybackAttempts(
       playSource,
-      'hevc',
+      'auto',
       {
         deviceKey: 'browser-dev:simulator',
         deviceLabel: 'Simulator',
         deviceClass: 'webos-simulator',
         support: { avc: true, hevc: false, av1: false },
       },
+      {
+        lastSuccessfulCodec: 'avc',
+        lastFailedCodec: null,
+        lastSuccessfulMode: 'compatible',
+        lastFailedMode: null,
+        lastSuccessfulQuality: 64,
+        lastSuccessfulAudioStreamId: null,
+        modeSuccessCount: { dash: 0, compatible: 8 },
+        modeFailureCount: { dash: 2, compatible: 0 },
+      },
     );
 
-    expect(result.attempts).toHaveLength(1);
-    expect(result.attempts[0]?.mode).toBe('compatible');
-    expect(result.effectivePreference).toBe('avc');
-    expect(result.warning).toContain('Simulator 当前优先使用兼容 MP4 线路');
-    expect(result.warning).toContain('无法强制 HEVC');
+    expect(result.attempts[0]?.mode).toBe('dash');
+    expect(result.attempts[0]?.quality).toBe(80);
+    expect(result.attempts.some((item) => item.mode === 'compatible')).toBe(true);
+    expect(result.warning).toContain('若 DASH 在当前电视设备上无法稳定起播');
   });
 });
