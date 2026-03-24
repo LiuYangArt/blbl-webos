@@ -296,8 +296,9 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const isEpisodesOpen = overlayMode === 'episodes';
   const overlayCaptureConfig = getOverlayCaptureConfig(overlayMode);
   const requestedQualityOption = play?.qualities.find((item) => item.qn === play.requestedQuality) ?? null;
-  const currentQualityOption = play?.qualities.find((item) => item.qn === play.currentQuality) ?? null;
-  const qualityAvailabilityNotice = play ? describeQualityAvailability(play) : null;
+  const returnedQualityOption = play?.qualities.find((item) => item.qn === play.returnedQuality) ?? null;
+  const compatibleQualityOption = play?.qualities.find((item) => item.qn === play.compatibleQuality) ?? null;
+  const qualityAvailabilityNotice = play?.qualityReason ?? null;
   const selectedSubtitleTrack = subtitleTracks.find((track) => track.id === activeSubtitleTrackId) ?? null;
   const subtitleTrackSummary = getSubtitleTrackSummary(selectedSubtitleTrack, subtitleEnabled, hasSubtitleTracks);
   const subtitleStyleVars = useMemo<CSSProperties>(() => ({
@@ -661,7 +662,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       bvid,
       cid,
       sourceUrl: '',
-      quality: play.qualityLabel,
+      quality: playbackPlan.attempts[0]?.qualityLabel ?? play.returnedQualityLabel,
       codec: playbackPlan.attempts[0]?.codecLabel ?? getCodecLabel(codecPreference),
       sourceTypeLabel: playbackPlan.attempts[0]?.mode === 'dash' ? 'Shaka Player + MSE' : 'HTML5 Video',
       details: buildEnvironmentDetails(capability, deviceInfo, play, playbackPlan.attempts, playbackPlan.warning, codecMemory),
@@ -949,9 +950,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         });
         manifestRevoke = manifestSource.revoke;
 
-        const shakaSession = await createShakaPlayer(video, (error) => {
-          finalizeFailure(error.message, error.code);
-        });
+        const shakaSession = await createShakaPlayer(
+          video,
+          (error) => {
+            finalizeFailure(error.message, error.code);
+          },
+        );
         destroyPlayer = () => shakaSession.destroy();
         await shakaSession.load(manifestSource.manifestUrl);
         return;
@@ -1182,12 +1186,14 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const progressTrailingLabel = savedProgress?.progress ? '已同步本地播放记录' : '首次播放';
   const qualityActions: PlayerSettingsAction[] = play.qualities.map((option, index) => {
     const isSelected = qualityPreference === option.qn;
-    const isReturned = play.currentQuality === option.qn;
+    const isReturned = play.returnedQuality === option.qn;
+    const isCompatibleFallback = play.compatibleQuality === option.qn && play.compatibleQuality !== play.returnedQuality;
     const chipLabel = option.badge ? `${option.label} ${option.badge}` : option.label;
+    const statusLabel = getQualityActionStatusLabel(play.mode, isReturned, isCompatibleFallback);
 
     return {
       key: `player-quality-${option.qn}`,
-      label: isReturned ? `${chipLabel} · 已返回` : chipLabel,
+      label: statusLabel ? `${chipLabel} · ${statusLabel}` : chipLabel,
       variant: isSelected ? 'primary' : 'ghost',
       defaultFocus: isSelected || (!play.qualities.some((item) => item.qn === qualityPreference) && index === 0),
       onClick: () => {
@@ -1234,11 +1240,18 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     { key: 'bvid', label: 'BV 号', value: bvid },
     { key: 'cid', label: 'CID', value: cid },
     { key: 'requested-quality', label: '请求画质', value: requestedQualityOption?.label ?? play.requestedQualityLabel },
-    { key: 'returned-quality', label: '实际返回画质', value: currentQualityOption?.label ?? currentAttempt.qualityLabel },
+    { key: 'returned-quality', label: '接口实际返回', value: returnedQualityOption?.label ?? play.returnedQualityLabel },
+    {
+      key: 'compatible-quality',
+      label: '兼容流最高回退',
+      value: compatibleQualityOption?.label ?? play.compatibleQualityLabel ?? '无',
+    },
+    { key: 'current-execution-quality', label: '当前执行画质', value: currentAttempt.qualityLabel },
     { key: 'codec-preference', label: '编码偏好', value: getCodecLabel(codecPreference) },
     { key: 'quality-limit-reason', label: '接口限制码', value: play.qualityLimitReason || '0' },
     { key: 'effective-strategy', label: '当前执行策略', value: getCodecLabel(playbackPlan.effectivePreference) },
     { key: 'current-codec', label: '当前执行 codec', value: currentAttempt.codecLabel },
+    { key: 'quality-reason', label: '画质决策', value: play.qualityReason ?? '无' },
     { key: 'resolution', label: '当前分辨率', value: formatAttemptResolution(currentAttempt) },
     { key: 'playback-mode', label: '播放模式', value: playbackModeLabel },
     { key: 'engine', label: '播放引擎', value: engineLabel },
@@ -1323,8 +1336,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                 <h1>{title}</h1>
                 <p>
                   {part ? `${part} · ` : ''}
-                  {currentQualityOption?.label ?? currentAttempt.qualityLabel}
-                  {play.requestedQuality !== play.currentQuality ? `（已请求 ${play.requestedQualityLabel}）` : ''}
+                  {currentAttempt.qualityLabel}
+                  {play.requestedQuality !== currentAttempt.quality ? `（已请求 ${play.requestedQualityLabel}）` : ''}
                   {' · '}
                   {currentAttempt.codecLabel}
                   {' · '}
@@ -1838,30 +1851,26 @@ function formatAudioStreamLabel(audioStream: PlayAudioStream | null): string {
   return audioStream.label || audioStream.codecs || '未知音频';
 }
 
-function describeQualityAvailability(play: PlaySource): string | null {
-  const requested = play.qualities.find((item) => item.qn === play.requestedQuality);
-  const actual = play.qualities.find((item) => item.qn === play.currentQuality);
-  if (!requested || !actual) {
-    return null;
-  }
-
-  if (play.requestedQuality === play.currentQuality) {
-    return `当前已按 ${requested.label} 返回播放源。`;
-  }
-
-  if (requested.limitReason) {
-    return `已请求 ${requested.label}，但接口本次只返回 ${actual.label}。限制码：${requested.limitReason}。`;
-  }
-
-  return `已请求 ${requested.label}，但接口本次实际返回 ${actual.label}。这通常与当前登录态、会员权限、视频授权或兼容流回退有关。`;
-}
-
 function getUrlHost(url: string): string {
   try {
     return new URL(url).host;
   } catch {
     return '未知';
   }
+}
+
+function getQualityActionStatusLabel(
+  mode: PlaySource['mode'],
+  isReturned: boolean,
+  isCompatibleFallback: boolean,
+): string | null {
+  if (isReturned) {
+    return mode === 'dash' ? 'DASH 已返回' : '已返回';
+  }
+  if (isCompatibleFallback) {
+    return '兼容回退';
+  }
+  return null;
 }
 
 function buildEnvironmentReportKey(input: {
@@ -1895,10 +1904,22 @@ function buildEnvironmentDetails(
     userAgent: navigator.userAgent,
     playMode: play.mode,
     requestedQuality: play.requestedQuality,
-    currentQuality: play.currentQuality,
+    returnedQuality: play.returnedQuality,
+    compatibleQuality: play.compatibleQuality,
+    qualityReason: play.qualityReason,
     videoStreamCount: play.videoStreams.length,
     audioStreamCount: play.audioStreams.length,
     compatibleSourceCount: play.compatibleSources.length,
+    compatibleSources: play.compatibleSources.map((source) => ({
+      quality: source.quality,
+      qualityLabel: source.qualityLabel,
+      host: getUrlHost(source.url),
+      urlHints: getUrlDebugHints(source.url),
+      candidateHints: source.candidateUrls.slice(0, 6).map((url) => ({
+        host: getUrlHost(url),
+        ...getUrlDebugHints(url),
+      })),
+    })),
     compatibleSourceHosts: play.compatibleSources.map((source) => getUrlHost(source.url)),
     compatibleCandidateHosts: play.compatibleSources.flatMap((source) => source.candidateUrls.map(getUrlHost)),
     dashVideoHosts: play.videoStreams.flatMap((stream) => [stream.url, ...stream.backupUrls].map(getUrlHost)),
@@ -1922,10 +1943,13 @@ function buildEnvironmentDetails(
       audioHost: getUrlHost(attempt.audioStream?.url ?? ''),
       firstVideoHost: getUrlHost(attempt.candidates[0]?.videoUrl ?? ''),
       firstAudioHost: getUrlHost(attempt.candidates[0]?.audioUrl ?? ''),
+      firstVideoHints: getUrlDebugHints(attempt.candidates[0]?.videoUrl ?? ''),
+      firstAudioHints: getUrlDebugHints(attempt.candidates[0]?.audioUrl ?? ''),
     })),
     playbackAttemptModes: attempts.map((attempt) => attempt.mode),
     playbackAttemptIds: attempts.map((attempt) => attempt.id),
     playbackWarning: warning,
+    requestTrace: play.requestTrace,
   };
 }
 
@@ -1948,5 +1972,40 @@ function buildAttemptDebugDetails(
     rawAudioHost: getUrlHost(rawCandidate?.audioUrl ?? ''),
     resolvedVideoHost: getUrlHost(resolvedCandidate?.videoUrl ?? ''),
     resolvedAudioHost: getUrlHost(resolvedCandidate?.audioUrl ?? ''),
+    rawVideoHints: getUrlDebugHints(rawCandidate?.videoUrl ?? ''),
+    rawAudioHints: getUrlDebugHints(rawCandidate?.audioUrl ?? ''),
+    resolvedVideoHints: getUrlDebugHints(resolvedCandidate?.videoUrl ?? ''),
+    resolvedAudioHints: getUrlDebugHints(resolvedCandidate?.audioUrl ?? ''),
   };
+}
+
+function getUrlDebugHints(url: string) {
+  if (!url) {
+    return {
+      platform: null,
+      formatHint: null,
+      orderId: null,
+      os: null,
+      og: null,
+    };
+  }
+
+  try {
+    const parsed = new URL(url);
+    return {
+      platform: parsed.searchParams.get('platform'),
+      formatHint: parsed.searchParams.get('f'),
+      orderId: parsed.searchParams.get('orderid'),
+      os: parsed.searchParams.get('os'),
+      og: parsed.searchParams.get('og'),
+    };
+  } catch {
+    return {
+      platform: null,
+      formatHint: null,
+      orderId: null,
+      os: null,
+      og: null,
+    };
+  }
 }

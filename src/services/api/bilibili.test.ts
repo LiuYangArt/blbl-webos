@@ -372,7 +372,7 @@ describe('bilibili api mapping', () => {
 
   it('fetchPlaySource 在 DASH 不可用时回退 durl 兼容流', async () => {
     fetchJsonMock.mockImplementation(async (url: string) => {
-      if (url.includes('fnval=4048') || url.includes('fnval=16')) {
+      if (url.includes('fnval=1488') || url.includes('fnval=4048') || url.includes('fnval=16')) {
         return {
           data: {
             quality: 64,
@@ -405,13 +405,18 @@ describe('bilibili api mapping', () => {
     const { fetchPlaySource } = await loadBilibiliModule();
     const result = await fetchPlaySource('BV1xx411c7mD', 12345, 80);
 
-    expect(result).toEqual({
+    expect(result).toEqual(expect.objectContaining({
       mode: 'durl',
       qualityLabel: '720P',
       currentQuality: 64,
+      returnedQuality: 64,
+      returnedQualityLabel: '720P',
+      compatibleQuality: 64,
+      compatibleQualityLabel: '720P',
       requestedQuality: 80,
       requestedQualityLabel: '1080P',
       qualityLimitReason: 0,
+      qualityReason: '已请求 1080P，但接口本次只返回 720P 兼容流。',
       durationMs: 1000,
       qualities: [
         {
@@ -445,12 +450,24 @@ describe('bilibili api mapping', () => {
         'https://cn-gotcha01.bilivideo.com/video.mp4',
         'https://mcdn.example.com/video.mp4',
       ],
-    });
+    }));
+    expect(result.requestTrace.dash.map((item) => item.fnval)).toEqual([1488, 4048, 16]);
+    expect(result.requestTrace.compatible).toEqual([{
+      qn: 80,
+      fnval: 0,
+      platform: null,
+      highQuality: false,
+      resultQuality: 64,
+      resultFormat: 'mp4',
+      resultHost: 'cn-gotcha01.bilivideo.com',
+      resultPlatformHint: null,
+      resultFormatHint: null,
+    }]);
   });
 
   it('fetchPlaySource 在 DASH 可用时解析视频音频轨并附带兼容回退', async () => {
     fetchJsonMock.mockImplementation(async (url: string) => {
-      if (url.includes('fnval=4048')) {
+      if (url.includes('fnval=1488') || url.includes('fnval=4048')) {
         return {
           data: {
             quality: 80,
@@ -521,6 +538,9 @@ describe('bilibili api mapping', () => {
 
     expect(result.mode).toBe('dash');
     expect(result.currentQuality).toBe(80);
+    expect(result.returnedQuality).toBe(80);
+    expect(result.compatibleQuality).toBe(80);
+    expect(result.qualityReason).toBe('接口已返回 1080P 播放源。');
     expect(result.videoStreams).toEqual([{
       id: 80,
       quality: 80,
@@ -563,6 +583,225 @@ describe('bilibili api mapping', () => {
         'https://mcdn.example.com/video-compatible.mp4',
       ],
     }]);
+    expect(result.requestTrace.dash[0]).toEqual({
+      qn: 80,
+      fnval: 1488,
+      platform: null,
+      highQuality: false,
+      resultQuality: 80,
+      resultFormat: 'dash',
+      resultHost: 'upos-sz.bilivideo.com',
+      resultPlatformHint: null,
+      resultFormatHint: null,
+    });
+    expect(result.requestTrace.compatible[0]).toEqual({
+      qn: 80,
+      fnval: 0,
+      platform: 'html5',
+      highQuality: true,
+      resultQuality: 80,
+      resultFormat: 'mp4',
+      resultHost: 'cn-gotcha01.bilivideo.com',
+      resultPlatformHint: null,
+      resultFormatHint: null,
+    });
+  });
+
+  it('fetchPlaySource 不会让低档兼容流覆盖 DASH 实际返回的高画质', async () => {
+    fetchJsonMock.mockImplementation(async (url: string) => {
+      if (url.includes('fnval=1488')) {
+        return {
+          data: {
+            quality: 80,
+            format: 'dash',
+            timelength: 120000,
+            support_formats: [
+              {
+                quality: 80,
+                new_description: '1080P',
+                codecs: ['avc1.640028'],
+              },
+              {
+                quality: 64,
+                new_description: '720P',
+                codecs: ['avc1.640028'],
+              },
+            ],
+            dash: {
+              video: [{
+                id: 80,
+                base_url: 'http://upos-sz.bilivideo.com/video-avc.m4s',
+                mime_type: 'video/mp4',
+                codecs: 'avc1.640028',
+                segment_base: {
+                  initialization: '0-100',
+                  index_range: '101-200',
+                },
+                width: 1920,
+                height: 1080,
+                bandwidth: 2000000,
+                frame_rate: '60',
+              }],
+              audio: [{
+                id: 30216,
+                base_url: 'http://upos-sz.bilivideo.com/audio.m4s',
+                mime_type: 'audio/mp4',
+                codecs: 'mp4a.40.2',
+                segment_base: {
+                  initialization: '0-50',
+                  index_range: '51-99',
+                },
+                bandwidth: 128000,
+              }],
+            },
+          },
+        };
+      }
+
+      if (url.includes('fnval=0') && url.includes('platform=html5') && url.includes('qn=80')) {
+        return {
+          data: {
+            quality: 64,
+            format: 'mp4',
+            durl: [{
+              url: 'https://cn-gotcha01.bilivideo.com/video-compatible-720.mp4',
+              backup_url: ['https://mcdn.example.com/video-compatible-720.mp4'],
+            }],
+          },
+        };
+      }
+
+      throw new Error(`unexpected url: ${url}`);
+    });
+
+    const { fetchPlaySource } = await loadBilibiliModule();
+    const result = await fetchPlaySource('BV1xx411c7mD', 12345, 80);
+
+    expect(result.mode).toBe('dash');
+    expect(result.currentQuality).toBe(80);
+    expect(result.returnedQuality).toBe(80);
+    expect(result.returnedQualityLabel).toBe('1080P');
+    expect(result.compatibleQuality).toBe(64);
+    expect(result.compatibleQualityLabel).toBe('720P');
+    expect(result.qualityReason).toBe('接口已返回 1080P DASH 分轨；兼容流最高仅 720P，仅在 DASH 失败时作为回退。');
+    expect(result.compatibleSources[0]).toEqual({
+      quality: 64,
+      qualityLabel: '720P',
+      format: 'mp4',
+      url: 'https://cn-gotcha01.bilivideo.com/video-compatible-720.mp4',
+      candidateUrls: [
+        'https://cn-gotcha01.bilivideo.com/video-compatible-720.mp4',
+        'https://mcdn.example.com/video-compatible-720.mp4',
+      ],
+    });
+  });
+
+  it('fetchPlaySource 会把 html5 兼容流排在同档位 pc 兼容流前面', async () => {
+    fetchJsonMock.mockImplementation(async (url: string) => {
+      if (url.includes('fnval=1488')) {
+        return {
+          data: {
+            quality: 80,
+            format: 'dash',
+            timelength: 120000,
+            support_formats: [
+              {
+                quality: 80,
+                new_description: '1080P',
+                codecs: ['avc1.640028'],
+              },
+              {
+                quality: 64,
+                new_description: '720P',
+                codecs: ['avc1.640028'],
+              },
+            ],
+            dash: {
+              video: [{
+                id: 80,
+                base_url: 'http://upos-sz.bilivideo.com/video-avc.m4s',
+                mime_type: 'video/mp4',
+                codecs: 'avc1.640028',
+                segment_base: {
+                  initialization: '0-100',
+                  index_range: '101-200',
+                },
+                width: 1920,
+                height: 1080,
+                bandwidth: 2000000,
+                frame_rate: '60',
+              }],
+              audio: [{
+                id: 30216,
+                base_url: 'http://upos-sz.bilivideo.com/audio.m4s',
+                mime_type: 'audio/mp4',
+                codecs: 'mp4a.40.2',
+                segment_base: {
+                  initialization: '0-50',
+                  index_range: '51-99',
+                },
+                bandwidth: 128000,
+              }],
+            },
+          },
+        };
+      }
+
+      if (url.includes('fnval=0') && url.includes('platform=html5') && url.includes('qn=80')) {
+        return {
+          data: {
+            quality: 64,
+            format: 'mp4',
+            durl: [{
+              url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-720.mp4?platform=html5&high_quality=1&f=h_0_0',
+            }],
+          },
+        };
+      }
+
+      if (url.includes('fnval=0') && !url.includes('platform=html5') && url.includes('qn=80')) {
+        return {
+          data: {
+            quality: 80,
+            format: 'mp4',
+            durl: [{
+              url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+            }],
+          },
+        };
+      }
+
+      if (url.includes('fnval=0') && url.includes('platform=html5') && url.includes('qn=64')) {
+        return {
+          data: {
+            quality: 80,
+            format: 'mp4',
+            durl: [{
+              url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0',
+              backup_url: ['https://mcdn.example.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0'],
+            }],
+          },
+        };
+      }
+
+      throw new Error(`unexpected url: ${url}`);
+    });
+
+    const { fetchPlaySource } = await loadBilibiliModule();
+    const result = await fetchPlaySource('BV1xx411c7mD', 12345, 80);
+
+    expect(result.compatibleQuality).toBe(80);
+    expect(result.compatibleSources[0]).toEqual({
+      quality: 80,
+      qualityLabel: '1080P',
+      format: 'mp4',
+      url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0',
+      candidateUrls: [
+        'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0',
+        'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+        'https://mcdn.example.com/video-compatible-1080.mp4?platform=html5&high_quality=1&f=h_0_0',
+      ],
+    });
   });
 
   it('fetchCurrentUserProfile 会整合 nav 与 nav/stat 响应', async () => {

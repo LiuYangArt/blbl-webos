@@ -114,7 +114,7 @@ function resolveDeviceClass(modelName: string, platformVersion: string, userAgen
   const normalizedModel = modelName.toLowerCase();
   const normalizedUserAgent = userAgent.toLowerCase();
 
-  if (normalizedModel.includes('browser-dev') && isWebOsSimulatorUserAgent(userAgent)) {
+  if (!hasPalmSystem() && isWebOsSimulatorUserAgent(userAgent)) {
     return 'webos-simulator';
   }
   if (normalizedModel.includes('browser-dev')) {
@@ -138,6 +138,10 @@ function resolveDeviceClass(modelName: string, platformVersion: string, userAgen
 function isWebOsSimulatorUserAgent(userAgent: string): boolean {
   const normalizedUserAgent = userAgent.toLowerCase();
   return normalizedUserAgent.includes('web0s') && normalizedUserAgent.includes('webappmanager');
+}
+
+function hasPalmSystem(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.PalmSystem);
 }
 
 export function getAutoCodecPriority(
@@ -186,28 +190,10 @@ export function buildPlaybackAttempts(
   effectivePreference: VideoCodecPreference;
   warning: string | null;
 } {
-  if (capability.deviceClass === 'webos-simulator') {
-    const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
-    if (compatibleResolution.attempts.length > 0) {
-      const warningMessages = [
-        'Simulator 当前优先使用兼容 MP4 线路；媒体请求会走本地代理补充必要请求头，避免 bilivideo 403。',
-      ];
-      if (compatibleResolution.warning) {
-        warningMessages.push(compatibleResolution.warning);
-      }
-      return {
-        attempts: compatibleResolution.attempts,
-        effectivePreference: compatibleResolution.effectivePreference,
-        warning: warningMessages.join(' '),
-      };
-    }
-  }
-
   const dashResolution = buildDashAttempts(playSource, codecPreference, capability, memory);
   const compatibleResolution = buildCompatibleAttempts(playSource, codecPreference, capability);
   if (dashResolution.attempts.length > 0) {
     const shouldAppendCompatibleFallback = capability.deviceClass !== 'browser-dev'
-      && capability.deviceClass !== 'webos-simulator'
       && compatibleResolution.attempts.length > 0;
     if (shouldAppendCompatibleFallback) {
       const warningMessages = [
@@ -219,6 +205,7 @@ export function buildPlaybackAttempts(
           [...dashResolution.attempts, ...compatibleResolution.attempts],
           playSource,
           capability,
+          dashResolution.effectivePreference,
           memory,
         ),
         effectivePreference: dashResolution.effectivePreference,
@@ -242,10 +229,10 @@ function buildDashAttempts(
   warning: string | null;
 } {
   const targetStreams = getResolvedDashStreams(playSource);
-  const quality = targetStreams[0]?.quality ?? playSource.currentQuality;
+  const quality = targetStreams[0]?.quality ?? playSource.returnedQuality;
   const qualityLabel = targetStreams[0]?.qualityLabel
     ?? playSource.qualities.find((item) => item.qn === quality)?.label
-    ?? playSource.qualityLabel;
+    ?? playSource.returnedQualityLabel;
 
   const uniqueStreams = pickBestStreamPerCodec(targetStreams);
   if (uniqueStreams.length === 0) {
@@ -256,7 +243,7 @@ function buildDashAttempts(
     };
   }
 
-  const audioStream = pickPreferredAudioStream(playSource.audioStreams, capability);
+  const audioStream = pickPreferredAudioStream(playSource.audioStreams, capability, memory);
   const preferredCodecs = codecPreference === 'auto'
     ? getAutoCodecPriority(capability.support, memory)
     : [codecPreference];
@@ -312,11 +299,7 @@ function buildCompatibleAttempts(
   effectivePreference: VideoCodecPreference;
   warning: string | null;
 } {
-  const source = playSource.compatibleSources.find((item) => item.quality === playSource.currentQuality)
-    ?? playSource.compatibleSources[0]
-    ?? null;
-
-  if (!source) {
+  if (playSource.compatibleSources.length === 0) {
     return {
       attempts: [],
       effectivePreference: codecPreference,
@@ -331,9 +314,14 @@ function buildCompatibleAttempts(
     ? `当前只有兼容流，无法强制 ${getCodecLabel(codecPreference)}，已按 AVC 兼容流处理。`
     : null;
   const codec = capability.support.avc ? 'avc' : 'unknown';
+  const orderedSources = orderCompatibleSources(
+    playSource.compatibleSources,
+    capability.deviceClass,
+    playSource.requestedQuality,
+  );
 
   return {
-    attempts: [{
+    attempts: orderedSources.map((source) => ({
       id: `${source.quality}:${source.url}`,
       mode: 'compatible',
       quality: source.quality,
@@ -344,15 +332,11 @@ function buildCompatibleAttempts(
       isCompatible: true,
       width: 0,
       height: 0,
-      candidates: source.candidateUrls.map((url, index) => ({
-        id: `compatible:${source.quality}:${index}`,
-        videoUrl: url,
-        audioUrl: null,
-      })),
+      candidates: buildCompatibleCandidates(source, capability.deviceClass),
       source,
       videoStream: null,
       audioStream: null,
-    }],
+    })),
     effectivePreference,
     warning,
   };
@@ -380,7 +364,7 @@ function pickBestStreamPerCodec(streams: PlayVideoStream[]): PlayVideoStream[] {
 }
 
 function getResolvedDashStreams(playSource: PlaySource): PlayVideoStream[] {
-  const streamsAtCurrentQuality = playSource.videoStreams.filter((stream) => stream.quality === playSource.currentQuality);
+  const streamsAtCurrentQuality = playSource.videoStreams.filter((stream) => stream.quality === playSource.returnedQuality);
   if (streamsAtCurrentQuality.length > 0) {
     return streamsAtCurrentQuality;
   }
@@ -436,6 +420,21 @@ function buildDashCandidates(
     }));
 }
 
+function buildCompatibleCandidates(
+  source: PlayCompatibleSource,
+  deviceClass: string,
+): PlaybackSourceCandidate[] {
+  const rankedUrls = rankCompatibleCandidateUrls(source.candidateUrls);
+  const candidateLimit = getCompatibleCandidateLimit(source, deviceClass);
+  return rankedUrls
+    .slice(0, candidateLimit)
+    .map((candidate, index) => ({
+      id: `compatible:${source.quality}:${index}`,
+      videoUrl: candidate.url,
+      audioUrl: null,
+    }));
+}
+
 function getDashCandidateLimit(
   deviceClass: string,
   memory: PlayerCodecMemory | undefined,
@@ -456,12 +455,38 @@ function getDashCandidateLimit(
   return hasCompatibleFallback ? 3 : 4;
 }
 
+function getCompatibleCandidateLimit(
+  source: PlayCompatibleSource,
+  deviceClass: string,
+) {
+  if (!isRealWebOsDevice(deviceClass)) {
+    return 12;
+  }
+
+  const platform = getUrlHint(source.url, 'platform');
+  if (platform === 'html5') {
+    return 5;
+  }
+
+  return 3;
+}
+
 function rankCandidateUrls(urls: string[]) {
   return urls
     .map((url, index) => ({
       url,
       index,
       score: getCandidateScore(url) - index,
+    }))
+    .sort((left, right) => right.score - left.score);
+}
+
+function rankCompatibleCandidateUrls(urls: string[]) {
+  return urls
+    .map((url, index) => ({
+      url,
+      index,
+      score: getCompatibleCandidateScore(url) - index,
     }))
     .sort((left, right) => right.score - left.score);
 }
@@ -489,6 +514,28 @@ function getCandidateScore(url: string) {
   } catch {
     return 0;
   }
+}
+
+function getCompatibleCandidateScore(url: string) {
+  let score = getCandidateScore(url);
+  const platform = getUrlHint(url, 'platform');
+  const formatHint = getUrlHint(url, 'f');
+
+  if (platform === 'html5') {
+    score += 24;
+  } else if (platform === 'pc') {
+    score -= 12;
+  }
+
+  if (formatHint?.startsWith('T_')) {
+    score += 12;
+  } else if (formatHint?.startsWith('h_')) {
+    score += 8;
+  } else if (formatHint?.startsWith('u_')) {
+    score -= 6;
+  }
+
+  return score;
 }
 
 function orderStreamsByCodec(
@@ -519,13 +566,14 @@ function orderPlaybackAttempts(
   attempts: PlaybackAttempt[],
   playSource: PlaySource,
   capability: PlayerCodecCapability,
+  codecPreference: VideoCodecPreference,
   memory?: PlayerCodecMemory,
 ): PlaybackAttempt[] {
   return attempts
     .map((attempt, index) => ({
       attempt,
       index,
-      score: getPlaybackAttemptScore(attempt, playSource, capability, memory),
+      score: getPlaybackAttemptScore(attempt, playSource, capability, codecPreference, memory),
     }))
     .sort((left, right) => {
       if (right.score !== left.score) {
@@ -540,6 +588,7 @@ function getPlaybackAttemptScore(
   attempt: PlaybackAttempt,
   playSource: PlaySource,
   capability: PlayerCodecCapability,
+  codecPreference: VideoCodecPreference,
   memory?: PlayerCodecMemory,
 ) {
   const realWebOs = isRealWebOsDevice(capability.deviceClass);
@@ -552,6 +601,22 @@ function getPlaybackAttemptScore(
     ...attemptsOfMode(playSource, 'compatible').map((item) => item.quality),
   );
   let score = attempt.mode === 'dash' ? 12 : 6;
+
+  if (playSource.mode === 'dash') {
+    if (attempt.mode === 'dash') {
+      score += 24;
+    } else {
+      score -= 24;
+    }
+  }
+
+  if (codecPreference !== 'auto' && attempt.mode === 'dash') {
+    if (attempt.codec === codecPreference) {
+      score += 24;
+    } else {
+      score -= 12;
+    }
+  }
 
   if (attempt.codec === 'avc') {
     score += 4;
@@ -601,10 +666,30 @@ function getPlaybackAttemptScore(
     if (compatibleBeatsDashFallback) {
       score += 10;
     }
+
+    score += getCompatibleAttemptStabilityScore(attempt.source);
   }
 
   if (realWebOs && attempt.mode === 'dash' && attempt.quality < playSource.requestedQuality) {
     score -= 8;
+  }
+
+  if (playSource.mode === 'dash' && bestDashQuality >= playSource.requestedQuality && attempt.mode === 'dash') {
+    if (attempt.quality >= playSource.requestedQuality) {
+      score += 48;
+    }
+  }
+
+  if (playSource.mode === 'dash' && bestDashQuality >= playSource.requestedQuality && attempt.mode === 'compatible') {
+    if (attempt.quality >= playSource.requestedQuality) {
+      score += 80;
+    } else {
+      score -= 12;
+    }
+  }
+
+  if (playSource.mode === 'dash' && attempt.mode === 'compatible' && bestDashQuality >= playSource.requestedQuality) {
+    score -= 48;
   }
 
   return score;
@@ -617,19 +702,85 @@ function attemptsOfMode(playSource: PlaySource, mode: 'dash' | 'compatible') {
   return playSource.compatibleSources;
 }
 
+function orderCompatibleSources(
+  sources: PlayCompatibleSource[],
+  deviceClass: string,
+  requestedQuality: number,
+) {
+  return [...sources].sort((left, right) => {
+    const rightScore = getCompatibleSourceScore(right, deviceClass, requestedQuality);
+    const leftScore = getCompatibleSourceScore(left, deviceClass, requestedQuality);
+    if (rightScore !== leftScore) {
+      return rightScore - leftScore;
+    }
+    return right.quality - left.quality;
+  });
+}
+
+function getCompatibleSourceScore(
+  source: PlayCompatibleSource,
+  deviceClass: string,
+  requestedQuality: number,
+) {
+  let score = source.quality;
+
+  if (!isRealWebOsDevice(deviceClass)) {
+    return score;
+  }
+
+  score += getCompatibleAttemptStabilityScore(source);
+  if (source.quality >= requestedQuality) {
+    score += 4;
+  }
+  return score;
+}
+
 function isRealWebOsDevice(deviceClass: string) {
   return deviceClass === 'webos-6' || deviceClass === 'webos-2021' || deviceClass === 'webos-generic';
+}
+
+function getCompatibleAttemptStabilityScore(source: PlayCompatibleSource | null) {
+  if (!source) {
+    return 0;
+  }
+
+  const platform = getUrlHint(source.url, 'platform');
+  const formatHint = getUrlHint(source.url, 'f');
+  let score = 0;
+
+  if (platform === 'html5') {
+    score += 32;
+  } else if (platform === 'pc') {
+    score -= 20;
+  }
+
+  if (formatHint?.startsWith('T_')) {
+    score += 16;
+  } else if (formatHint?.startsWith('h_')) {
+    score += 12;
+  } else if (formatHint?.startsWith('u_')) {
+    score -= 8;
+  }
+
+  return score;
 }
 
 function pickPreferredAudioStream(
   audioStreams: PlayAudioStream[],
   capability: PlayerCodecCapability,
+  memory?: PlayerCodecMemory,
 ): PlayAudioStream | null {
   if (audioStreams.length === 0) {
     return null;
   }
 
   const preferred = [...audioStreams].sort((left, right) => {
+    const rightMemoryScore = getAudioStreamMemoryScore(right, memory);
+    const leftMemoryScore = getAudioStreamMemoryScore(left, memory);
+    if (rightMemoryScore !== leftMemoryScore) {
+      return rightMemoryScore - leftMemoryScore;
+    }
+
     const rightScore = getAudioStreamScore(right, capability.deviceClass);
     const leftScore = getAudioStreamScore(left, capability.deviceClass);
     if (rightScore !== leftScore) {
@@ -642,21 +793,28 @@ function pickPreferredAudioStream(
       return rightHostScore - leftHostScore;
     }
 
-    if (shouldPreferStableAudioForDevice(capability.deviceClass)) {
-      return left.bandwidth - right.bandwidth;
-    }
-
     return right.bandwidth - left.bandwidth;
   });
 
   return preferred[0] ?? null;
 }
 
+function getAudioStreamMemoryScore(
+  stream: PlayAudioStream,
+  memory: PlayerCodecMemory | undefined,
+) {
+  if (memory?.lastSuccessfulAudioStreamId === stream.id) {
+    return 24;
+  }
+
+  return 0;
+}
+
 function getAudioStreamScore(stream: PlayAudioStream, deviceClass: string): number {
   const codecs = stream.codecs.toLowerCase();
   let score = 0;
   if (codecs.includes('mp4a')) {
-    score += shouldPreferStableAudioForDevice(deviceClass) ? 5 : 3;
+    score += shouldPreferStableAudioForDevice(deviceClass) ? 6 : 3;
   }
   if (codecs.includes('ec-3') || codecs.includes('eac3')) {
     score += 2;
@@ -666,7 +824,7 @@ function getAudioStreamScore(stream: PlayAudioStream, deviceClass: string): numb
   }
 
   if (shouldPreferStableAudioForDevice(deviceClass)) {
-    score += getStableAudioBandwidthScore(stream.bandwidth);
+    score += getHighBandwidthAudioScore(stream.bandwidth);
   }
 
   return score;
@@ -709,10 +867,8 @@ function getAudioStreamHostScore(stream: PlayAudioStream) {
   return hosts.reduce((total, url) => total + getMediaHostPreferenceScore(url), 0);
 }
 
-function getStableAudioBandwidthScore(bandwidth: number) {
-  const target = 128_000;
-  const distance = Math.abs(bandwidth - target);
-  return Math.round(12 - distance / 24_000);
+function getHighBandwidthAudioScore(bandwidth: number) {
+  return Math.round(Math.min(12, bandwidth / 32_000));
 }
 
 function formatAudioCodecLabel(codecs: string): string {
@@ -727,6 +883,18 @@ function formatAudioCodecLabel(codecs: string): string {
     return 'FLAC';
   }
   return codecs || '未知音频';
+}
+
+function getUrlHint(url: string, key: string) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url).searchParams.get(key);
+  } catch {
+    return null;
+  }
 }
 
 export function getAvailableCodecsForQuality(playSource: PlaySource, quality: number): ParsedVideoCodec[] {

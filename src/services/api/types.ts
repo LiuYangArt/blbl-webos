@@ -221,6 +221,18 @@ export type PlayCompatibleSource = {
   candidateUrls: string[];
 };
 
+export type PlayRequestTrace = {
+  qn: number;
+  fnval: number;
+  platform: 'html5' | null;
+  highQuality: boolean;
+  resultQuality?: number | null;
+  resultFormat?: string | null;
+  resultHost?: string | null;
+  resultPlatformHint?: string | null;
+  resultFormatHint?: string | null;
+};
+
 export type PlaySubtitleTrack = {
   id: number;
   lang: string;
@@ -237,15 +249,24 @@ export type PlaySource = {
   mode: 'dash' | 'durl';
   qualityLabel: string;
   currentQuality: number;
+  returnedQuality: number;
+  returnedQualityLabel: string;
+  compatibleQuality: number | null;
+  compatibleQualityLabel: string | null;
   requestedQuality: number;
   requestedQualityLabel: string;
   qualityLimitReason: number;
+  qualityReason: string | null;
   durationMs: number;
   qualities: PlayQualityOption[];
   videoStreams: PlayVideoStream[];
   audioStreams: PlayAudioStream[];
   compatibleSources: PlayCompatibleSource[];
   candidateUrls: string[];
+  requestTrace: {
+    dash: PlayRequestTrace[];
+    compatible: PlayRequestTrace[];
+  };
 };
 
 export type UserProfile = {

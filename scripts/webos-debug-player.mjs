@@ -25,6 +25,7 @@ const telemetryPort = clampNumber(readArg('--telemetry-port', '19080'), 0, 65535
 const explicitHostIp = readArg('--host-ip', '').trim();
 const disableTelemetry = hasFlag('--no-telemetry');
 const launchOnly = hasFlag('--launch-only');
+const keepRunningApp = hasFlag('--keep-running-app');
 
 async function main() {
   if (!inputBvid) {
@@ -74,6 +75,9 @@ async function main() {
     }
 
     if (!launchOnly) {
+      if (!keepRunningApp) {
+        closeRunningApp(device);
+      }
       runAresLaunch(device, launchPayload);
     } else {
       console.log('launch-only 已开启，本次只输出启动参数，不执行电视启动。');
@@ -303,7 +307,7 @@ function runNodeScript(scriptPath, extraArgs) {
   }
 }
 
-function runAresLaunch(deviceName, launchPayload) {
+function resolveAresLaunchCliBin() {
   const cliBin = resolve(
     process.env.APPDATA ?? resolve(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
     'npm',
@@ -317,6 +321,12 @@ function runAresLaunch(deviceName, launchPayload) {
   if (!existsSync(cliBin)) {
     throw new Error('未找到 ares-launch.js，请先确认已全局安装 @webos-tools/cli。');
   }
+
+  return cliBin;
+}
+
+function runAresLaunch(deviceName, launchPayload) {
+  const cliBin = resolveAresLaunchCliBin();
 
   const cliArgs = ['-y', '-p', 'node@16', 'node', cliBin, String(appInfo.id), '-d', deviceName];
   for (const [key, rawValue] of Object.entries(launchPayload)) {
@@ -344,6 +354,30 @@ function runAresLaunch(deviceName, launchPayload) {
 
   if (result.status !== 0) {
     throw new Error(`ares-launch 执行失败，退出码 ${result.status ?? 1}`);
+  }
+}
+
+function closeRunningApp(deviceName) {
+  const cliBin = resolveAresLaunchCliBin();
+  const cliArgs = ['-y', '-p', 'node@16', 'node', cliBin, '-c', String(appInfo.id), '-d', deviceName];
+  const result = process.platform === 'win32'
+    ? spawnSync('powershell.exe', ['-NoProfile', '-Command', buildPowerShellCommand('npx.cmd', cliArgs)], {
+      cwd: root,
+      stdio: 'inherit',
+      shell: false,
+    })
+    : spawnSync('npx', cliArgs, {
+      cwd: root,
+      stdio: 'inherit',
+      shell: false,
+    });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`ares-launch 关闭应用失败，退出码 ${result.status ?? 1}`);
   }
 }
 
