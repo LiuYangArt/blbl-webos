@@ -92,7 +92,9 @@ describe('playerDashManifest', () => {
     expect(manifest).toContain('mimeType="video/mp4&quot;"');
     expect(manifest).toContain('<BaseURL>https://example.com/video.m4s?foo=1&amp;bar=&lt;2&gt;</BaseURL>');
     expect(manifest).toContain('<BaseURL>https://example.com/audio.m4s?foo=1&amp;bar=&lt;2&gt;</BaseURL>');
-    expect(manifest).toContain('<AdaptationSet mimeType="audio/mp4"');
+    expect(manifest).toContain('<Period duration="PT245.5S">');
+    expect(manifest).toContain('<AdaptationSet id="2" contentType="audio" mimeType="audio/mp4"');
+    expect(manifest).toContain('<Representation id="a1" bandwidth="128000" mimeType="audio/mp4" codecs="mp4a.40.2">');
 
     source.revoke();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test-manifest');

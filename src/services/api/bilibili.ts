@@ -463,6 +463,30 @@ function getCompatibleMediaCandidateScore(url: string) {
   return score;
 }
 
+function getUrlHost(url: string) {
+  if (!url) {
+    return '未知';
+  }
+
+  try {
+    return new URL(url).host || '未知';
+  } catch {
+    return '未知';
+  }
+}
+
+function readUrlHint(url: string, key: string) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url).searchParams.get(key);
+  } catch {
+    return null;
+  }
+}
+
 function parseVideoCodec(codecs: string | undefined): ParsedVideoCodec {
   const normalized = String(codecs ?? '').trim().toLowerCase();
   if (normalized.startsWith('avc')) {
@@ -1031,12 +1055,13 @@ async function requestPlaySource(
     trace?: PlayRequestTrace[];
   },
 ) {
-  options?.trace?.push({
+  const traceEntry: PlayRequestTrace = {
     qn: quality,
     fnval,
-    platform: options.platform ?? null,
-    highQuality: Boolean(options.highQuality),
-  });
+    platform: options?.platform ?? null,
+    highQuality: Boolean(options?.highQuality),
+  };
+  options?.trace?.push(traceEntry);
 
   const params = new URLSearchParams({
     bvid,
@@ -1058,7 +1083,18 @@ async function requestPlaySource(
   const payload = await fetchJson<ApiEnvelope<RawPlaySource>>(
     getBiliApiUrl(`/x/player/playurl?${params.toString()}`),
   );
-  return unwrapData(payload);
+  const data = unwrapData(payload);
+  const firstCandidateUrl = getPlayCandidateUrls(data.durl?.[0])[0]
+    ?? getDashCandidateUrls(data.dash?.video?.[0])[0]
+    ?? '';
+
+  traceEntry.resultQuality = Number(data.quality ?? 0) || null;
+  traceEntry.resultFormat = String(data.format ?? '');
+  traceEntry.resultHost = getUrlHost(firstCandidateUrl);
+  traceEntry.resultPlatformHint = readUrlHint(firstCandidateUrl, 'platform');
+  traceEntry.resultFormatHint = readUrlHint(firstCandidateUrl, 'f');
+
+  return data;
 }
 
 const DASH_FNVAL_CANDIDATES = Array.from(new Set([16 | 64 | 128 | 256 | 1024, 4048, 16]));

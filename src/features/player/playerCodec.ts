@@ -243,7 +243,7 @@ function buildDashAttempts(
     };
   }
 
-  const audioStream = pickPreferredAudioStream(playSource.audioStreams, capability);
+  const audioStream = pickPreferredAudioStream(playSource.audioStreams, capability, memory);
   const preferredCodecs = codecPreference === 'auto'
     ? getAutoCodecPriority(capability.support, memory)
     : [codecPreference];
@@ -674,8 +674,22 @@ function getPlaybackAttemptScore(
     score -= 8;
   }
 
+  if (playSource.mode === 'dash' && bestDashQuality >= playSource.requestedQuality && attempt.mode === 'dash') {
+    if (attempt.quality >= playSource.requestedQuality) {
+      score += 48;
+    }
+  }
+
+  if (playSource.mode === 'dash' && bestDashQuality >= playSource.requestedQuality && attempt.mode === 'compatible') {
+    if (attempt.quality >= playSource.requestedQuality) {
+      score += 80;
+    } else {
+      score -= 12;
+    }
+  }
+
   if (playSource.mode === 'dash' && attempt.mode === 'compatible' && bestDashQuality >= playSource.requestedQuality) {
-    score -= 24;
+    score -= 48;
   }
 
   return score;
@@ -754,12 +768,19 @@ function getCompatibleAttemptStabilityScore(source: PlayCompatibleSource | null)
 function pickPreferredAudioStream(
   audioStreams: PlayAudioStream[],
   capability: PlayerCodecCapability,
+  memory?: PlayerCodecMemory,
 ): PlayAudioStream | null {
   if (audioStreams.length === 0) {
     return null;
   }
 
   const preferred = [...audioStreams].sort((left, right) => {
+    const rightMemoryScore = getAudioStreamMemoryScore(right, memory);
+    const leftMemoryScore = getAudioStreamMemoryScore(left, memory);
+    if (rightMemoryScore !== leftMemoryScore) {
+      return rightMemoryScore - leftMemoryScore;
+    }
+
     const rightScore = getAudioStreamScore(right, capability.deviceClass);
     const leftScore = getAudioStreamScore(left, capability.deviceClass);
     if (rightScore !== leftScore) {
@@ -772,21 +793,28 @@ function pickPreferredAudioStream(
       return rightHostScore - leftHostScore;
     }
 
-    if (shouldPreferStableAudioForDevice(capability.deviceClass)) {
-      return left.bandwidth - right.bandwidth;
-    }
-
     return right.bandwidth - left.bandwidth;
   });
 
   return preferred[0] ?? null;
 }
 
+function getAudioStreamMemoryScore(
+  stream: PlayAudioStream,
+  memory: PlayerCodecMemory | undefined,
+) {
+  if (memory?.lastSuccessfulAudioStreamId === stream.id) {
+    return 24;
+  }
+
+  return 0;
+}
+
 function getAudioStreamScore(stream: PlayAudioStream, deviceClass: string): number {
   const codecs = stream.codecs.toLowerCase();
   let score = 0;
   if (codecs.includes('mp4a')) {
-    score += shouldPreferStableAudioForDevice(deviceClass) ? 5 : 3;
+    score += shouldPreferStableAudioForDevice(deviceClass) ? 6 : 3;
   }
   if (codecs.includes('ec-3') || codecs.includes('eac3')) {
     score += 2;
@@ -796,7 +824,7 @@ function getAudioStreamScore(stream: PlayAudioStream, deviceClass: string): numb
   }
 
   if (shouldPreferStableAudioForDevice(deviceClass)) {
-    score += getStableAudioBandwidthScore(stream.bandwidth);
+    score += getHighBandwidthAudioScore(stream.bandwidth);
   }
 
   return score;
@@ -839,10 +867,8 @@ function getAudioStreamHostScore(stream: PlayAudioStream) {
   return hosts.reduce((total, url) => total + getMediaHostPreferenceScore(url), 0);
 }
 
-function getStableAudioBandwidthScore(bandwidth: number) {
-  const target = 128_000;
-  const distance = Math.abs(bandwidth - target);
-  return Math.round(12 - distance / 24_000);
+function getHighBandwidthAudioScore(bandwidth: number) {
+  return Math.round(Math.min(12, bandwidth / 32_000));
 }
 
 function formatAudioCodecLabel(codecs: string): string {

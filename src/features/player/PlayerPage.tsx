@@ -950,9 +950,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         });
         manifestRevoke = manifestSource.revoke;
 
-        const shakaSession = await createShakaPlayer(video, (error) => {
-          finalizeFailure(error.message, error.code);
-        });
+        const shakaSession = await createShakaPlayer(
+          video,
+          (error) => {
+            finalizeFailure(error.message, error.code);
+          },
+        );
         destroyPlayer = () => shakaSession.destroy();
         await shakaSession.load(manifestSource.manifestUrl);
         return;

@@ -102,6 +102,37 @@ const audioStreams: PlayAudioStream[] = [
   },
 ];
 
+const audioStreamsWithVariants: PlayAudioStream[] = [
+  {
+    id: 201,
+    url: 'https://upos-sz.bilivideo.com/audio-128.m4s',
+    backupUrls: ['https://mcdn.example.com/audio-128.m4s'],
+    mimeType: 'audio/mp4',
+    segmentBase: {
+      initialization: '0-50',
+      indexRange: '51-99',
+    },
+    bandwidth: 128_000,
+    codecs: 'mp4a.40.2',
+    kind: 'aac',
+    label: 'AAC 128K',
+  },
+  {
+    id: 202,
+    url: 'https://upos-sz.bilivideo.com/audio-320.m4s',
+    backupUrls: ['https://mcdn.example.com/audio-320.m4s'],
+    mimeType: 'audio/mp4',
+    segmentBase: {
+      initialization: '0-50',
+      indexRange: '51-99',
+    },
+    bandwidth: 320_000,
+    codecs: 'mp4a.40.2',
+    kind: 'aac',
+    label: 'AAC 320K',
+  },
+];
+
 const compatibleSources: PlayCompatibleSource[] = [
   {
     quality: 80,
@@ -222,6 +253,34 @@ describe('playerCodec', () => {
     expect(result.attempts[0]?.codec).toBe('av1');
   });
 
+  it('真实 webOS 设备会优先沿用上次成功的 DASH 音轨记忆', () => {
+    const result = buildPlaybackAttempts(
+      {
+        ...playSource,
+        audioStreams: audioStreamsWithVariants,
+      },
+      'auto',
+      {
+        deviceKey: 'oled55c1:6.0',
+        deviceLabel: 'LG C1',
+        deviceClass: 'webos-2021',
+        support: { avc: true, hevc: true, av1: false },
+      },
+      {
+        lastSuccessfulCodec: 'hevc',
+        lastFailedCodec: null,
+        lastSuccessfulMode: 'dash',
+        lastFailedMode: null,
+        lastSuccessfulQuality: 80,
+        lastSuccessfulAudioStreamId: 202,
+        modeSuccessCount: { dash: 1, compatible: 0 },
+        modeFailureCount: { dash: 0, compatible: 0 },
+      },
+    );
+
+    expect(result.attempts[0]?.audioStream?.id).toBe(202);
+  });
+
   it('兼容流档位较低时，真实 webOS 设备仍优先保留 DASH 的实际返回档位', () => {
     const result = buildPlaybackAttempts(
       {
@@ -250,6 +309,86 @@ describe('playerCodec', () => {
     expect(result.attempts[0]?.mode).toBe('dash');
     expect(result.attempts[0]?.quality).toBe(80);
     expect(result.attempts.some((item) => item.mode === 'compatible' && item.quality === 64)).toBe(true);
+  });
+
+  it('真实 webOS 在已拿到目标 DASH 档位时，会先试完 DASH 编码再回退兼容流', () => {
+    const result = buildPlaybackAttempts(
+      playSource,
+      'auto',
+      {
+        deviceKey: 'unknown:unknown',
+        deviceLabel: 'unknown',
+        deviceClass: 'webos-6',
+        support: { avc: true, hevc: true, av1: true },
+      },
+      {
+        lastSuccessfulCodec: 'avc',
+        lastFailedCodec: null,
+        lastSuccessfulMode: 'compatible',
+        lastFailedMode: null,
+        lastSuccessfulQuality: 64,
+        lastSuccessfulAudioStreamId: null,
+        modeSuccessCount: { dash: 2, compatible: 8 },
+        modeFailureCount: { dash: 8, compatible: 2 },
+      },
+    );
+
+    expect(result.attempts[0]?.mode).toBe('dash');
+    expect(result.attempts[1]?.mode).toBe('dash');
+    expect(result.attempts[2]?.mode).toBe('compatible');
+  });
+
+  it('真实 webOS 在 DASH 失败后，会先尝试同档位兼容流，再降到更低档位 html5 兼容流', () => {
+    const result = buildPlaybackAttempts(
+      {
+        ...playSource,
+        compatibleSources: [
+          {
+            quality: 80,
+            qualityLabel: '1080P',
+            format: 'mp4',
+            url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+            candidateUrls: [
+              'https://upos-sz-estghw.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+              'https://upos-sz-mirror08c.bilivideo.com/video-compatible-1080.mp4?platform=pc&f=u_0_0',
+            ],
+          },
+          {
+            quality: 64,
+            qualityLabel: '720P',
+            format: 'mp4',
+            url: 'https://upos-sz-estghw.bilivideo.com/video-compatible-720.mp4?platform=html5&f=T_0_0',
+            candidateUrls: [
+              'https://upos-sz-estghw.bilivideo.com/video-compatible-720.mp4?platform=html5&f=T_0_0',
+              'https://upos-sz-mirror08c.bilivideo.com/video-compatible-720.mp4?platform=html5&f=T_0_0',
+            ],
+          },
+        ],
+      },
+      'auto',
+      {
+        deviceKey: 'unknown:unknown',
+        deviceLabel: 'unknown',
+        deviceClass: 'webos-6',
+        support: { avc: true, hevc: true, av1: true },
+      },
+      {
+        lastSuccessfulCodec: 'avc',
+        lastFailedCodec: null,
+        lastSuccessfulMode: 'compatible',
+        lastFailedMode: null,
+        lastSuccessfulQuality: 64,
+        lastSuccessfulAudioStreamId: null,
+        modeSuccessCount: { dash: 2, compatible: 8 },
+        modeFailureCount: { dash: 8, compatible: 0 },
+      },
+    );
+
+    expect(result.attempts[0]?.mode).toBe('dash');
+    expect(result.attempts[1]?.mode).toBe('dash');
+    expect(result.attempts[2]?.mode).toBe('compatible');
+    expect(result.attempts[2]?.quality).toBe(80);
+    expect(result.attempts[3]?.quality).toBe(64);
   });
 
   it('真实 webOS 设备会优先尝试更稳定的 html5 兼容流，而不是只盯住更高但不稳定的 pc 兼容流', () => {

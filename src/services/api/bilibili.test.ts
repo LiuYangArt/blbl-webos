@@ -457,6 +457,11 @@ describe('bilibili api mapping', () => {
       fnval: 0,
       platform: null,
       highQuality: false,
+      resultQuality: 64,
+      resultFormat: 'mp4',
+      resultHost: 'cn-gotcha01.bilivideo.com',
+      resultPlatformHint: null,
+      resultFormatHint: null,
     }]);
   });
 
@@ -583,12 +588,22 @@ describe('bilibili api mapping', () => {
       fnval: 1488,
       platform: null,
       highQuality: false,
+      resultQuality: 80,
+      resultFormat: 'dash',
+      resultHost: 'upos-sz.bilivideo.com',
+      resultPlatformHint: null,
+      resultFormatHint: null,
     });
     expect(result.requestTrace.compatible[0]).toEqual({
       qn: 80,
       fnval: 0,
       platform: 'html5',
       highQuality: true,
+      resultQuality: 80,
+      resultFormat: 'mp4',
+      resultHost: 'cn-gotcha01.bilivideo.com',
+      resultPlatformHint: null,
+      resultFormatHint: null,
     });
   });
 

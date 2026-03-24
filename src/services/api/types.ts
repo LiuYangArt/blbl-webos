@@ -226,6 +226,11 @@ export type PlayRequestTrace = {
   fnval: number;
   platform: 'html5' | null;
   highQuality: boolean;
+  resultQuality?: number | null;
+  resultFormat?: string | null;
+  resultHost?: string | null;
+  resultPlatformHint?: string | null;
+  resultFormatHint?: string | null;
 };
 
 export type PlaySubtitleTrack = {
