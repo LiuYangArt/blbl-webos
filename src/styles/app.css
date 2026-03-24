@@ -1710,7 +1710,13 @@ button {
   font-size: 16px;
 }
 
-.login-panel__content,
+.login-panel__content {
+  display: grid;
+  grid-template-columns: minmax(480px, 620px) minmax(0, 1fr);
+  gap: 42px;
+  align-items: start;
+}
+
 .profile-hero {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
@@ -1719,9 +1725,40 @@ button {
 }
 
 .login-panel__qr {
-  padding: 18px;
-  border-radius: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 26px 26px 22px;
+  border-radius: 36px;
   background: #ffffff;
+  box-shadow:
+    0 24px 54px rgba(0, 0, 0, 0.26),
+    inset 0 0 0 1px rgba(18, 18, 18, 0.06);
+}
+
+.login-panel__qr-frame {
+  flex: 0 0 auto;
+}
+
+.login-panel__qr-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.login-panel__qr-note {
+  margin: 0;
+  max-width: 520px;
+  color: rgba(31, 31, 36, 0.72);
+  font-size: 18px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.login-panel__meta {
+  min-width: 0;
+  max-width: 760px;
 }
 
 .login-panel__meta h1,
@@ -1745,6 +1782,10 @@ button {
   color: var(--tv-text-muted);
   font-size: 18px;
   line-height: 1.8;
+}
+
+.login-panel__steps li + li {
+  margin-top: 8px;
 }
 
 .profile-hero__avatar {

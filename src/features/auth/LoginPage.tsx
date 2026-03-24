@@ -5,6 +5,7 @@ import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { createWebQrLogin, pollWebQrLogin } from '../../services/api/bilibili';
 import { useAppStore } from '../../app/AppStore';
 import { PageStatus } from '../shared/PageStatus';
+import { getLoginQrBitmapSize, getLoginQrDisplaySize } from './loginQr';
 
 type LoginPageProps = {
   onCompleted: () => void;
@@ -19,6 +20,10 @@ type LoginFlowState =
 export function LoginPage({ onCompleted }: LoginPageProps) {
   const { refreshAuth } = useAppStore();
   const [state, setState] = useState<LoginFlowState>({ status: 'loading', message: '正在生成二维码' });
+  const viewportWidth = typeof window === 'undefined' ? 1920 : window.innerWidth;
+  const viewportHeight = typeof window === 'undefined' ? 1080 : window.innerHeight;
+  const qrDisplaySize = getLoginQrDisplaySize(viewportWidth, viewportHeight);
+  const qrBitmapSize = getLoginQrBitmapSize(viewportWidth, viewportHeight);
 
   useEffect(() => {
     let active = true;
@@ -28,7 +33,7 @@ export function LoginPage({ onCompleted }: LoginPageProps) {
       setState({ status: 'loading', message: '正在生成二维码' });
       try {
         const qrData = await createWebQrLogin();
-        const qrUrl = await QRCode.toDataURL(qrData.url, { margin: 1, width: 300 });
+        const qrUrl = await QRCode.toDataURL(qrData.url, { margin: 1, width: qrBitmapSize });
         if (!active) {
           return;
         }
@@ -97,7 +102,7 @@ export function LoginPage({ onCompleted }: LoginPageProps) {
         window.clearInterval(timer);
       }
     };
-  }, [onCompleted, refreshAuth]);
+  }, [onCompleted, qrBitmapSize, refreshAuth]);
 
   if (state.status === 'loading') {
     return <PageStatus title="准备扫码登录" description={state.message} />;
@@ -130,7 +135,18 @@ export function LoginPage({ onCompleted }: LoginPageProps) {
       >
         <div className="login-panel__content">
           <div className="login-panel__qr">
-            <img src={state.qrUrl} alt="哔哩哔哩扫码登录二维码" />
+            <div
+              className="login-panel__qr-frame"
+              style={{ width: `${qrDisplaySize}px`, height: `${qrDisplaySize}px` }}
+            >
+              <img
+                src={state.qrUrl}
+                alt="哔哩哔哩扫码登录二维码"
+                width={qrDisplaySize}
+                height={qrDisplaySize}
+              />
+            </div>
+            <p className="login-panel__qr-note">请保持电视亮度正常，并让二维码完整出现在手机取景框内。</p>
           </div>
           <div className="login-panel__meta">
             <span className="detail-hero__tag">扫码登录</span>
