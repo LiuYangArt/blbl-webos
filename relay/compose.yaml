@@ -1,0 +1,27 @@
+name: bilibili-relay
+
+services:
+  playurl-relay:
+    image: golang:1.25-alpine
+    container_name: bilibili-relay
+    restart: unless-stopped
+    working_dir: /src
+    command:
+      - sh
+      - -lc
+      - export PATH=/usr/local/go/bin:/go/bin:$PATH && go build -o /tmp/playurl-relay . && exec /tmp/playurl-relay
+    environment:
+      RELAY_HOST: 0.0.0.0
+      RELAY_PORT: ${RELAY_PORT:-19091}
+      RELAY_ACCESS_TOKEN: ${RELAY_ACCESS_TOKEN:-}
+      RELAY_STATE_DIR: /data
+      RELAY_REQUEST_TIMEOUT_MS: ${RELAY_REQUEST_TIMEOUT_MS:-7000}
+    ports:
+      - ${RELAY_PORT:-19091}:${RELAY_PORT:-19091}
+    volumes:
+      - ./:/src
+      - relay-data:/data
+
+volumes:
+  relay-data:
+    name: bilibili-relay-data

@@ -9,6 +9,7 @@ const { moveFocusMock, activateFocusedMock } = vi.hoisted(() => ({
 vi.mock('./focus', () => ({
   moveFocus: moveFocusMock,
   activateFocused: activateFocusedMock,
+  isFocusableElement: (element: HTMLElement) => element.dataset.focusable === 'true',
 }));
 
 import { attachRemoteControl, REMOTE_INTENT_EVENT } from './remote';
@@ -56,6 +57,21 @@ describe('remote', () => {
 
     expect(moveFocusMock).not.toHaveBeenCalled();
     expect(onBack).toHaveBeenCalledTimes(1);
+    detach();
+  });
+
+  it('接入焦点系统的输入框聚焦时，方向键仍然会参与遥控器导航', () => {
+    const detach = attachRemoteControl({ onBack: vi.fn() });
+    const input = document.createElement('input');
+    input.dataset.focusable = 'true';
+    input.dataset.focusId = 'relay-host-input';
+    input.dataset.focusSection = 'relay-settings';
+    document.body.appendChild(input);
+    input.focus();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { keyCode: REMOTE_KEYS.DOWN }));
+
+    expect(moveFocusMock).toHaveBeenCalledWith('down');
     detach();
   });
 

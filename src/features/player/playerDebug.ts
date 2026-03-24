@@ -1,7 +1,7 @@
 import { readDebugTelemetryUrl } from '../../app/launchParams';
 
 export type PlayerDebugEvent = {
-  type: 'environment' | 'loadedmetadata' | 'play' | 'progress' | 'error' | 'audio-only-detected' | 'attempt-switch';
+  type: 'environment' | 'loadedmetadata' | 'play' | 'progress' | 'error' | 'audio-only-detected' | 'attempt-switch' | 'attempt-failure';
   bvid: string;
   cid: number;
   sourceUrl: string;

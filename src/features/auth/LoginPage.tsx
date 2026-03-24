@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { FocusButton } from '../../components/FocusButton';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
-import { createWebQrLogin, pollWebQrLogin } from '../../services/api/bilibili';
+import { createWebQrLogin, fetchCurrentUserProfile, pollWebQrLogin } from '../../services/api/bilibili';
 import { useAppStore } from '../../app/AppStore';
 import { PageStatus } from '../shared/PageStatus';
 import { getLoginQrBitmapSize, getLoginQrDisplaySize } from './loginQr';
+import { ensureRelaySession } from '../../services/relay/client';
+import { readRelaySettings, writeRelayAuthMaterial } from '../../services/relay/settings';
 
 type LoginPageProps = {
   onCompleted: () => void;
@@ -56,6 +58,36 @@ export function LoginPage({ onCompleted }: LoginPageProps) {
                 setState({ status: 'success', message: '登录成功，正在同步当前账号信息。' });
                 window.clearInterval(timer ?? undefined);
                 await refreshAuth();
+                try {
+                  const profile = await fetchCurrentUserProfile();
+                  if (result.loginUrl) {
+                    writeRelayAuthMaterial({
+                      loginUrl: result.loginUrl,
+                      refreshToken: result.refreshToken,
+                      completedAt: result.timestamp ?? Date.now(),
+                      mid: profile.mid,
+                      uname: profile.name,
+                      vip: Boolean(profile.vipLabel),
+                      capturedAt: Date.now(),
+                    });
+                    await ensureRelaySession(
+                      readRelaySettings(),
+                      profile,
+                      {
+                        loginUrl: result.loginUrl,
+                        refreshToken: result.refreshToken,
+                        completedAt: result.timestamp ?? Date.now(),
+                        mid: profile.mid,
+                        uname: profile.name,
+                        vip: Boolean(profile.vipLabel),
+                        capturedAt: Date.now(),
+                      },
+                      'login-success',
+                    );
+                  }
+                } catch {
+                  // relay 同步失败不应阻断 TV 登录完成。
+                }
                 onCompleted();
                 break;
               case 86090:

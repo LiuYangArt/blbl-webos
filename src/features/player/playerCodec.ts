@@ -81,6 +81,41 @@ export function getCodecLabel(codec: ParsedVideoCodec | VideoCodecPreference): s
   }
 }
 
+export function isCodecSupportedByCapability(
+  codecPreference: VideoCodecPreference,
+  capability: PlayerCodecCapability | null,
+): boolean {
+  if (codecPreference === 'auto') {
+    return true;
+  }
+
+  if (!capability) {
+    return true;
+  }
+
+  return capability.support[codecPreference];
+}
+
+export function normalizeCodecPreferenceForCapability(
+  codecPreference: VideoCodecPreference,
+  capability: PlayerCodecCapability | null,
+): {
+  codecPreference: VideoCodecPreference;
+  warning: string | null;
+} {
+  if (isCodecSupportedByCapability(codecPreference, capability)) {
+    return {
+      codecPreference,
+      warning: null,
+    };
+  }
+
+  return {
+    codecPreference: 'auto',
+    warning: `当前设备能力探测不支持 ${getCodecLabel(codecPreference)}，已自动切回自动模式。`,
+  };
+}
+
 export function probePlayerCodecSupport(): PlayerCodecSupport {
   const video = document.createElement('video');
   return {

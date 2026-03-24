@@ -8,12 +8,18 @@ import { setTimeout as delay } from 'node:timers/promises';
 const root = resolve(import.meta.dirname, '..');
 const devMenuConfigFile = resolve(root, '_dev', 'dev-menu.config.bat');
 const appInfo = JSON.parse(readFileSync(resolve(root, 'appinfo.json'), 'utf8'));
-const novacomDevicesFile = resolve(
-  process.env.APPDATA ?? resolve(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
-  '.webos',
-  'tv',
-  'novacom-devices.json',
-);
+const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? '';
+const globalNpmRoot = process.platform === 'win32'
+  ? resolve(process.env.APPDATA ?? resolve(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'), 'npm', 'node_modules')
+  : capture(getCommandName('npm'), ['root', '-g']);
+const novacomDevicesFile = process.platform === 'win32'
+  ? resolve(
+    process.env.APPDATA ?? resolve(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
+    '.webos',
+    'tv',
+    'novacom-devices.json',
+  )
+  : resolve(homeDir, '.webos', 'tv', 'novacom-devices.json');
 
 const args = process.argv.slice(2);
 const inputUrl = readArg('--url', '').trim();
@@ -270,6 +276,7 @@ function buildTelemetrySummary({ device, tvHost, hostIp, telemetryUrl, launchPay
 
   const latestEnvironment = [...items].reverse().find((item) => item?.type === 'environment') ?? null;
   const latestAttempt = [...items].reverse().find((item) => item?.type === 'attempt-switch') ?? null;
+  const latestAttemptFailure = [...items].reverse().find((item) => item?.type === 'attempt-failure') ?? null;
   const latestError = [...items].reverse().find((item) => item?.type === 'error') ?? null;
   const latestPlay = [...items].reverse().find((item) => item?.type === 'play') ?? null;
   const latestProgress = [...items].reverse().find((item) => item?.type === 'progress') ?? null;
@@ -284,6 +291,7 @@ function buildTelemetrySummary({ device, tvHost, hostIp, telemetryUrl, launchPay
     typeCounts,
     latestEnvironment,
     latestAttempt,
+    latestAttemptFailure,
     latestPlay,
     latestProgress,
     latestError,
@@ -308,15 +316,7 @@ function runNodeScript(scriptPath, extraArgs) {
 }
 
 function resolveAresLaunchCliBin() {
-  const cliBin = resolve(
-    process.env.APPDATA ?? resolve(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
-    'npm',
-    'node_modules',
-    '@webos-tools',
-    'cli',
-    'bin',
-    'ares-launch.js',
-  );
+  const cliBin = resolve(globalNpmRoot, '@webos-tools', 'cli', 'bin', 'ares-launch.js');
 
   if (!existsSync(cliBin)) {
     throw new Error('未找到 ares-launch.js，请先确认已全局安装 @webos-tools/cli。');
@@ -493,6 +493,30 @@ function clampNumber(value, min, max, fallback) {
     return fallback;
   }
   return Math.min(max, Math.max(min, parsed));
+}
+
+function getCommandName(name) {
+  return process.platform === 'win32' ? `${name}.cmd` : name;
+}
+
+function capture(command, args) {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    const errorOutput = String(result.stderr ?? '').trim();
+    throw new Error(`${command} ${args.join(' ')} 失败${errorOutput ? `：${errorOutput}` : ''}`);
+  }
+
+  return String(result.stdout ?? '').trim();
 }
 
 function isIpv4(value) {

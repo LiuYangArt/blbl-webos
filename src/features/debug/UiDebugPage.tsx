@@ -584,17 +584,40 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
         <div className="ui-debug-showcase-grid">
           <ShowcaseCard
             title="搜索输入面板"
-            usedIn="用于：搜索页和搜索结果页的输入面板，现在已经统一收口。"
+            usedIn="用于：搜索页、搜索结果页，以及 relay 设置里的 IP / 端口输入面板。"
             source="SearchComposer"
           >
-            <SearchComposer
-              value="遥控器焦点样式"
-              submitLabel="立即搜索"
-              readOnly
-              onChange={() => {}}
-              onSubmit={() => {}}
-              onClose={() => {}}
-            />
+            <div className="ui-debug-search-composer">
+              <SearchComposer
+                value="遥控器焦点样式"
+                submitLabel="立即搜索"
+                readOnly
+                onChange={() => {}}
+                onSubmit={() => {}}
+                onClose={() => {}}
+              />
+              <SearchComposer
+                fields={[
+                  {
+                    key: 'debug-relay-host',
+                    label: '服务器 IP',
+                    value: '192.168.50.10',
+                    placeholder: '例如 192.168.50.10',
+                    readOnly: true,
+                    onChange: () => {},
+                  },
+                  {
+                    key: 'debug-relay-port',
+                    label: '端口',
+                    value: '19091',
+                    placeholder: '19091',
+                    readOnly: true,
+                    inputMode: 'numeric',
+                    onChange: () => {},
+                  },
+                ]}
+              />
+            </div>
           </ShowcaseCard>
 
           <ShowcaseCard

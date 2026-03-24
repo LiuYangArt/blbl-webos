@@ -457,11 +457,17 @@ describe('bilibili api mapping', () => {
       fnval: 0,
       platform: null,
       highQuality: false,
+      source: 'direct',
       resultQuality: 64,
       resultFormat: 'mp4',
       resultHost: 'cn-gotcha01.bilivideo.com',
       resultPlatformHint: null,
       resultFormatHint: null,
+      relayQuality: null,
+      relayFormat: null,
+      relayHost: null,
+      relayPlatformHint: null,
+      relayFormatHint: null,
     }]);
   });
 
@@ -588,22 +594,34 @@ describe('bilibili api mapping', () => {
       fnval: 1488,
       platform: null,
       highQuality: false,
+      source: 'direct',
       resultQuality: 80,
       resultFormat: 'dash',
       resultHost: 'upos-sz.bilivideo.com',
       resultPlatformHint: null,
       resultFormatHint: null,
+      relayQuality: null,
+      relayFormat: null,
+      relayHost: null,
+      relayPlatformHint: null,
+      relayFormatHint: null,
     });
     expect(result.requestTrace.compatible[0]).toEqual({
       qn: 80,
       fnval: 0,
       platform: 'html5',
       highQuality: true,
+      source: 'direct',
       resultQuality: 80,
       resultFormat: 'mp4',
       resultHost: 'cn-gotcha01.bilivideo.com',
       resultPlatformHint: null,
       resultFormatHint: null,
+      relayQuality: null,
+      relayFormat: null,
+      relayHost: null,
+      relayPlatformHint: null,
+      relayFormatHint: null,
     });
   });
 
@@ -845,6 +863,29 @@ describe('bilibili api mapping', () => {
       vipLabel: '大会员',
       following: 88,
       follower: 99,
+    });
+  });
+
+  it('pollWebQrLogin 会保留 relay 建立会话所需的登录完成信息', async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: {
+        code: 0,
+        message: '0',
+        url: 'https://passport.bilibili.com/login-done',
+        refresh_token: 'refresh-token',
+        timestamp: 1710000000000,
+      },
+    });
+
+    const { pollWebQrLogin } = await loadBilibiliModule();
+    const result = await pollWebQrLogin('qr-key');
+
+    expect(result).toEqual({
+      code: 0,
+      message: '0',
+      loginUrl: 'https://passport.bilibili.com/login-done',
+      refreshToken: 'refresh-token',
+      timestamp: 1710000000000,
     });
   });
 

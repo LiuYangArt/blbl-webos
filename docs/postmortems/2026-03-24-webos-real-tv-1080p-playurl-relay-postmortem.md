@@ -8,13 +8,70 @@
 2. 问题也不是“B 站接口完全不给我们 `1080P` 数据”。
 3. 现在真正卡住的是：`webOS 真机 Web App` 这一层，没法像原生客户端或受控代理那样稳定控制 `playurl` 请求上下文。
 4. 因此，继续只在前端里硬调 `fnval / platform / high_quality / UA / 回退顺序`，收益已经明显递减。
-5. 下一阶段应该转向：`把拿 playurl 的动作放到一个最小 relay 服务里做，TV 端保留当前直连作为 fallback`。
+5. 只把 `playurl` 放到 relay 仍然不够，因为真机直连 `1080 DASH / 1080 pc mp4` 媒体 URL 依旧会遇到 `403 / timeout`。
+6. 最终可用方案是：`playurl` 和高码率媒体请求都走同一个最小 relay，由 relay 带上 B 站需要的请求头与 cookie 去拉取媒体内容。
 
 一句话总结：
 
 - `电视硬件能播高清`。
-- `B 站有时也会给 1080 数据`。
-- `但纯 webOS Web App 这一层，不能稳定拿到并跑通那条高清链路`。
+- `B 站也会给 1080 / HEVC 数据`。
+- `但纯 webOS Web App 直连这些高清媒体地址时并不稳定`。
+- `最终要靠 relay 接管媒体请求上下文，才能在真机上稳定跑通 1080 HEVC`。
+
+## 最终收口
+
+这篇 postmortem 形成后，后续真机联调又把最后一层根因补齐了：
+
+1. `playurl relay` 解决的是“拿到更完整的 1080 / HEVC 播放地址”。
+2. 但真机直接访问这些 `1080 DASH` 分片和 `1080 pc mp4` URL 时，仍然会遇到 `403 Forbidden` 或一直超时。
+3. 所以真正的闭环不是“relay 只代理 playurl”，而是“relay 同时代理高码率媒体请求”。
+
+最终修复后的链路是：
+
+1. TV 端仍然优先走 `relay` 拿 `playurl`
+2. 当这次 `playurlSource = relay` 且账号状态已同步时
+3. 播放器会自动把 `DASH video/audio` 与 `compatible mp4` 候选地址改写成 `relay /media?url=...`
+4. relay 用保存的 B 站 cookie、`Referer`、`Origin` 和桌面浏览器 `UA` 去拉真实媒体资源
+5. TV 端只消费 relay 返回的媒体流
+
+这样做之后，真机就不再直接面对 bilivideo 的 `403 / 上下文校验` 问题。
+
+## 最终验证结果
+
+针对测试视频 `BV1Sf4y1q7H9`，这轮最终收口时拿到的真机 telemetry 已经满足目标：
+
+1. `quality = 1080P 高清`
+2. `codec = HEVC`
+3. `sourceTypeLabel = Shaka Player + MSE`
+4. `videoWidth = 1920`
+5. `videoHeight = 1080`
+6. `decodedVideoFrames > 0`
+7. `attempt-failure = 0`
+
+同时还能看到：
+
+1. `resolvedVideoHost = 192.168.50.81:19091`
+2. `resolvedAudioHost = 192.168.50.81:19091`
+
+这说明最终成功播放的并不是“电视重新自己直连成功了”，而是：
+
+- `TV -> relay /media -> bilivideo`
+
+这条链路已经稳定接管了真机上的高清媒体请求。
+
+## 新增经验
+
+以后再碰到“真机上 relay 已同步、playurl 也拿到了 1080，但播放器还是回退”的情况，优先按下面顺序判断：
+
+1. 先看 `attempt-failure` 里是不是 `403` 或 `load-timeout`
+2. 再看失败 URL 是 `rawVideoHost` 还是 `resolvedVideoHost`
+3. 如果 `rawVideoHost` 是 bilivideo，`resolvedVideoHost` 还不是 relay，本质上说明媒体请求还没接管
+4. 如果 relay `/media` 本机 `curl` 能拿到 `206 Partial Content`，而电视端还不行，再继续查前端候选地址改写是否生效
+
+一句话经验：
+
+- `playurl relay` 解决的是“地址来源”
+- `media relay` 解决的是“高清媒体实际可播”
 
 ## 背景
 

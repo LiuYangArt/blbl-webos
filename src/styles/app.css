@@ -1537,6 +1537,14 @@ button {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
+.player-settings-drawer__info[data-focus-active="true"] {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 4px rgba(255, 255, 255, 0.92),
+    0 20px 38px rgba(0, 0, 0, 0.26);
+}
+
 .player-settings-drawer__info > * + * {
   margin-top: 12px;
 }
@@ -1576,10 +1584,20 @@ button {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
+.search-composer__fields {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: -12px;
+  margin-left: -16px;
+}
+
 .search-composer__field {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  min-width: 0;
+  flex: 1 1 360px;
+  margin-top: 12px;
+  margin-left: 16px;
 }
 
 .search-composer__field > * + * {
@@ -1601,6 +1619,14 @@ button {
   background: rgba(255, 255, 255, 0.08);
   color: var(--tv-text);
   outline: none;
+}
+
+.search-composer__field input[data-focus-active="true"],
+.search-composer__field input:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.92),
+    0 18px 34px rgba(0, 0, 0, 0.28);
 }
 
 .search-composer__actions {
@@ -1855,7 +1881,13 @@ button {
 }
 
 .ui-debug-search-composer {
+  display: flex;
+  flex-direction: column;
   margin-top: 0;
+}
+
+.ui-debug-search-composer > * + * {
+  margin-top: 18px;
 }
 
 .ui-debug-copy-block {
@@ -2028,6 +2060,40 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.relay-settings-panel__body {
+  margin-top: 24px;
+}
+
+.relay-settings-panel__body > * + * {
+  margin-top: 18px;
+}
+
+.relay-settings-panel__block {
+  display: flex;
+  flex-direction: column;
+}
+
+.relay-settings-panel__block > * + * {
+  margin-top: 14px;
+}
+
+.relay-settings-panel__actions > * {
+  min-width: 250px;
+}
+
+.relay-settings-panel__action-hint {
+  max-width: 920px;
+  min-height: 28px;
+}
+
+.relay-settings-panel__hint {
+  max-width: 1080px;
+}
+
+.relay-settings-panel__summary .home-following-summary {
+  margin-bottom: 0;
 }
 
 .library-folder-strip {

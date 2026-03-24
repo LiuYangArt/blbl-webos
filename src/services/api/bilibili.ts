@@ -7,6 +7,13 @@ import {
 } from './http';
 import { signWbi } from './wbi';
 import { appendRuntimeDiagnostic } from '../debug/runtimeDiagnostics';
+import {
+  RelayApiError,
+  ensureRelaySession,
+  fetchRelayPlayurl,
+  type RelayPlayurlMeta,
+} from '../relay/client';
+import { readRelayAuthMaterial, readRelaySettings } from '../relay/settings';
 import type {
   ApiEnvelope,
   FavoriteFolder,
@@ -1045,6 +1052,7 @@ export async function fetchPgcSeasonDetail(seasonId: number): Promise<PgcSeasonD
 }
 
 async function requestPlaySource(
+  requester: PlayurlRequester,
   bvid: string,
   cid: number,
   quality: number,
@@ -1080,19 +1088,23 @@ async function requestPlaySource(
     params.set('high_quality', '1');
   }
 
-  const payload = await fetchJson<ApiEnvelope<RawPlaySource>>(
-    getBiliApiUrl(`/x/player/playurl?${params.toString()}`),
-  );
-  const data = unwrapData(payload);
+  const result = await requester(params);
+  const data = result.data;
   const firstCandidateUrl = getPlayCandidateUrls(data.durl?.[0])[0]
     ?? getDashCandidateUrls(data.dash?.video?.[0])[0]
     ?? '';
 
+  traceEntry.source = result.source;
   traceEntry.resultQuality = Number(data.quality ?? 0) || null;
   traceEntry.resultFormat = String(data.format ?? '');
   traceEntry.resultHost = getUrlHost(firstCandidateUrl);
   traceEntry.resultPlatformHint = readUrlHint(firstCandidateUrl, 'platform');
   traceEntry.resultFormatHint = readUrlHint(firstCandidateUrl, 'f');
+  traceEntry.relayQuality = result.relayMeta?.quality ?? null;
+  traceEntry.relayFormat = result.relayMeta?.format ?? null;
+  traceEntry.relayHost = result.relayMeta?.host ?? null;
+  traceEntry.relayPlatformHint = result.relayMeta?.platformHint ?? null;
+  traceEntry.relayFormatHint = result.relayMeta?.formatHint ?? null;
 
   return data;
 }
@@ -1114,12 +1126,122 @@ const COMPATIBLE_REQUEST_VARIANTS: Array<{
   },
 ];
 
-async function requestDashPlaySource(bvid: string, cid: number, quality: number) {
+type PlayurlRequestResult = {
+  data: RawPlaySource;
+  source: 'direct' | 'relay';
+  relayMeta?: RelayPlayurlMeta;
+};
+
+type PlayurlRequester = (params: URLSearchParams) => Promise<PlayurlRequestResult>;
+
+type PlayurlRequesterResolution = {
+  source: 'direct' | 'relay';
+  fallbackReason: string | null;
+  relayStatus: PlaySource['relayStatus'];
+  request: PlayurlRequester;
+};
+
+function createDirectPlayurlRequester(
+  relayStatus: PlaySource['relayStatus'],
+  fallbackReason: string | null,
+): PlayurlRequesterResolution {
+  return {
+    source: 'direct',
+    fallbackReason,
+    relayStatus,
+    request: async (params) => {
+      const payload = await fetchJson<ApiEnvelope<RawPlaySource>>(
+        getBiliApiUrl(`/x/player/playurl?${params.toString()}`),
+      );
+      return {
+        data: unwrapData(payload),
+        source: 'direct',
+      };
+    },
+  };
+}
+
+function createRelayPlayurlRequester(
+  relayStatus: PlaySource['relayStatus'],
+  settings: ReturnType<typeof readRelaySettings>,
+): PlayurlRequesterResolution {
+  return {
+    source: 'relay',
+    fallbackReason: null,
+    relayStatus,
+    request: async (params) => {
+      const payload = await fetchRelayPlayurl<RawPlaySource>(settings, params);
+      return {
+        data: payload.data,
+        source: 'relay',
+        relayMeta: payload.relay,
+      };
+    },
+  };
+}
+
+async function resolvePlayurlRequester(): Promise<PlayurlRequesterResolution> {
+  const settings = readRelaySettings();
+  const baseRelayStatus: PlaySource['relayStatus'] = {
+    enabled: settings.enabled,
+    configured: Boolean(settings.host),
+    healthOk: null,
+    authState: settings.enabled ? 'not-configured' : 'disabled',
+    relayMid: null,
+    expectedMid: null,
+    autoSyncTriggered: false,
+    autoSyncReason: null,
+  };
+
+  if (!settings.enabled || !settings.host) {
+    return createDirectPlayurlRequester(baseRelayStatus, settings.enabled ? 'relay not configured' : null);
+  }
+
+  let profile: UserProfile | null = null;
+  try {
+    profile = await fetchCurrentUserProfile();
+  } catch {
+    profile = null;
+  }
+
+  try {
+    const ensure = await ensureRelaySession(settings, profile, readRelayAuthMaterial(), 'play-request');
+    const relayStatus: PlaySource['relayStatus'] = {
+      enabled: settings.enabled,
+      configured: true,
+      healthOk: ensure.healthOk,
+      authState: ensure.authState,
+      relayMid: ensure.relayMid,
+      expectedMid: ensure.expectedMid,
+      autoSyncTriggered: ensure.autoSyncTriggered,
+      autoSyncReason: ensure.autoSyncReason,
+    };
+
+    if (!ensure.usable) {
+      return createDirectPlayurlRequester(relayStatus, ensure.fallbackReason);
+    }
+
+    return createRelayPlayurlRequester(relayStatus, settings);
+  } catch {
+    return createDirectPlayurlRequester({
+      ...baseRelayStatus,
+      configured: true,
+      authState: 'sync-failed',
+    }, 'relay request failed');
+  }
+}
+
+async function requestDashPlaySource(
+  requester: PlayurlRequester,
+  bvid: string,
+  cid: number,
+  quality: number,
+) {
   const requestTrace: PlayRequestTrace[] = [];
 
   for (const fnval of DASH_FNVAL_CANDIDATES) {
     try {
-      const data = await requestPlaySource(bvid, cid, quality, fnval, {
+      const data = await requestPlaySource(requester, bvid, cid, quality, fnval, {
         trace: requestTrace,
       });
       if (data.dash?.video?.length) {
@@ -1140,6 +1262,7 @@ async function requestDashPlaySource(bvid: string, cid: number, quality: number)
 }
 
 async function fetchCompatibleSources(
+  requester: PlayurlRequester,
   bvid: string,
   cid: number,
   qualities: PlayQualityOption[],
@@ -1155,7 +1278,7 @@ async function fetchCompatibleSources(
   for (const variant of COMPATIBLE_REQUEST_VARIANTS) {
     for (const quality of preferredQualities) {
       try {
-        const data = await requestPlaySource(bvid, cid, quality, variant.fnval, {
+        const data = await requestPlaySource(requester, bvid, cid, quality, variant.fnval, {
           platform: variant.platform,
           highQuality: variant.highQuality,
           trace: requestTrace,
@@ -1266,11 +1389,37 @@ function describePlayQualityReason(input: {
 }
 
 export async function fetchPlaySource(bvid: string, cid: number, quality = 80): Promise<PlaySource> {
-  const dashResult = await requestDashPlaySource(bvid, cid, quality);
+  const preferredRequester = await resolvePlayurlRequester();
+
+  try {
+    return await fetchPlaySourceWithRequester(preferredRequester, bvid, cid, quality);
+  } catch (error) {
+    if (preferredRequester.source !== 'relay' || !(error instanceof RelayApiError)) {
+      throw error;
+    }
+
+    const fallbackReason = mapRelayErrorToFallbackReason(error);
+    const directRequester = createDirectPlayurlRequester({
+      ...preferredRequester.relayStatus,
+      authState: preferredRequester.relayStatus.authState === 'synced'
+        ? 'sync-failed'
+        : preferredRequester.relayStatus.authState,
+    }, fallbackReason);
+    return fetchPlaySourceWithRequester(directRequester, bvid, cid, quality);
+  }
+}
+
+async function fetchPlaySourceWithRequester(
+  requester: PlayurlRequesterResolution,
+  bvid: string,
+  cid: number,
+  quality: number,
+): Promise<PlaySource> {
+  const dashResult = await requestDashPlaySource(requester.request, bvid, cid, quality);
   const dashData = dashResult.data;
   if (!dashData) {
     const directRequestTrace: PlayRequestTrace[] = [];
-    const durlData = await requestPlaySource(bvid, cid, quality, 0, {
+    const durlData = await requestPlaySource(requester.request, bvid, cid, quality, 0, {
       trace: directRequestTrace,
     });
     const candidateUrls = getPlayCandidateUrls(durlData.durl?.[0]);
@@ -1284,6 +1433,9 @@ export async function fetchPlaySource(bvid: string, cid: number, quality = 80): 
     const qualityLimitReason = getQualityLimitReason(qualities, quality, currentQuality);
     return {
       mode: 'durl',
+      playurlSource: requester.source,
+      playurlFallbackReason: requester.fallbackReason,
+      relayStatus: requester.relayStatus,
       qualityLabel: returnedQualityLabel,
       currentQuality,
       returnedQuality: currentQuality,
@@ -1326,6 +1478,7 @@ export async function fetchPlaySource(bvid: string, cid: number, quality = 80): 
   const audioStreams = buildAudioStreams(dashData);
   const returnedQuality = getReturnedDashQuality(dashData, quality, videoStreams);
   const compatibleResult = await fetchCompatibleSources(
+    requester.request,
     bvid,
     cid,
     qualities,
@@ -1345,6 +1498,9 @@ export async function fetchPlaySource(bvid: string, cid: number, quality = 80): 
   const qualityLimitReason = getQualityLimitReason(qualities, quality, currentQuality);
   return {
     mode: videoStreams.length > 0 ? 'dash' : 'durl',
+    playurlSource: requester.source,
+    playurlFallbackReason: requester.fallbackReason,
+    relayStatus: requester.relayStatus,
     qualityLabel,
     currentQuality,
     returnedQuality: currentQuality,
@@ -1377,6 +1533,23 @@ export async function fetchPlaySource(bvid: string, cid: number, quality = 80): 
   };
 }
 
+function mapRelayErrorToFallbackReason(error: RelayApiError) {
+  switch (error.kind) {
+    case 'auth_missing':
+      return 'relay auth missing';
+    case 'auth_expired':
+      return 'relay auth expired';
+    case 'auth_mismatch':
+      return 'relay auth mismatch';
+    case 'bad_payload':
+      return 'relay bad payload';
+    case 'timeout':
+      return 'relay timeout';
+    default:
+      return 'relay request failed';
+  }
+}
+
 export async function createWebQrLogin() {
   const payload = await fetchJson<ApiEnvelope<{ url: string; qrcode_key: string }>>(
     getBiliPassportUrl('/x/passport-login/web/qrcode/generate'),
@@ -1389,10 +1562,23 @@ export async function createWebQrLogin() {
 }
 
 export async function pollWebQrLogin(key: string) {
-  const payload = await fetchJson<ApiEnvelope<{ code: number; message: string }>>(
+  const payload = await fetchJson<ApiEnvelope<{
+    code: number;
+    message: string;
+    url?: string;
+    refresh_token?: string;
+    timestamp?: number;
+  }>>(
     getBiliPassportUrl(`/x/passport-login/web/qrcode/poll?qrcode_key=${encodeURIComponent(key)}`),
   );
-  return unwrapData(payload);
+  const data = unwrapData(payload);
+  return {
+    code: data.code,
+    message: data.message,
+    loginUrl: typeof data.url === 'string' ? data.url : '',
+    refreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : '',
+    timestamp: Number(data.timestamp ?? 0) || null,
+  };
 }
 
 export async function fetchCurrentUserProfile(): Promise<UserProfile> {
