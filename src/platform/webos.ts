@@ -19,6 +19,10 @@ export type WebOsDeviceInfo = {
   [key: string]: unknown;
 };
 
+type KeyboardStateChangeDetail = {
+  visibility?: boolean;
+};
+
 export function isWebOSAvailable() {
   return typeof window !== 'undefined' && typeof window.webOS !== 'undefined';
 }
@@ -41,6 +45,18 @@ export function platformBack() {
 
 export function getKeyboardVisible() {
   return window.webOS?.keyboard?.isShowing?.() ?? false;
+}
+
+export function observeKeyboardVisibility(listener: (visible: boolean) => void) {
+  const handleKeyboardStateChange = (event: Event) => {
+    const detail = (event as CustomEvent<KeyboardStateChangeDetail>).detail;
+    listener(Boolean(detail?.visibility));
+  };
+
+  document.addEventListener('keyboardStateChange', handleKeyboardStateChange, false);
+  return () => {
+    document.removeEventListener('keyboardStateChange', handleKeyboardStateChange, false);
+  };
 }
 
 export function readDeviceInfo() {

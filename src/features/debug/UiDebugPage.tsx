@@ -604,6 +604,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                     value: '192.168.50.10',
                     placeholder: '例如 192.168.50.10',
                     readOnly: true,
+                    valueFilter: 'ip-address',
                     onChange: () => {},
                   },
                   {
@@ -612,7 +613,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                     value: '19091',
                     placeholder: '19091',
                     readOnly: true,
-                    inputMode: 'numeric',
+                    valueFilter: 'digits',
                     onChange: () => {},
                   },
                 ]}

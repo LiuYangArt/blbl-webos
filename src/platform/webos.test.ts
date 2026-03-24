@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   getKeyboardVisible,
   isWebOSAvailable,
+  observeKeyboardVisibility,
   platformBack,
   readDeviceInfo,
 } from './webos';
@@ -53,6 +54,23 @@ describe('webos', () => {
       },
     };
     expect(getKeyboardVisible()).toBe(true);
+  });
+
+  it('能监听官方 keyboardStateChange 事件', () => {
+    const keyboardVisibilityChange = vi.fn();
+    const stop = observeKeyboardVisibility(keyboardVisibilityChange);
+
+    document.dispatchEvent(new CustomEvent('keyboardStateChange', {
+      detail: { visibility: true },
+    }));
+    document.dispatchEvent(new CustomEvent('keyboardStateChange', {
+      detail: { visibility: false },
+    }));
+
+    stop();
+
+    expect(keyboardVisibilityChange).toHaveBeenNthCalledWith(1, true);
+    expect(keyboardVisibilityChange).toHaveBeenNthCalledWith(2, false);
   });
 
   it('readDeviceInfo 在无能力时返回 null，有能力时返回设备信息', async () => {

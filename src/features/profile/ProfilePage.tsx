@@ -5,6 +5,7 @@ import { FocusButton } from '../../components/FocusButton';
 import { SearchComposer } from '../../components/SearchComposer';
 import { SectionHeader } from '../../components/SectionHeader';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
+import type { FocusSectionScrollConfig } from '../../platform/focus';
 import { PageStatus } from '../shared/PageStatus';
 import {
   ensureRelaySession,
@@ -20,6 +21,12 @@ type ProfilePageProps = {
   onOpenHistory: () => void;
   onOpenLater: () => void;
   onOpenFavorites: () => void;
+};
+
+const RELAY_SETTINGS_SCROLL: FocusSectionScrollConfig = {
+  mode: 'comfort-zone',
+  anchor: 'focused-element',
+  preserveHeaderWhenFirstRowFocused: false,
 };
 
 export function ProfilePage({
@@ -115,8 +122,7 @@ export function ProfilePage({
   }, []);
 
   const handleRelayPortChange = useCallback((value: string) => {
-    const sanitized = value.replace(/[^\d]/g, '');
-    setRelayPortInput(sanitized);
+    setRelayPortInput(value);
     setRelayHealth('unknown');
     setRelayStatus(null);
     setRelayMessage(relayHostInput.trim()
@@ -285,7 +291,7 @@ export function ProfilePage({
         className="content-section relay-settings-panel"
         defaultElement="relay-host-input"
         leaveFor={{ left: '@side-nav' }}
-        scroll={CONTENT_FIRST_ROW_SCROLL}
+        scroll={RELAY_SETTINGS_SCROLL}
       >
         <SectionHeader
           title="Playurl Relay"
@@ -307,6 +313,8 @@ export function ProfilePage({
                 focusUp: '@profile-actions',
                 focusRight: 'relay-port-input',
                 focusDown: 'relay-test-connection',
+                maxLength: 15,
+                valueFilter: 'ip-address',
                 onChange: handleRelayHostChange,
               },
               {
@@ -319,7 +327,8 @@ export function ProfilePage({
                 focusUp: '@profile-actions',
                 focusLeft: 'relay-host-input',
                 focusDown: 'relay-sync-current-account',
-                inputMode: 'numeric',
+                maxLength: 5,
+                valueFilter: 'digits',
                 onChange: handleRelayPortChange,
               },
             ]}
