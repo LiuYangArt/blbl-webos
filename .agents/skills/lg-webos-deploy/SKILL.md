@@ -26,6 +26,7 @@ description: Use when you need to package, reinstall, verify the actual installe
 ```bash
 npm run webos:doctor
 npm run webos:package
+npm run webos:update -- --device <deviceName>
 npm run webos:reinstall -- --device <deviceName>
 npm run webos:verify-install -- --device <deviceName>
 npm run webos:deploy -- --device <deviceName>
@@ -46,12 +47,15 @@ npm run webos:deploy -- --device <deviceName>
 
 1. `build:webos`
 2. `package`
-3. `reinstall`
+3. `update`
 4. 等待电视写盘与索引刷新
 5. `verify-install`
 6. `launch`
 
 只有在你明确要拆步骤排查时，才手动分开执行。
+
+这里的 `update` 指“覆盖安装新包，但尽量保留应用数据与登录态”。
+`reinstall` 才是“先卸载旧包再安装”的清洁重装路径，存在清空本地数据和登录态的风险。
 
 ## Simulator 调试规则
 
@@ -113,6 +117,7 @@ npm run webos:simulator
 以下命令禁止并行执行：
 
 - `webos:package`
+- `webos:update`
 - `webos:reinstall`
 - `webos:verify-install`
 - `webos:list`
@@ -120,14 +125,15 @@ npm run webos:simulator
 
 原因：
 
-- `webos:reinstall` 依赖刚刚生成的 IPK 文件
-- 如果 `package` 和 `reinstall` 并行跑，`reinstall` 很可能在新 IPK 生成前就开始执行
+- `webos:update` 和 `webos:reinstall` 都依赖刚刚生成的 IPK 文件
+- 如果 `package` 和安装步骤并行跑，安装很可能在新 IPK 生成前就开始执行
 - 即使 CLI 某一步显示成功，整个安装状态也会变得不可信
 
 结论：
 
 - 真机部署相关命令一律串行执行
 - 需要稳定流程时优先 `webos:deploy`
+- 日常更新优先 `webos:update`，不要把 `webos:reinstall` 当成默认安装方式
 
 ### 2. 不要把 CLI 的 `Success` 当成最终真相
 
@@ -159,7 +165,7 @@ npm run webos:verify-install -- --device <deviceName>
 1. 提升 `appinfo.json.version`
 2. 重新执行 `npm run webos:deploy -- --device <deviceName>`
 
-不要继续反复覆盖同版本包。
+不要继续反复覆盖同版本包；只有怀疑旧数据残留影响判断时，再改用 `webos:reinstall`。
 
 ### 4. 如果 Simulator 像旧包，先怀疑旧会话残留
 
@@ -194,8 +200,9 @@ npm run webos:verify-install -- --device <deviceName>
 
 - `npm run webos:verify-install`
 - `npm run webos:deploy`
+- `npm run webos:update`
 
-以后优先走这两个入口。
+以后优先走这三个入口。
 
 ## 关键经验
 
@@ -295,10 +302,10 @@ npm run webos:doctor
 npm run webos:package
 ```
 
-### 3. 清洁重装到电视
+### 3. 默认更新安装到电视（尽量保留数据）
 
 ```bash
-npm run webos:reinstall -- --device <deviceName>
+npm run webos:update -- --device <deviceName>
 ```
 
 ### 4. 等待电视完成写盘与索引刷新
@@ -316,6 +323,15 @@ npm run webos:verify-install -- --device <deviceName>
 ```bash
 npm run webos:launch -- --device <deviceName>
 ```
+
+### 7. 只有排障时才清洁重装到电视
+
+```bash
+npm run webos:reinstall -- --device <deviceName>
+```
+
+这条命令会先卸载旧包，再安装新包，可能导致本地数据和登录态丢失。
+如果走了这条路径，后续仍然要按 `等待 -> verify-install -> launch` 的顺序补完验证。
 
 ## 典型排障
 

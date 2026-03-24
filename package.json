@@ -18,6 +18,7 @@
     "webos:doctor": "node ./scripts/webos-cli.mjs doctor",
     "webos:package": "npm run build:webos && node ./scripts/webos-cli.mjs package",
     "webos:install": "node ./scripts/webos-cli.mjs install",
+    "webos:update": "node ./scripts/webos-cli.mjs update",
     "webos:reinstall": "node ./scripts/webos-cli.mjs reinstall",
     "webos:verify-install": "node ./scripts/webos-cli.mjs verify-installed-entry",
     "webos:deploy": "npm run build:webos && node ./scripts/webos-cli.mjs deploy",
