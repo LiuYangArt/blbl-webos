@@ -17,8 +17,10 @@ import {
   mapFavoriteItemToVideoCard,
   mapLaterItemToVideoCard,
 } from '../shared/videoListItems';
+import { pickImageUrls } from '../shared/videoListLoading';
 import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
+import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 import {
   FAVORITE_FOLDER_SECTION_ID,
   FAVORITE_VIDEO_SECTION_ID,
@@ -92,21 +94,32 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
     const matchedIndex = folders.data.findIndex((folder) => folder.id === activeFolderId);
     return matchedIndex >= 0 ? matchedIndex : 0;
   }, [activeFolderId, folders, mode]);
+  const isLaterReady = mode === 'later' && later.status === 'success';
+  const isFavoritesReady = mode === 'favorites'
+    && folders.status === 'success'
+    && (folders.data.length === 0 || favoriteItems.status === 'success');
+  const preloadItems = mode === 'later' ? later.items : favoriteItems.items;
+  const showLoadingGate = useVideoListPageLoading({
+    ready: isLaterReady || isFavoritesReady,
+    imageUrls: pickImageUrls(preloadItems, (item) => item.cover, 12),
+    overlayVisible: (mode === 'later' && later.status !== 'error')
+      || (mode === 'favorites' && folders.status !== 'error' && favoriteItems.status !== 'error'),
+  });
 
   if (mode === 'later') {
-    if (later.status !== 'success') {
-      if (later.status === 'error') {
-        return (
-          <PageStatus
-            title="稍后再看暂不可用"
-            description="通常是因为当前还没有有效登录态。"
-            actionLabel="去扫码登录"
-            onAction={onLogin}
-          />
-        );
-      }
+    if (later.status === 'error') {
+      return (
+        <PageStatus
+          title="稍后再看暂不可用"
+          description="通常是因为当前还没有有效登录态。"
+          actionLabel="去扫码登录"
+          onAction={onLogin}
+        />
+      );
+    }
 
-      return <PageStatus title="正在同步稍后再看" description="如果当前已有登录态，会自动读取账号数据。" />;
+    if (showLoadingGate || later.status !== 'success') {
+      return null;
     }
 
     const items = later.items.map((item) => createDirectVideoListItem(
@@ -132,19 +145,19 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
     );
   }
 
-  if (folders.status !== 'success') {
-    if (folders.status === 'error') {
-      return (
-        <PageStatus
-          title="收藏夹暂不可用"
-          description="通常是因为当前还没有有效登录态。"
-          actionLabel="去扫码登录"
-          onAction={onLogin}
-        />
-      );
-    }
+  if (folders.status === 'error') {
+    return (
+      <PageStatus
+        title="收藏夹暂不可用"
+        description="通常是因为当前还没有有效登录态。"
+        actionLabel="去扫码登录"
+        onAction={onLogin}
+      />
+    );
+  }
 
-    return <PageStatus title="正在同步收藏夹" description="如果当前已有登录态，会自动读取账号数据。" />;
+  if (showLoadingGate || folders.status !== 'success') {
+    return null;
   }
 
   if (folders.data.length === 0) {
@@ -158,19 +171,19 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
     );
   }
 
-  if (favoriteItems.status !== 'success') {
-    if (favoriteItems.status === 'error') {
-      return (
-        <PageStatus
-          title="收藏视频加载失败"
-          description={favoriteItems.error}
-          actionLabel="重新加载"
-          onAction={() => void favoriteItems.reload()}
-        />
-      );
-    }
+  if (favoriteItems.status === 'error') {
+    return (
+      <PageStatus
+        title="收藏视频加载失败"
+        description={favoriteItems.error}
+        actionLabel="重新加载"
+        onAction={() => void favoriteItems.reload()}
+      />
+    );
+  }
 
-    return <PageStatus title="正在加载收藏视频" description={activeFolder?.title ?? '准备收藏列表'} />;
+  if (showLoadingGate || favoriteItems.status !== 'success') {
+    return null;
   }
 
   const items = favoriteItems.items.map((item) => createDirectVideoListItem(

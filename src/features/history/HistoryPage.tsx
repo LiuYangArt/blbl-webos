@@ -2,9 +2,11 @@ import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
 import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchHistoryPage } from '../../services/api/bilibili';
+import { pickImageUrls } from '../shared/videoListLoading';
 import { createDirectVideoListItem, mapHistoryItemToVideoCard } from '../shared/videoListItems';
 import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
+import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type HistoryPageProps = {
   onLogin: () => void;
@@ -23,6 +25,12 @@ export function HistoryPage({ onLogin, onOpenPlayer }: HistoryPageProps) {
     }),
     getItemKey: (item) => item.kid,
   });
+  const historyReady = history.status === 'success';
+  const showLoadingGate = useVideoListPageLoading({
+    ready: historyReady,
+    imageUrls: pickImageUrls(history.items, (item) => item.cover, 12),
+    overlayVisible: history.status !== 'error' && auth.status === 'authenticated' && Boolean(auth.profile),
+  });
 
   if (auth.status !== 'authenticated' || !auth.profile) {
     return (
@@ -35,20 +43,21 @@ export function HistoryPage({ onLogin, onOpenPlayer }: HistoryPageProps) {
     );
   }
 
-  if (history.status !== 'success') {
-    if (history.status === 'error') {
-      return (
-        <PageStatus
-          title="历史记录暂不可用"
-          description={history.error}
-          actionLabel="重新加载"
-          onAction={() => {
-            void history.reload();
-          }}
-        />
-      );
-    }
-    return <PageStatus title="正在同步观看历史" description="如果你已登录，会自动读取云端历史记录。" />;
+  if (history.status === 'error') {
+    return (
+      <PageStatus
+        title="历史记录暂不可用"
+        description={history.error}
+        actionLabel="重新加载"
+        onAction={() => {
+          void history.reload();
+        }}
+      />
+    );
+  }
+
+  if (showLoadingGate || history.status !== 'success') {
+    return null;
   }
 
   const items = history.items;

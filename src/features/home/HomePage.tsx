@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAsyncData } from '../../app/useAsyncData';
 import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
@@ -24,6 +24,7 @@ import type {
   PgcSubscriptionItem,
   VideoCardItem,
 } from '../../services/api/types';
+import { pickImageUrls } from '../shared/videoListLoading';
 import {
   createResolvedVideoListItem,
   mapFollowItemToVideoCard,
@@ -32,6 +33,7 @@ import {
   resolveVideoPlayerPayload,
 } from '../shared/videoListItems';
 import { PageStatus } from '../shared/PageStatus';
+import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type HomePageProps = {
   isLoggedIn: boolean;
@@ -83,6 +85,7 @@ export function HomePage({
   onOpenHot,
 }: HomePageProps) {
   const { auth } = useAppStore();
+  const isAuthSettled = auth.status === 'authenticated' || auth.status === 'guest';
   const isAuthenticated = isLoggedIn && auth.status === 'authenticated';
   const viewerMid = auth.profile?.mid ?? 0;
   const [activeChannel, setActiveChannel] = useState<HomeChannelKey>(() => (
@@ -252,12 +255,30 @@ export function HomePage({
   }, [isAuthenticated, viewerMid]);
 
   const recommendedFeed = feed.status === 'success' ? feed.data.recommended : EMPTY_VIDEO_OPTIONAL;
+  const effectivePersonalizedItems = personalizedItems.length > 0 || recommendedFeed.data.length === 0
+    ? personalizedItems
+    : recommendedFeed.data;
+  const isHomeDataReady = isAuthSettled && feed.status === 'success';
+  const showLoadingGate = useVideoListPageLoading({
+    ready: isHomeDataReady,
+    imageUrls: isHomeDataReady
+      ? getHomeLoadingImageUrls({
+        activeChannel,
+        personalizedItems: effectivePersonalizedItems,
+        popularItems: feed.data.popular.data,
+        rankingItems: feed.data.ranking.data,
+        followingItems: feed.data.following.data.items,
+        subscriptionItems: [...feed.data.subscriptions.anime.data, ...feed.data.subscriptions.cinema.data],
+      })
+      : [],
+    overlayVisible: feed.status !== 'error',
+  });
   const personalizedBaseKey = useMemo(
     () => `${recommendedFeed.data[0]?.bvid ?? 'empty'}:${recommendedFeed.data.length}:${isAuthenticated ? 'auth' : 'guest'}`,
     [isAuthenticated, recommendedFeed.data],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (feed.status !== 'success') {
       return;
     }
@@ -355,18 +376,19 @@ export function HomePage({
     void loadMorePersonalized('initial');
   }, [activeChannel, feed.status, loadMorePersonalized, personalizedItems.length]);
 
-  if (feed.status !== 'success') {
-    if (feed.status === 'error') {
-      return (
-        <PageStatus
-          title="首页加载失败"
-          description={feed.error}
-          actionLabel="重试首页"
-          onAction={() => void feed.reload()}
-        />
-      );
-    }
-    return <PageStatus title="正在加载首页" description="准备推荐流、排行和登录态频道，稍等片刻。" />;
+  if (feed.status === 'error') {
+    return (
+      <PageStatus
+        title="首页加载失败"
+        description={feed.error}
+        actionLabel="重试首页"
+        onAction={() => void feed.reload()}
+      />
+    );
+  }
+
+  if (showLoadingGate || feed.status !== 'success') {
+    return null;
   }
 
   const { recommended, popular, ranking, following, subscriptions } = feed.data;
@@ -391,7 +413,7 @@ export function HomePage({
         onOpenPlayer,
         onOpenSearch,
         onOpenHot,
-        personalizedItems,
+        personalizedItems: effectivePersonalizedItems,
         hasMorePersonalized,
         isLoadingMorePersonalized,
         personalizedLoadMoreError,
@@ -457,7 +479,7 @@ function renderChannelContent(params: {
           isLoadingMore={isLoadingMorePersonalized}
           loadMoreError={personalizedLoadMoreError}
           onRequestMore={(trigger) => void onLoadMorePersonalized(trigger === 'manual' ? 'manual' : 'prefetch')}
-          visibilityMode="loaded"
+          visibilityMode="progressive"
           emptyState={recommended.error && personalizedItems.length === 0 ? (
             <>
               <InlineChannelNotice title="个性推荐暂时不可用" description={recommended.error} />
@@ -806,6 +828,39 @@ function mergeUniqueVideoCards(current: VideoCardItem[], incoming: VideoCardItem
   }
 
   return merged;
+}
+
+function getHomeLoadingImageUrls(params: {
+  activeChannel: HomeChannelKey;
+  personalizedItems: VideoCardItem[];
+  popularItems: VideoCardItem[];
+  rankingItems: VideoCardItem[];
+  followingItems: FollowingChannelData['items'];
+  subscriptionItems: PgcSubscriptionItem[];
+}) {
+  const {
+    activeChannel,
+    personalizedItems,
+    popularItems,
+    rankingItems,
+    followingItems,
+    subscriptionItems,
+  } = params;
+
+  switch (activeChannel) {
+    case 'personalized':
+      return pickImageUrls(personalizedItems, (item) => item.cover, 12);
+    case 'hot':
+      return pickImageUrls(popularItems, (item) => item.cover, 12);
+    case 'ranking':
+      return pickImageUrls(rankingItems, (item) => item.cover, 12);
+    case 'following':
+      return pickImageUrls(followingItems, (item) => item.cover, 6);
+    case 'subscriptions':
+      return pickImageUrls(subscriptionItems, (item) => item.latestEpisodeCover || item.cover, 12);
+    case 'live':
+      return [];
+  }
 }
 
 function buildHomePublicFeedError(errors: Array<string | null>) {

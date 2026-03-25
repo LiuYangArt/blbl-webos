@@ -8,9 +8,11 @@ import { SectionHeader } from '../../components/SectionHeader';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../../platform/focus';
 import { VideoGridSection } from '../../components/VideoGridSection';
 import { searchVideos } from '../../services/api/bilibili';
+import { pickImageUrls } from '../shared/videoListLoading';
 import { createResolvedVideoListItem, resolveVideoPlayerPayload } from '../shared/videoListItems';
 import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
+import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type SearchResultsPageProps = {
   keyword: string;
@@ -28,6 +30,12 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
     loadPage: (page) => searchVideos(keyword, page, 24),
     getItemKey: (item) => `${item.bvid}:${item.cid}`,
   });
+  const resultReady = result.status === 'success';
+  const showLoadingGate = useVideoListPageLoading({
+    ready: resultReady,
+    imageUrls: pickImageUrls(result.items, (item) => item.cover, 12),
+    overlayVisible: result.status !== 'error',
+  });
 
   usePageBackHandler(isComposerOpen ? () => {
     setComposerOpen(false);
@@ -43,18 +51,19 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
     onSubmit(normalized);
   };
 
-  if (result.status !== 'success') {
-    if (result.status === 'error') {
-      return (
-        <PageStatus
-          title="搜索失败"
-          description={result.error}
-          actionLabel="重新搜索"
-          onAction={() => void result.reload()}
-        />
-      );
-    }
-    return <PageStatus title="正在搜索视频" description={`关键词：${keyword}`} />;
+  if (result.status === 'error') {
+    return (
+      <PageStatus
+        title="搜索失败"
+        description={result.error}
+        actionLabel="重新搜索"
+        onAction={() => void result.reload()}
+      />
+    );
+  }
+
+  if (showLoadingGate || result.status !== 'success') {
+    return null;
   }
 
   const items = result.items;

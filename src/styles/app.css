@@ -126,6 +126,7 @@ button {
 }
 
 .tv-app-main {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -133,6 +134,13 @@ button {
   min-width: 0;
   padding: var(--tv-safe-y) var(--tv-safe-x) 48px 20px;
   overflow: hidden;
+}
+
+.tv-app-main__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
 }
 
 .tv-topbar {
@@ -206,6 +214,12 @@ button {
 .tv-page-content::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+.app-page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .focus-debug-ring {
@@ -282,7 +296,7 @@ button {
   overflow: hidden;
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 60;
   contain: paint;
   background:
     linear-gradient(180deg, rgba(28, 27, 28, 0.96), rgba(19, 19, 20, 0.94)),
@@ -516,6 +530,28 @@ button {
 
 .page-shell--home {
   contain: layout paint;
+}
+
+.video-list-loading-page {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100%;
+  background: #000;
+}
+
+.video-list-loading-page--overlay {
+  min-height: 100%;
+}
+
+.video-list-loading-page__text {
+  margin: 0;
+  color: #fff;
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
 }
 
 .player-page {
