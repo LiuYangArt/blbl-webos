@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 type UseVideoListLoadingGateOptions = {
   minDurationMs?: number;
@@ -11,7 +11,7 @@ export function useVideoListLoadingGate(ready: boolean, options?: UseVideoListLo
   const [showLoading, setShowLoading] = useState(!ready);
   const loadingStartedAtRef = useRef<number | null>(ready ? null : performance.now());
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!ready) {
       loadingStartedAtRef.current = performance.now();
       setShowLoading(true);

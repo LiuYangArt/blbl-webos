@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 
 export function useImageReadyGate(imageUrls: string[], enabled: boolean) {
   const normalizedUrls = useMemo(() => Array.from(new Set(
@@ -8,7 +8,7 @@ export function useImageReadyGate(imageUrls: string[], enabled: boolean) {
   )), [imageUrls]);
   const [ready, setReady] = useState(() => enabled && normalizedUrls.length === 0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) {
       setReady(false);
       return;

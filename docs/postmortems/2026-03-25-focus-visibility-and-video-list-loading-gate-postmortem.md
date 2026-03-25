@@ -124,3 +124,39 @@
    - 关键登录态已稳定
    - 首屏所需图片已就绪
    - 首帧不会再发生可见结构扩张
+
+## 11. Tab 切换 loading 慢一拍补充复盘（2026-03-25 晚）
+
+### 11.1 现象
+
+- 首页频道 Tab（`个性推荐 / 正在关注 / 订阅剧集 / 热门视频 / 排行`）切换时，用户会先看到频道内容出现，再看到 loading 覆盖层补上来
+- 主观体验是“先露内容再遮住”，切换反馈不连续，像卡顿或掉帧
+
+### 11.2 根因
+
+- loading 相关状态切换在 `useEffect` 中执行
+- `useEffect` 时机是首帧提交之后，导致内容已经先绘制到屏幕，随后才触发 loading gate/overlay
+- 具体涉及：
+  - `useImageReadyGate`
+  - `useVideoListLoadingGate`
+  - `useRouteLoadingOverlay`
+
+### 11.3 修复策略
+
+统一把“需要首帧生效”的 loading 状态更新前移到 `useLayoutEffect`：
+
+1. `useImageReadyGate`：Tab 或图片集合变化时，同帧先锁 gate，避免先露内容
+2. `useVideoListLoadingGate`：`ready=true -> false` 时，同帧打开 loading
+3. `useRouteLoadingOverlay`：overlay 注册前移，避免全局遮罩慢一拍
+
+### 11.4 防回归措施
+
+- 新增测试：`src/features/shared/useVideoListLoadingGate.test.tsx`
+- 断言点：`ready` 从 `true` 切到 `false` 后，loading gate 在同一帧立即为 `on`
+- 验证链路：`lint + test + typecheck + build` 全通过后，再执行真机 `webos:deploy` 与 `webos:verify-install`
+
+### 11.5 经验沉淀
+
+1. TV 端对“首帧时序”非常敏感，`effect` 与 `layout effect` 的差异会直接变成肉眼可见的体验问题
+2. “loading 是否存在”不够，需要验证“loading 出现是否早于内容绘制”
+3. 对首页这类频道切换场景，优先把 gate 时序作为基础稳定性约束，而不是仅依赖视觉遮罩兜底

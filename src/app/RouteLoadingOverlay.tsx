@@ -4,8 +4,8 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
 } from 'react';
@@ -58,7 +58,7 @@ export function useRouteLoadingOverlay(visible: boolean) {
   const context = useContext(RouteLoadingOverlayContext);
   const id = useId();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!context) {
       return undefined;
     }
