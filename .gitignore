@@ -16,5 +16,6 @@ src/generated/material-symbols-rounded-subset.woff2
 public/app-icon-master*.png
 _dev/real-tv-debug/
 _dev/simulator-debug/
+_dev/simulator-current.png
 notes.md
 task_plan.md
