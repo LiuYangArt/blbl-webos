@@ -3,7 +3,7 @@ import { REMOTE_KEYS } from './webos';
 
 export const REMOTE_INTENT_EVENT = 'tv-remote-intent';
 
-export type RemoteIntentAction = 'left' | 'right' | 'up' | 'down' | 'enter' | 'back';
+export type RemoteIntentAction = 'left' | 'right' | 'up' | 'down' | 'enter' | 'back' | 'play' | 'pause';
 
 export type RemoteIntentDetail = {
   action: RemoteIntentAction;
@@ -21,6 +21,8 @@ const handledKeys = new Set<number>([
   REMOTE_KEYS.DOWN,
   REMOTE_KEYS.ENTER,
   REMOTE_KEYS.BACK,
+  REMOTE_KEYS.PLAY,
+  REMOTE_KEYS.PAUSE,
 ]);
 const KEY_GUARD_MS = 140;
 
@@ -38,6 +40,10 @@ function mapKeyCodeToAction(keyCode: number): RemoteIntentAction | null {
       return 'enter';
     case REMOTE_KEYS.BACK:
       return 'back';
+    case REMOTE_KEYS.PLAY:
+      return 'play';
+    case REMOTE_KEYS.PAUSE:
+      return 'pause';
     default:
       return null;
   }

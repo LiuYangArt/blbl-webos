@@ -123,11 +123,11 @@ type PlayerPageProps = {
 };
 
 const CODEC_OPTIONS: VideoCodecPreference[] = ['auto', 'avc', 'hevc', 'av1'];
-const PLAYER_CHROME_HIDE_DELAY_MS = 3000;
 const PLAYER_LOAD_TIMEOUT_MS = 4500;
 const PLAYER_PROGRESS_PERSIST_INTERVAL_S = 5;
 const STRIP_PAGE_SIZE = 6;
 const PLAYER_CONTROL_SECTION_ID = 'player-controls';
+const PLAYER_TOGGLE_PLAY_FOCUS_ID = 'player-toggle-play';
 const PLAYER_SETTINGS_SECTION_ID = 'player-settings-drawer';
 const PLAYER_SUBTITLE_SECTION_ID = 'player-subtitle-drawer';
 const PLAYER_RECOMMENDATIONS_SECTION_ID = 'player-recommendations-strip';
@@ -197,7 +197,6 @@ export function PlayerPage({
   const [subtitleStyle, setSubtitleStyle] = useState<PlayerSubtitleStyleSettings>(() => readPlayerSettings().subtitleStyle);
   const [overlayMode, setOverlayMode] = useState<PlayerOverlayMode>('none');
   const [isChromeVisible, setIsChromeVisible] = useState(false);
-  const [chromeActivityTick, setChromeActivityTick] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progressView, setProgressView] = useState({ current: 0, duration: 0 });
   const [activeAttemptIndex, setActiveAttemptIndex] = useState(0);
@@ -569,12 +568,11 @@ export function PlayerPage({
     setActiveCandidateIndex(0);
   }, [playbackPlan]);
 
-  function revealPlayerChrome(focusControls: boolean): void {
+  function revealPlayerChrome(focusTarget: 'none' | 'controls' | 'toggle-play'): void {
     setOverlayMode('none');
     setIsChromeVisible(true);
-    setChromeActivityTick((previous) => previous + 1);
 
-    if (!focusControls) {
+    if (focusTarget === 'none') {
       return;
     }
 
@@ -583,6 +581,11 @@ export function PlayerPage({
     }
 
     chromeFocusTimeoutRef.current = window.setTimeout(() => {
+      if (focusTarget === 'toggle-play' && focusById(PLAYER_TOGGLE_PLAY_FOCUS_ID)) {
+        chromeFocusTimeoutRef.current = null;
+        return;
+      }
+
       focusSection(PLAYER_CONTROL_SECTION_ID);
       chromeFocusTimeoutRef.current = null;
     }, 0);
@@ -601,12 +604,10 @@ export function PlayerPage({
 
   function seekPlaybackBy(seconds: number): void {
     seekVideo(videoRef.current, seconds);
-    setChromeActivityTick((previous) => previous + 1);
   }
 
   function togglePlaybackFromRemote(): void {
     togglePlay(videoRef.current);
-    setChromeActivityTick((previous) => previous + 1);
   }
 
   function openSettingsOverlay(): void {
@@ -617,7 +618,6 @@ export function PlayerPage({
   function openSubtitleOverlay(): void {
     if (!hasSubtitleTracks) {
       setPlaybackNotice('当前视频暂无可用 CC 字幕');
-      setChromeActivityTick((previous) => previous + 1);
       return;
     }
 
@@ -629,7 +629,6 @@ export function PlayerPage({
     const authorMid = detail?.owner.mid ?? 0;
     if (authorMid <= 0) {
       setPlaybackNotice('当前视频缺少作者信息，暂时无法打开 UP 主页');
-      setChromeActivityTick((previous) => previous + 1);
       return;
     }
 
@@ -655,7 +654,6 @@ export function PlayerPage({
   function closeOverlayToChrome(): void {
     setOverlayMode('none');
     setIsChromeVisible(true);
-    setChromeActivityTick((previous) => previous + 1);
   }
 
   function openStripOverlay(mode: PlayerStripMode, page: number, slot: number): void {
@@ -724,7 +722,6 @@ export function PlayerPage({
     setReloadNonce(0);
     setOverlayMode('none');
     setIsChromeVisible(false);
-    setChromeActivityTick(0);
     setRecommendationPage(0);
     setEpisodePage(0);
     setPendingStripFocus(null);
@@ -848,30 +845,40 @@ export function PlayerPage({
       switch (remoteDecision) {
         case 'blur-controls':
           blurPlayerChromeFocus();
-          setChromeActivityTick((previous) => previous + 1);
           remoteEvent.preventDefault();
           return;
         case 'seek-backward':
-          revealPlayerChrome(false);
+          revealPlayerChrome('none');
           seekPlaybackBy(-10);
           remoteEvent.preventDefault();
           return;
         case 'seek-forward':
-          revealPlayerChrome(false);
+          revealPlayerChrome('none');
           seekPlaybackBy(10);
           remoteEvent.preventDefault();
           return;
-        case 'toggle-play':
-          revealPlayerChrome(false);
+        case 'toggle-play': {
+          const shouldFocusToggle = !videoRef.current?.paused;
+          revealPlayerChrome(shouldFocusToggle ? 'toggle-play' : 'none');
           togglePlaybackFromRemote();
           remoteEvent.preventDefault();
           return;
+        }
+        case 'play':
+          revealPlayerChrome('none');
+          playVideo(videoRef.current);
+          remoteEvent.preventDefault();
+          return;
+        case 'pause':
+          revealPlayerChrome('toggle-play');
+          pauseVideo(videoRef.current);
+          remoteEvent.preventDefault();
+          return;
         case 'focus-controls':
-          revealPlayerChrome(true);
+          revealPlayerChrome('controls');
           remoteEvent.preventDefault();
           return;
         case 'keep-alive':
-          setChromeActivityTick((previous) => previous + 1);
           return;
         case 'delegate':
         default:
@@ -891,22 +898,7 @@ export function PlayerPage({
     overlayMode,
     recommendationPage,
     related.length,
-    shouldShowPlayerChrome,
   ]);
-
-  useEffect(() => {
-    if (!isPlaying || !isChromeVisible || overlayMode !== 'none' || playbackError) {
-      return undefined;
-    }
-
-    const hideTimer = window.setTimeout(() => {
-      hidePlayerChrome();
-    }, PLAYER_CHROME_HIDE_DELAY_MS);
-
-    return () => {
-      window.clearTimeout(hideTimer);
-    };
-  }, [chromeActivityTick, isChromeVisible, isPlaying, overlayMode, playbackError]);
 
   useEffect(() => () => {
     if (chromeFocusTimeoutRef.current !== null) {
@@ -1172,6 +1164,7 @@ export function PlayerPage({
     const handlePause = () => {
       const shouldRevealChrome = shouldRevealChromeAfterPause(suppressPauseChromeRef.current);
       suppressPauseChromeRef.current = false;
+      setIsPlaying(false);
       if (!shouldRevealChrome) {
         return;
       }
@@ -1181,7 +1174,6 @@ export function PlayerPage({
       persistWatchProgress(current, duration, true);
       void reportHistoryHeartbeat('status', current, duration).catch(() => undefined);
       void reportHistoryFlush(current, duration, 'pause').catch(() => undefined);
-      setIsPlaying(false);
       setIsChromeVisible(true);
     };
 
@@ -1689,7 +1681,6 @@ export function PlayerPage({
                     current: normalizedTime,
                     duration: previous.duration || Math.floor(videoRef.current?.duration ?? 0),
                   }));
-                  setChromeActivityTick((previous) => previous + 1);
                 }}
               />
 
@@ -1707,7 +1698,6 @@ export function PlayerPage({
                 onForward={() => seekPlaybackBy(10)}
                 onRestartFromBeginning={() => {
                   restartVideo(videoRef.current);
-                  setChromeActivityTick((previous) => previous + 1);
                 }}
                 onRefresh={() => {
                   const currentTime = Math.floor(videoRef.current?.currentTime ?? resumeProgressRef.current);
@@ -1715,7 +1705,7 @@ export function PlayerPage({
                   setPlaybackNotice('正在按当前策略重新加载播放器');
                   setActiveCandidateIndex(0);
                   setReloadNonce((previous) => previous + 1);
-                  revealPlayerChrome(false);
+                  revealPlayerChrome('none');
                 }}
                 onOpenEpisodes={openEpisodesOverlay}
                 onOpenAuthor={openAuthorSpace}
@@ -1974,6 +1964,22 @@ function togglePlay(video: HTMLVideoElement | null): void {
 
   if (video.paused) {
     void video.play();
+    return;
+  }
+
+  video.pause();
+}
+
+function playVideo(video: HTMLVideoElement | null): void {
+  if (!video || !video.paused) {
+    return;
+  }
+
+  void video.play();
+}
+
+function pauseVideo(video: HTMLVideoElement | null): void {
+  if (!video || video.paused) {
     return;
   }
 

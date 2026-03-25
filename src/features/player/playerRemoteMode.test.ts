@@ -8,6 +8,11 @@ describe('playerRemoteMode', () => {
     expect(decidePlayerChromeRemoteAction('enter', false)).toBe('toggle-play');
   });
 
+  it('专用播放/暂停键直接映射到播放器动作', () => {
+    expect(decidePlayerChromeRemoteAction('play', false)).toBe('play');
+    expect(decidePlayerChromeRemoteAction('pause', false)).toBe('pause');
+  });
+
   it('默认播放态下上下键进入 OSD 控件区', () => {
     expect(decidePlayerChromeRemoteAction('up', false)).toBe('focus-controls');
     expect(decidePlayerChromeRemoteAction('down', false)).toBe('focus-controls');
@@ -19,5 +24,10 @@ describe('playerRemoteMode', () => {
     expect(decidePlayerChromeRemoteAction('left', true)).toBe('delegate');
     expect(decidePlayerChromeRemoteAction('right', true)).toBe('delegate');
     expect(decidePlayerChromeRemoteAction('enter', true)).toBe('delegate');
+  });
+
+  it('OSD 控件已聚焦时，专用播放/暂停键仍然生效', () => {
+    expect(decidePlayerChromeRemoteAction('play', true)).toBe('play');
+    expect(decidePlayerChromeRemoteAction('pause', true)).toBe('pause');
   });
 });

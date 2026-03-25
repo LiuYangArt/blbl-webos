@@ -4,10 +4,20 @@ export type PlayerChromeRemoteDecision =
   | 'seek-backward'
   | 'seek-forward'
   | 'toggle-play'
+  | 'play'
+  | 'pause'
   | 'focus-controls'
   | 'blur-controls'
   | 'delegate'
   | 'keep-alive';
+
+function mapMediaRemoteAction(action: RemoteIntentAction): 'play' | 'pause' | null {
+  if (action === 'play' || action === 'pause') {
+    return action;
+  }
+
+  return null;
+}
 
 export function decidePlayerChromeRemoteAction(
   action: RemoteIntentAction,
@@ -16,6 +26,11 @@ export function decidePlayerChromeRemoteAction(
   if (controlsFocused) {
     if (action === 'up' || action === 'down') {
       return 'blur-controls';
+    }
+
+    const mediaAction = mapMediaRemoteAction(action);
+    if (mediaAction) {
+      return mediaAction;
     }
 
     return 'delegate';
@@ -32,6 +47,6 @@ export function decidePlayerChromeRemoteAction(
     case 'down':
       return 'focus-controls';
     default:
-      return 'keep-alive';
+      return mapMediaRemoteAction(action) ?? 'keep-alive';
   }
 }
