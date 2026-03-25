@@ -17,6 +17,7 @@ export type RelayAuthMaterial = {
   uname: string;
   vip: boolean;
   capturedAt: number;
+  csrfToken?: string;
 };
 
 const STORAGE_KEYS = {
@@ -66,14 +67,17 @@ export function readRelayAuthMaterial(): RelayAuthMaterial | null {
     uname: typeof stored.uname === 'string' ? stored.uname : '',
     vip: Boolean(stored.vip),
     capturedAt: Number(stored.capturedAt ?? 0) || Date.now(),
+    csrfToken: resolveStoredCsrfToken(stored) || undefined,
   };
 }
 
 export function writeRelayAuthMaterial(material: RelayAuthMaterial) {
+  const csrfToken = material.csrfToken?.trim() || extractLoginUrlCookies(material.loginUrl).bili_jct || '';
   writeJsonStorage(STORAGE_KEYS.authMaterial, {
     ...material,
     loginUrl: material.loginUrl.trim(),
     refreshToken: material.refreshToken.trim(),
+    ...(csrfToken ? { csrfToken } : {}),
   });
 }
 
@@ -204,4 +208,35 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
     return fallback;
   }
   return Math.min(max, Math.max(min, Math.round(numeric)));
+}
+
+function resolveStoredCsrfToken(stored: Partial<RelayAuthMaterial>) {
+  if (typeof stored.csrfToken === 'string' && stored.csrfToken.trim()) {
+    return stored.csrfToken.trim();
+  }
+
+  const loginUrl = typeof stored.loginUrl === 'string' ? stored.loginUrl : '';
+  return extractLoginUrlCookies(loginUrl).bili_jct || '';
+}
+
+export function extractLoginUrlCookies(loginUrl: string) {
+  const trimmed = loginUrl.trim();
+  if (!trimmed) {
+    return {};
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const params = parsed.searchParams;
+    const cookies: Record<string, string> = {};
+    for (const name of ['SESSDATA', 'bili_jct', 'DedeUserID', 'DedeUserID__ckMd5', 'buvid3', 'buvid4']) {
+      const value = params.get(name)?.trim();
+      if (value) {
+        cookies[name] = value;
+      }
+    }
+    return cookies;
+  } catch {
+    return {};
+  }
 }

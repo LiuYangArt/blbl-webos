@@ -181,6 +181,104 @@ func TestRelaySyncAcceptsCookiesEmbeddedInLoginURL(t *testing.T) {
 	}
 }
 
+func TestRelayHistoryEndpointsForwardCookiesAndFormFields(t *testing.T) {
+	t.Helper()
+
+	var heartbeatCookie string
+	var heartbeatBody string
+	var reportCookie string
+	var reportBody string
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/x/web-interface/nav":
+			if !strings.Contains(request.Header.Get("Cookie"), "SESSDATA=query-sess") {
+				http.Error(writer, `{"code":-101,"message":"账号未登录"}`, http.StatusOK)
+				return
+			}
+			_, _ = writer.Write([]byte(`{"code":0,"message":"0","data":{"mid":654321,"uname":"Query 用户","vip_label":{"text":""}}}`))
+		case "/x/web-interface/nav/stat":
+			_, _ = writer.Write([]byte(`{"code":0,"message":"0","data":{}}`))
+		case "/x/click-interface/web/heartbeat":
+			heartbeatCookie = request.Header.Get("Cookie")
+			body, _ := io.ReadAll(request.Body)
+			heartbeatBody = string(body)
+			_, _ = writer.Write([]byte(`{"code":0,"message":"0","data":null}`))
+		case "/x/v2/history/report":
+			reportCookie = request.Header.Get("Cookie")
+			body, _ := io.ReadAll(request.Body)
+			reportBody = string(body)
+			_, _ = writer.Write([]byte(`{"code":0,"message":"0","data":null}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer upstream.Close()
+
+	stateDir := t.TempDir()
+	config := Config{
+		Host:            "127.0.0.1",
+		Port:            0,
+		StateDir:        stateDir,
+		RequestTimeout:  2 * time.Second,
+		UserAgent:       "relay-test",
+		BiliAPIBaseURL:  upstream.URL,
+		BiliPassportURL: upstream.URL,
+	}
+
+	store, err := NewStateStore(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := NewServer(&config, store, NewBilibiliClient(config), log.New(io.Discard, "", 0))
+	app := httptest.NewServer(server.routes())
+	defer app.Close()
+
+	syncBody := map[string]any{
+		"loginUrl":    upstream.URL + "/x/passport-login/web/crossDomain?SESSDATA=query-sess&DedeUserID=654321&bili_jct=query-csrf&DedeUserID__ckMd5=query-md5",
+		"completedAt": time.Now().UnixMilli(),
+		"expectedMid": 654321,
+	}
+
+	syncResponse := doJSONRequest(t, app.URL+"/api/auth/sync", "", syncBody)
+	if syncResponse.StatusCode != http.StatusOK {
+		t.Fatalf("sync failed: %s", syncResponse.Body)
+	}
+
+	heartbeatResponse := doJSONRequest(t, app.URL+"/api/history/heartbeat", "", map[string]any{
+		"aid":        1001,
+		"bvid":       "BV1history",
+		"cid":        2002,
+		"playedTime": 22,
+	})
+	if heartbeatResponse.StatusCode != http.StatusOK {
+		t.Fatalf("heartbeat failed: %s", heartbeatResponse.Body)
+	}
+
+	reportResponse := doJSONRequest(t, app.URL+"/api/history/report", "", map[string]any{
+		"aid":      1001,
+		"cid":      2002,
+		"progress": 88,
+	})
+	if reportResponse.StatusCode != http.StatusOK {
+		t.Fatalf("history report failed: %s", reportResponse.Body)
+	}
+
+	if !strings.Contains(heartbeatCookie, "SESSDATA=query-sess") || !strings.Contains(heartbeatCookie, "bili_jct=query-csrf") {
+		t.Fatalf("unexpected heartbeat cookie header: %s", heartbeatCookie)
+	}
+	if !strings.Contains(heartbeatBody, "aid=1001") || !strings.Contains(heartbeatBody, "bvid=BV1history") || !strings.Contains(heartbeatBody, "cid=2002") || !strings.Contains(heartbeatBody, "played_time=22") || !strings.Contains(heartbeatBody, "csrf=query-csrf") {
+		t.Fatalf("unexpected heartbeat body: %s", heartbeatBody)
+	}
+	if !strings.Contains(reportCookie, "SESSDATA=query-sess") || !strings.Contains(reportCookie, "bili_jct=query-csrf") {
+		t.Fatalf("unexpected report cookie header: %s", reportCookie)
+	}
+	if !strings.Contains(reportBody, "aid=1001") || !strings.Contains(reportBody, "cid=2002") || !strings.Contains(reportBody, "progress=88") || !strings.Contains(reportBody, "csrf=query-csrf") {
+		t.Fatalf("unexpected report body: %s", reportBody)
+	}
+}
+
 func TestRelayRequiresToken(t *testing.T) {
 	config := Config{
 		AccessToken:     "token",

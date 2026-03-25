@@ -1,6 +1,8 @@
 import type { ApiEnvelope } from './types';
 
 type JsonRecord = Record<string, unknown>;
+type FormPrimitive = string | number | boolean;
+type FormValue = FormPrimitive | null | undefined;
 
 const BILI_API_ORIGIN = import.meta.env.DEV ? '/__bili_api' : 'https://api.bilibili.com';
 const BILI_PASSPORT_ORIGIN = import.meta.env.DEV ? '/__bili_passport' : 'https://passport.bilibili.com';
@@ -54,6 +56,58 @@ export async function fetchJson<T extends JsonRecord | ApiEnvelope<unknown>>(url
   }
 
   return response.json() as Promise<T>;
+}
+
+export async function postForm<T extends JsonRecord | ApiEnvelope<unknown>>(
+  url: string,
+  body: Record<string, FormValue>,
+  init?: RequestInit,
+) {
+  const form = new URLSearchParams();
+
+  Object.entries(body).forEach(([key, value]) => {
+    if (value === null || value === undefined) {
+      return;
+    }
+    form.set(key, String(value));
+  });
+
+  return fetchJson<T>(url, {
+    ...init,
+    method: 'POST',
+    body: form,
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      ...init?.headers,
+    },
+  });
+}
+
+export function readCookieValue(name: string) {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const prefix = `${name}=`;
+  const matched = document.cookie
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix));
+
+  if (!matched) {
+    return null;
+  }
+
+  const rawValue = matched.slice(prefix.length).trim();
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(rawValue);
+  } catch {
+    return rawValue;
+  }
 }
 
 export function formatDisplayError(error: unknown, context?: string) {

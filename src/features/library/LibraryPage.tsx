@@ -176,6 +176,7 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
     `${item.bvid}:${item.cid}`,
     mapFavoriteItemToVideoCard(item, activeFolder?.title),
     {
+      aid: item.aid,
       bvid: item.bvid,
       cid: item.cid,
       title: item.title,

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -214,6 +215,25 @@ type RelayPlayurlEnvelope struct {
 	Relay   RelayPlayurlMeta `json:"relay"`
 }
 
+type RelayMutationEnvelope struct {
+	Ok      bool `json:"ok"`
+	Code    int  `json:"code"`
+	Message string `json:"message"`
+}
+
+type RelayHeartbeatInput struct {
+	Aid        int64
+	Bvid       string
+	Cid        int64
+	PlayedTime int64
+}
+
+type RelayHistoryReportInput struct {
+	Aid      int64
+	Cid      int64
+	Progress int64
+}
+
 func (c *BilibiliClient) FetchPlayURL(ctx context.Context, cookies map[string]string, rawQuery string) (RelayPlayurlEnvelope, error) {
 	body, err := c.getBytes(ctx, c.apiBaseURL+"/x/player/playurl?"+rawQuery, cookies)
 	if err != nil {
@@ -245,6 +265,47 @@ func (c *BilibiliClient) FetchPlayURL(ctx context.Context, cookies map[string]st
 		Data:    upstream.Data,
 		Relay:   meta,
 	}, nil
+}
+
+func (c *BilibiliClient) ReportVideoHeartbeat(ctx context.Context, cookies map[string]string, input RelayHeartbeatInput) (RelayMutationEnvelope, error) {
+	csrfToken, err := requireCSRFCookie(cookies)
+	if err != nil {
+		return RelayMutationEnvelope{}, err
+	}
+
+	form := url.Values{}
+	if input.Aid > 0 {
+		form.Set("aid", strconv.FormatInt(input.Aid, 10))
+	}
+	form.Set("bvid", strings.TrimSpace(input.Bvid))
+	form.Set("cid", strconv.FormatInt(input.Cid, 10))
+	form.Set("played_time", strconv.FormatInt(input.PlayedTime, 10))
+	form.Set("csrf", csrfToken)
+
+	body, err := c.postFormBytes(ctx, c.apiBaseURL+"/x/click-interface/web/heartbeat", cookies, form)
+	if err != nil {
+		return RelayMutationEnvelope{}, err
+	}
+	return parseRelayMutation(body, "heartbeat")
+}
+
+func (c *BilibiliClient) ReportHistoryProgress(ctx context.Context, cookies map[string]string, input RelayHistoryReportInput) (RelayMutationEnvelope, error) {
+	csrfToken, err := requireCSRFCookie(cookies)
+	if err != nil {
+		return RelayMutationEnvelope{}, err
+	}
+
+	form := url.Values{}
+	form.Set("aid", strconv.FormatInt(input.Aid, 10))
+	form.Set("cid", strconv.FormatInt(input.Cid, 10))
+	form.Set("progress", strconv.FormatInt(input.Progress, 10))
+	form.Set("csrf", csrfToken)
+
+	body, err := c.postFormBytes(ctx, c.apiBaseURL+"/x/v2/history/report", cookies, form)
+	if err != nil {
+		return RelayMutationEnvelope{}, err
+	}
+	return parseRelayMutation(body, "观看历史")
 }
 
 func summarizePlayurl(rawData json.RawMessage) RelayPlayurlMeta {
@@ -312,13 +373,7 @@ func (c *BilibiliClient) getBytes(ctx context.Context, requestURL string, cookie
 	if err != nil {
 		return nil, err
 	}
-	request.Header.Set("User-Agent", c.userAgent)
-	request.Header.Set("Accept", "application/json, text/plain, */*")
-	request.Header.Set("Referer", "https://www.bilibili.com")
-	request.Header.Set("Origin", "https://www.bilibili.com")
-	if cookieHeader := buildCookieHeader(cookies); cookieHeader != "" {
-		request.Header.Set("Cookie", cookieHeader)
-	}
+	c.applyCommonHeaders(request, cookies)
 
 	client := &http.Client{Timeout: c.timeout}
 	response, err := client.Do(request)
@@ -336,6 +391,74 @@ func (c *BilibiliClient) getBytes(ctx context.Context, requestURL string, cookie
 		return nil, newRelayError("request_failed", "读取上游响应失败", http.StatusBadGateway)
 	}
 	return body, nil
+}
+
+func (c *BilibiliClient) postFormBytes(ctx context.Context, requestURL string, cookies map[string]string, form url.Values) ([]byte, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	c.applyCommonHeaders(request, cookies)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+
+	client := &http.Client{Timeout: c.timeout}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, newRelayError("request_failed", fmt.Sprintf("请求上游失败：%v", err), http.StatusBadGateway)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, newRelayError("request_failed", fmt.Sprintf("上游响应异常（%d）", response.StatusCode), http.StatusBadGateway)
+	}
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, newRelayError("request_failed", "读取上游响应失败", http.StatusBadGateway)
+	}
+	return body, nil
+}
+
+func (c *BilibiliClient) applyCommonHeaders(request *http.Request, cookies map[string]string) {
+	request.Header.Set("User-Agent", c.userAgent)
+	request.Header.Set("Accept", "application/json, text/plain, */*")
+	request.Header.Set("Referer", "https://www.bilibili.com")
+	request.Header.Set("Origin", "https://www.bilibili.com")
+	if cookieHeader := buildCookieHeader(cookies); cookieHeader != "" {
+		request.Header.Set("Cookie", cookieHeader)
+	}
+}
+
+func parseRelayMutation(body []byte, action string) (RelayMutationEnvelope, error) {
+	type upstreamEnvelope struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+
+	var upstream upstreamEnvelope
+	if err := json.Unmarshal(body, &upstream); err != nil {
+		return RelayMutationEnvelope{}, newRelayError("bad_payload", "relay 拿到的历史写入响应不是合法 JSON", http.StatusBadGateway)
+	}
+	if upstream.Code != 0 {
+		if isAuthErrorCode(upstream.Code) {
+			return RelayMutationEnvelope{}, newRelayError("auth_expired", "relay 当前登录态已失效", http.StatusConflict)
+		}
+		return RelayMutationEnvelope{}, newRelayError("upstream_api_error", fmt.Sprintf("%s接口失败：%s", action, upstream.Message), http.StatusBadGateway)
+	}
+
+	return RelayMutationEnvelope{
+		Ok:      true,
+		Code:    upstream.Code,
+		Message: upstream.Message,
+	}, nil
+}
+
+func requireCSRFCookie(cookies map[string]string) (string, error) {
+	csrfToken := strings.TrimSpace(cookies["bili_jct"])
+	if csrfToken == "" {
+		return "", newRelayError("auth_missing", "relay 当前登录态缺少 csrf，通常需要重新扫码同步一次", http.StatusConflict)
+	}
+	return csrfToken, nil
 }
 
 func buildCookieHeader(cookies map[string]string) string {

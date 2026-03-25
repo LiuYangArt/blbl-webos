@@ -72,6 +72,7 @@ describe('videoListItems', () => {
 
     expect(fetchVideoDetail).toHaveBeenCalledWith('BV1detail');
     expect(payload).toEqual({
+      aid: 1,
       bvid: 'BV1detail',
       cid: 456,
       title: '详情标题',
@@ -131,11 +132,39 @@ describe('videoListItems', () => {
         },
       ],
     });
+    vi.mocked(fetchVideoDetail).mockResolvedValue({
+      aid: 9001,
+      bvid: 'BVpgc1',
+      cid: 7788,
+      title: '三体',
+      cover: '',
+      description: '',
+      duration: 1440,
+      owner: {
+        mid: 1,
+        name: '作者',
+        face: '',
+      },
+      stats: {
+        playCount: 0,
+        danmakuCount: 0,
+        favoriteCount: 0,
+        likeCount: 0,
+        replyCount: 0,
+        coinCount: 0,
+        shareCount: 0,
+      },
+      parts: [{ cid: 7788, page: 1, part: '第 1 集', duration: 1440 }],
+      publishAt: 0,
+      typeName: '番剧',
+    });
 
     const payload = await resolvePgcSubscriptionPlayerPayload(subscription);
 
     expect(fetchPgcSeasonDetail).toHaveBeenCalledWith(1001);
+    expect(fetchVideoDetail).toHaveBeenCalledWith('BVpgc1');
     expect(payload).toEqual({
+      aid: 9001,
       bvid: 'BVpgc1',
       cid: 7788,
       title: '三体',
@@ -146,6 +175,7 @@ describe('videoListItems', () => {
   it('历史记录会映射出统一卡片元信息', () => {
     const card = mapHistoryItemToVideoCard({
       kid: 'history-1',
+      aid: 101,
       title: '历史视频',
       bvid: 'BVhistory',
       cid: 66,

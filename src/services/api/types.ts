@@ -303,6 +303,7 @@ export type UserProfile = {
 
 export type HistoryItem = {
   kid: string;
+  aid: number;
   title: string;
   bvid: string;
   cid: number;

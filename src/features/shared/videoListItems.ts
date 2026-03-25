@@ -40,6 +40,7 @@ export function createResolvedVideoListItem(
 }
 
 export async function resolveVideoPlayerPayload(item: {
+  aid?: number;
   bvid: string;
   cid?: number;
   title: string;
@@ -47,6 +48,7 @@ export async function resolveVideoPlayerPayload(item: {
 }): Promise<PlayerRoutePayload> {
   if (item.cid && item.cid > 0) {
     return {
+      ...(item.aid ? { aid: item.aid } : {}),
       bvid: item.bvid,
       cid: item.cid,
       title: item.title,
@@ -63,6 +65,7 @@ export async function resolveVideoPlayerPayload(item: {
   }
 
   return {
+    aid: detail.aid,
     bvid: detail.bvid || item.bvid,
     cid: targetCid,
     title: detail.title || item.title,
@@ -78,7 +81,10 @@ export async function resolvePgcSubscriptionPlayerPayload(item: PgcSubscriptionI
     throw new Error('当前订阅剧集暂无可直接播放的分集');
   }
 
+  const detail = await fetchVideoDetail(firstPlayableEpisode.bvid);
+
   return {
+    aid: detail.aid,
     bvid: firstPlayableEpisode.bvid,
     cid: firstPlayableEpisode.cid,
     title: season.title || item.title,
@@ -88,7 +94,7 @@ export async function resolvePgcSubscriptionPlayerPayload(item: PgcSubscriptionI
 
 export function mapHistoryItemToVideoCard(item: HistoryItem): VideoCardItem {
   return {
-    aid: 0,
+    aid: item.aid,
     bvid: item.bvid,
     cid: item.cid,
     title: item.title,

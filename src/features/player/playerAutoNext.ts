@@ -1,6 +1,7 @@
 import type { VideoCardItem, VideoPart } from '../../services/api/types';
 
 type PlayerAutoNextPayload = {
+  aid?: number;
   bvid: string;
   cid: number;
   title: string;
@@ -15,9 +16,10 @@ export type PlayerAutoNextTarget =
       kind: 'related';
     });
 
-type RelatedVideoCandidate = Partial<Pick<VideoCardItem, 'bvid' | 'cid' | 'title'>>;
+type RelatedVideoCandidate = Partial<Pick<VideoCardItem, 'aid' | 'bvid' | 'cid' | 'title'>>;
 
 type ResolvePlayerAutoNextTargetOptions = {
+  aid?: number;
   bvid: string;
   cid: number;
   title: string;
@@ -26,6 +28,7 @@ type ResolvePlayerAutoNextTargetOptions = {
 };
 
 export function resolvePlayerAutoNextTarget({
+  aid,
   bvid,
   cid,
   title,
@@ -38,6 +41,7 @@ export function resolvePlayerAutoNextTarget({
   if (nextEpisode) {
     return {
       kind: 'episode',
+      aid,
       bvid,
       cid: nextEpisode.cid,
       title,
@@ -52,6 +56,7 @@ export function resolvePlayerAutoNextTarget({
 
   return {
     kind: 'related',
+    aid: nextRelated.aid,
     bvid: nextRelated.bvid,
     cid: nextRelated.cid,
     title: nextRelated.title,

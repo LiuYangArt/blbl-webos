@@ -2,6 +2,7 @@ import type { AppRoute } from './routes';
 
 export type AppLaunchParams = {
   route?: string;
+  aid?: number | string;
   bvid?: string;
   cid?: number | string;
   title?: string;
@@ -94,6 +95,7 @@ export function resolveInitialRoute(): AppRoute {
   }
 
   const bvid = normalizeString(launchParams?.bvid ?? import.meta.env.VITE_BOOT_PLAYER_BVID);
+  const aid = normalizeNumber(launchParams?.aid);
   const cid = normalizeNumber(launchParams?.cid ?? import.meta.env.VITE_BOOT_PLAYER_CID);
   const title = normalizeString(launchParams?.title ?? import.meta.env.VITE_BOOT_PLAYER_TITLE);
   const part = normalizeString(launchParams?.part ?? import.meta.env.VITE_BOOT_PLAYER_PART) ?? undefined;
@@ -104,6 +106,7 @@ export function resolveInitialRoute(): AppRoute {
 
   return {
     name: 'player',
+    aid: aid ?? undefined,
     bvid,
     cid,
     title,

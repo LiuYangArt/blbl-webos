@@ -20,6 +20,7 @@ const episodeEntries: VideoPart[] = [
 describe('playerAutoNext', () => {
   it('当前视频还有下一P时，优先返回下一P', () => {
     const result = resolvePlayerAutoNextTarget({
+      aid: 1001,
       bvid: 'BV1episode',
       cid: 101,
       title: '测试视频',
@@ -35,6 +36,7 @@ describe('playerAutoNext', () => {
 
     expect(result).toEqual({
       kind: 'episode',
+      aid: 1001,
       bvid: 'BV1episode',
       cid: 102,
       title: '测试视频',
@@ -44,12 +46,14 @@ describe('playerAutoNext', () => {
 
   it('已经播到最后一P时，会退化到第一条相关推荐', () => {
     const result = resolvePlayerAutoNextTarget({
+      aid: 1001,
       bvid: 'BV1episode',
       cid: 102,
       title: '测试视频',
       episodeEntries,
       related: [
         {
+          aid: 2002,
           bvid: 'BV1related',
           cid: 201,
           title: '推荐视频',
@@ -59,6 +63,7 @@ describe('playerAutoNext', () => {
 
     expect(result).toEqual({
       kind: 'related',
+      aid: 2002,
       bvid: 'BV1related',
       cid: 201,
       title: '推荐视频',
@@ -67,6 +72,7 @@ describe('playerAutoNext', () => {
 
   it('没有相关推荐时，返回 null', () => {
     const result = resolvePlayerAutoNextTarget({
+      aid: 1001,
       bvid: 'BV1episode',
       cid: 102,
       title: '测试视频',
@@ -79,6 +85,7 @@ describe('playerAutoNext', () => {
 
   it('第一条相关推荐缺少必要字段时，返回 null', () => {
     const result = resolvePlayerAutoNextTarget({
+      aid: 1001,
       bvid: 'BV1episode',
       cid: 102,
       title: '测试视频',
@@ -97,6 +104,7 @@ describe('playerAutoNext', () => {
   it('会为下一P和相关推荐返回正确的提示文案', () => {
     expect(getPlayerAutoNextNotice({
       kind: 'episode',
+      aid: 1001,
       bvid: 'BV1episode',
       cid: 102,
       title: '测试视频',
@@ -105,6 +113,7 @@ describe('playerAutoNext', () => {
 
     expect(getPlayerAutoNextNotice({
       kind: 'related',
+      aid: 2002,
       bvid: 'BV1related',
       cid: 201,
       title: '推荐视频',

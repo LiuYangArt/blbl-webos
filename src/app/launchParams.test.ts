@@ -15,6 +15,7 @@ describe('launchParams', () => {
   it('从字符串 launch params 解析播放器首屏路由', async () => {
     window.launchParams = JSON.stringify({
       route: 'player',
+      aid: '778899',
       bvid: 'BV1xx411c7mD',
       cid: '12345',
       title: '播放器直达',
@@ -25,6 +26,7 @@ describe('launchParams', () => {
 
     expect(resolveInitialRoute()).toEqual({
       name: 'player',
+      aid: 778899,
       bvid: 'BV1xx411c7mD',
       cid: 12345,
       title: '播放器直达',
