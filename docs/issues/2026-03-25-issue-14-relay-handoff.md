@@ -57,6 +57,7 @@ Relay：
 
 本机已跑通：
 
+- `cd relay && go test ./...`
 - `npm run lint`
 - `npm run test`
 - `npm run typecheck`
@@ -69,17 +70,21 @@ Relay：
   - cookie 读不到 csrf 时，从已保存登录材料回退
   - relay 优先、失败回退本地直写
 - webOS 构建产物已更新到 `build/webos`
+- 当前机器上的 relay Docker 已重启并验活：
+  - `/health` 返回 `ok: true`
+  - `/api/auth/status` 返回已登录账号状态
+  - `/api/history/heartbeat`、`/api/history/report` 已确认存在，新接口返回 `bad_request` 而不是 `404`
 
 当前还没在本机完成的部分：
 
-- `relay/go test`
-  - 原因：当前这台机器没有 `go` 命令
-- 远端 relay 真正重启后的联调
-  - 原因：你的 relay 在另一台电脑上
+- webOS 真机安装联调
+  - 原因：默认设备 `lgtv` 当前连接超时，`ares-install` 无法连上电视
 
-## 另一台电脑需要做什么
+## 如果 relay 就跑在当前开发机
 
-### 路径 A：那台电脑有完整仓库
+当前机器已经按下面步骤完成重启；以后如果需要再次重启，直接在仓库根目录执行即可。
+
+### 路径 A：当前机器有完整仓库
 
 推荐直接这样做。
 
@@ -102,7 +107,7 @@ cd ..
 
 4. 按你那台机器的 relay 启动方式重启服务。
 
-### 路径 B：那台电脑只跑 relay，没有完整前端环境
+### 路径 B：当前机器只跑 relay，没有完整前端环境
 
 至少把这些文件同步过去：
 
@@ -230,4 +235,3 @@ curl -H "X-Relay-Token: <token>" http://<relay-ip>:19091/api/auth/status
 4. 先测“relay 主路径”。
 5. 再临时关闭 relay 或清空 host，测“本地兜底路径”。
 6. 如果本地兜底仍提示缺 csrf，再重新扫码一次补登录材料。
-

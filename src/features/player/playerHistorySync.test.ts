@@ -100,7 +100,7 @@ describe('playerHistorySync', () => {
     expect(reportVideoHistoryProgressMock).not.toHaveBeenCalled();
     expect(result).toEqual({
       path: 'relay',
-      relayAttempted: false,
+      relayAttempted: true,
       relayFallbackReason: null,
     });
   });

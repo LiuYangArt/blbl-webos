@@ -12,28 +12,16 @@ export type PlayerHistorySyncResult = {
   relayFallbackReason: string | null;
 };
 
-type RelayFallbackActionResult = {
-  path: 'relay' | 'direct';
-  relayAttempted: boolean;
-  relayFallbackReason: string | null;
-};
-
 export async function syncPlayerHistoryHeartbeat(options: {
   aid?: number;
   bvid: string;
   cid: number;
   playedTime: number;
 }): Promise<PlayerHistorySyncResult> {
-  const fallback = await runWithRelayFallback(
+  return runWithRelayFallback(
     () => reportRelayHeartbeat(readRelaySettings(), options),
     () => reportVideoHeartbeat(options),
   );
-
-  return {
-    path: fallback.path,
-    relayAttempted: fallback.relayAttempted,
-    relayFallbackReason: fallback.relayFallbackReason,
-  };
 }
 
 export async function syncPlayerHistoryProgress(options: {
@@ -41,22 +29,16 @@ export async function syncPlayerHistoryProgress(options: {
   cid: number;
   progress: number;
 }): Promise<PlayerHistorySyncResult> {
-  const fallback = await runWithRelayFallback(
+  return runWithRelayFallback(
     () => reportRelayHistoryProgress(readRelaySettings(), options),
     () => reportVideoHistoryProgress(options),
   );
-
-  return {
-    path: fallback.path,
-    relayAttempted: fallback.relayAttempted,
-    relayFallbackReason: fallback.relayFallbackReason,
-  };
 }
 
 async function runWithRelayFallback(
   relayAction: () => Promise<unknown>,
   directAction: () => Promise<unknown>,
-): Promise<RelayFallbackActionResult> {
+): Promise<PlayerHistorySyncResult> {
   const settings = readRelaySettings();
   if (!settings.enabled || !hasRelayConfiguration(settings)) {
     await directAction();
@@ -71,7 +53,7 @@ async function runWithRelayFallback(
     await relayAction();
     return {
       path: 'relay',
-      relayAttempted: false,
+      relayAttempted: true,
       relayFallbackReason: null,
     };
   } catch (relayError) {
