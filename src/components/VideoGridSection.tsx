@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { PlayerRoutePayload } from '../app/routes';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../platform/focus';
@@ -8,6 +8,14 @@ import { MediaCard } from './MediaCard';
 import { SectionHeader } from './SectionHeader';
 
 type LoadMoreTrigger = 'prefetch' | 'manual';
+type VisibilityMode = 'loaded' | 'progressive';
+
+type VisibleResetSignature = {
+  firstVisibleItemId: string | null;
+  initialVisibleCount: number;
+  resetKey: string | undefined;
+  visibilityMode: VisibilityMode;
+};
 
 type VideoGridSectionProps = {
   sectionId: string;
@@ -32,7 +40,7 @@ type VideoGridSectionProps = {
   onRequestMore?: (trigger: LoadMoreTrigger) => void;
   showEndHint?: boolean;
   resetKey?: string;
-  visibilityMode?: 'loaded' | 'progressive';
+  visibilityMode?: VisibilityMode;
 };
 
 export function VideoGridSection({
@@ -59,10 +67,24 @@ export function VideoGridSection({
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
   const firstVisibleItemId = items[0]?.id ?? null;
+  const previousResetSignatureRef = useRef<VisibleResetSignature | null>(null);
 
   useEffect(() => {
+    const previousSignature = previousResetSignatureRef.current;
+    const nextSignature: VisibleResetSignature = {
+      firstVisibleItemId,
+      initialVisibleCount,
+      resetKey,
+      visibilityMode,
+    };
+    previousResetSignatureRef.current = nextSignature;
+
     if (visibilityMode === 'progressive') {
-      setVisibleCount(Math.min(items.length, initialVisibleCount));
+      if (isVisibleWindowResetRequired(previousSignature, nextSignature)) {
+        setVisibleCount(clampVisibleCount(initialVisibleCount, items.length));
+      } else {
+        setVisibleCount((current) => clampVisibleCount(current, items.length));
+      }
     }
     setResolveError(null);
     setPendingTitle(null);
@@ -161,4 +183,22 @@ export function VideoGridSection({
       ) : null}
     </FocusSection>
   );
+}
+
+function isVisibleWindowResetRequired(
+  previous: VisibleResetSignature | null,
+  next: VisibleResetSignature,
+): boolean {
+  if (!previous) {
+    return true;
+  }
+
+  return previous.firstVisibleItemId !== next.firstVisibleItemId
+    || previous.initialVisibleCount !== next.initialVisibleCount
+    || previous.resetKey !== next.resetKey
+    || previous.visibilityMode !== next.visibilityMode;
+}
+
+function clampVisibleCount(count: number, total: number): number {
+  return Math.min(total, count);
 }
