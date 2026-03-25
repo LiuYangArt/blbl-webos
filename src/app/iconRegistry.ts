@@ -19,6 +19,7 @@ export const TV_ICONS = {
   playerRestart: 'restart_alt',
   playerRefresh: 'refresh',
   playerEpisodes: 'view_list',
+  playerAuthor: 'account_circle',
   playerSubtitle: 'closed_caption',
   playerSettings: 'tune',
   playerRecommendations: 'local_fire_department',

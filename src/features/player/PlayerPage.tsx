@@ -86,6 +86,12 @@ type PlayerNavigationTarget = {
   part?: string;
 };
 
+type AuthorSpaceNavigationTarget = {
+  mid: number;
+  authorName?: string;
+  sourceBvid?: string;
+};
+
 type SubtitleTrackLoadState = 'idle' | 'loading' | 'ready' | 'error';
 type PlayerOverlayMode = 'none' | 'settings' | 'subtitles' | 'recommendations' | 'episodes';
 type PlayerStripMode = Exclude<PlayerOverlayMode, 'none' | 'settings' | 'subtitles'>;
@@ -112,6 +118,7 @@ type PlayerPageProps = {
   part?: string;
   onBack: () => void;
   onOpenPlayer: (item: PlayerNavigationTarget) => void;
+  onOpenAuthorSpace: (item: AuthorSpaceNavigationTarget) => void;
 };
 
 const CODEC_OPTIONS: VideoCodecPreference[] = ['auto', 'avc', 'hevc', 'av1'];
@@ -152,7 +159,16 @@ const STRIP_OVERLAY_CONFIG: Record<PlayerStripMode, StripOverlayConfig> = {
   },
 };
 
-export function PlayerPage({ aid, bvid, cid, title, part, onBack, onOpenPlayer }: PlayerPageProps) {
+export function PlayerPage({
+  aid,
+  bvid,
+  cid,
+  title,
+  part,
+  onBack,
+  onOpenPlayer,
+  onOpenAuthorSpace,
+}: PlayerPageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const subtitleTrackUrlRef = useRef<string | null>(null);
   const subtitleTrackElementRef = useRef<HTMLTrackElement | null>(null);
@@ -582,6 +598,21 @@ export function PlayerPage({ aid, bvid, cid, title, part, onBack, onOpenPlayer }
 
     setOverlayMode('subtitles');
     setIsChromeVisible(false);
+  }
+
+  function openAuthorSpace(): void {
+    const authorMid = detail?.owner.mid ?? 0;
+    if (authorMid <= 0) {
+      setPlaybackNotice('当前视频缺少作者信息，暂时无法打开 UP 主页');
+      setChromeActivityTick((previous) => previous + 1);
+      return;
+    }
+
+    onOpenAuthorSpace({
+      mid: authorMid,
+      authorName: detail?.owner.name || undefined,
+      sourceBvid: bvid,
+    });
   }
 
   function openRecommendationsOverlay(): void {
@@ -1648,6 +1679,7 @@ export function PlayerPage({ aid, bvid, cid, title, part, onBack, onOpenPlayer }
                 sectionId={PLAYER_CONTROL_SECTION_ID}
                 disabled={!shouldShowPlayerChrome}
                 isPlaying={isPlaying}
+                authorAvailable={(detail?.owner.mid ?? 0) > 0}
                 subtitleAvailable={hasSubtitleTracks}
                 onBack={onBack}
                 onReplay={() => seekPlaybackBy(-10)}
@@ -1668,6 +1700,7 @@ export function PlayerPage({ aid, bvid, cid, title, part, onBack, onOpenPlayer }
                   revealPlayerChrome(false);
                 }}
                 onOpenEpisodes={openEpisodesOverlay}
+                onOpenAuthor={openAuthorSpace}
                 onOpenSubtitles={openSubtitleOverlay}
                 onOpenSettings={openSettingsOverlay}
                 onOpenRecommendations={openRecommendationsOverlay}

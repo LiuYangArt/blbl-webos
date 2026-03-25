@@ -1105,6 +1105,109 @@ describe('bilibili api mapping', () => {
     });
   });
 
+  it('fetchUserSpaceProfile 会映射作者资料并兼容多种 VIP 字段', async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: {
+        mid: 1001,
+        name: '作者甲',
+        face: 'http://i0.hdslb.com/author.jpg',
+        sign: '这是作者签名',
+        level_info: {
+          current_level: 6,
+        },
+        vip: {
+          label: {
+            text: '大会员',
+          },
+        },
+      },
+    });
+
+    const { fetchUserSpaceProfile } = await loadBilibiliModule();
+    const result = await fetchUserSpaceProfile(1001);
+
+    expect(signWbiMock).toHaveBeenCalledWith({
+      mid: 1001,
+    });
+    expect(result).toEqual({
+      mid: 1001,
+      name: '作者甲',
+      face: 'https://i0.hdslb.com/author.jpg',
+      sign: '这是作者签名',
+      level: 6,
+      vipLabel: '大会员',
+    });
+  });
+
+  it('fetchUserArchivePage 会映射作者投稿视频并返回分页信息', async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: {
+        list: {
+          vlist: [
+            {
+              aid: 2001,
+              bvid: 'BV1author1',
+              cid: 3001,
+              title: '<em class="keyword">作者</em>热视频',
+              pic: '//i0.hdslb.com/author-video.jpg',
+              duration: '04:05',
+              author: '作者甲',
+              play: 123456,
+              video_review: 789,
+              desc: '视频简介',
+            },
+          ],
+        },
+        page: {
+          count: 25,
+          pn: 1,
+          ps: 24,
+        },
+      },
+    });
+
+    const { fetchUserArchivePage } = await loadBilibiliModule();
+    const result = await fetchUserArchivePage({
+      mid: 1001,
+      page: 1,
+      pageSize: 24,
+      order: 'click',
+    });
+
+    expect(signWbiMock).toHaveBeenCalledWith({
+      mid: 1001,
+      pn: 1,
+      ps: 24,
+      order: 'click',
+      platform: 'web',
+      web_location: 333.1387,
+    });
+    expect(result).toEqual({
+      items: [{
+        aid: 2001,
+        bvid: 'BV1author1',
+        cid: 3001,
+        title: '作者热视频',
+        cover: 'https://i0.hdslb.com/author-video.jpg',
+        duration: 245,
+        ownerName: '作者甲',
+        ownerFace: '',
+        playCount: 123456,
+        danmakuCount: 789,
+        likeCount: 0,
+        description: '视频简介',
+        reason: '',
+        publishAt: 0,
+        badge: '',
+        typeName: '',
+      }],
+      total: 25,
+      hasMore: true,
+      page: 1,
+      pageSize: 24,
+    });
+  });
+
   it('pollWebQrLogin 会保留 relay 建立会话所需的登录完成信息', async () => {
     fetchJsonMock.mockResolvedValue({
       data: {

@@ -7,6 +7,7 @@ import { resolveInitialRoute } from './app/launchParams';
 import { PageBackHandlerProvider } from './app/PageBackHandler';
 import { type AppRoute, type PlayerRoutePayload, getActiveNav } from './app/routes';
 import { usePageStack } from './app/usePageStack';
+import { AuthorSpacePage } from './features/author-space/AuthorSpacePage';
 import { LoginPage } from './features/auth/LoginPage';
 import { UiDebugPage } from './features/debug/UiDebugPage';
 import { isEditableElement, matchesUiDebugShortcut } from './features/debug/uiDebug';
@@ -52,20 +53,7 @@ function AppContent() {
   const nextNavFocusIdRef = useRef<string | null>(null);
   const lastRelaySyncKeyRef = useRef<string>('');
 
-  const focusKey = useMemo(() => {
-    switch (currentPage.name) {
-      case 'search-results':
-        return `${currentPage.name}:${currentPage.keyword}`;
-      case 'video-detail':
-        return `${currentPage.name}:${currentPage.bvid}`;
-      case 'pgc-detail':
-        return `${currentPage.name}:${currentPage.seasonId}`;
-      case 'player':
-        return `${currentPage.name}:${currentPage.bvid}:${currentPage.cid}`;
-      default:
-        return currentPage.name;
-    }
-  }, [currentPage]);
+  const focusKey = useMemo(() => summarizeRoute(currentPage), [currentPage]);
 
   useEffect(() => {
     void refreshAuth();
@@ -245,6 +233,8 @@ function summarizeRoute(route: AppRoute) {
       return `video-detail:${route.bvid}`;
     case 'pgc-detail':
       return `pgc-detail:${route.seasonId}`;
+    case 'author-space':
+      return `author-space:${route.mid}`;
     case 'search-results':
       return `search-results:${route.keyword}`;
     default:
@@ -267,6 +257,22 @@ function pushPlayer(actions: RouteActions, item: PlayerRoutePayload): void {
     cid: item.cid,
     title: item.title,
     part: item.part,
+  });
+}
+
+function pushAuthorSpace(
+  actions: RouteActions,
+  item: {
+    mid: number;
+    authorName?: string;
+    sourceBvid?: string;
+  },
+): void {
+  actions.push({
+    name: 'author-space',
+    mid: item.mid,
+    authorName: item.authorName,
+    sourceBvid: item.sourceBvid,
   });
 }
 
@@ -363,6 +369,16 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
             title: item.title,
             part: item.part,
           })}
+          onOpenAuthorSpace={(item) => pushAuthorSpace(actions, item)}
+        />
+      );
+    case 'author-space':
+      return (
+        <AuthorSpacePage
+          mid={route.mid}
+          authorName={route.authorName}
+          sourceBvid={route.sourceBvid}
+          onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
     case 'history':
