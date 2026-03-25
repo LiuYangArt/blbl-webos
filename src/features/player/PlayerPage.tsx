@@ -1,5 +1,6 @@
 import { type CSSProperties, type MutableRefObject, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../app/AppStore';
+import { readWatchProgressEntry, setWatchProgress } from '../../app/watchProgressStore';
 import { usePageBackHandler } from '../../app/PageBackHandler';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
@@ -124,6 +125,7 @@ type PlayerPageProps = {
 const CODEC_OPTIONS: VideoCodecPreference[] = ['auto', 'avc', 'hevc', 'av1'];
 const PLAYER_CHROME_HIDE_DELAY_MS = 3000;
 const PLAYER_LOAD_TIMEOUT_MS = 4500;
+const PLAYER_PROGRESS_PERSIST_INTERVAL_S = 5;
 const STRIP_PAGE_SIZE = 6;
 const PLAYER_CONTROL_SECTION_ID = 'player-controls';
 const PLAYER_SETTINGS_SECTION_ID = 'player-settings-drawer';
@@ -209,7 +211,7 @@ export function PlayerPage({
   const [activeSubtitleTrackId, setActiveSubtitleTrackId] = useState<number | null>(null);
   const [subtitleLoadState, setSubtitleLoadState] = useState<SubtitleTrackLoadState>('idle');
   const [subtitleStatusText, setSubtitleStatusText] = useState<string | null>(null);
-  const { auth, setWatchProgress, watchProgress } = useAppStore();
+  const { auth } = useAppStore();
 
   const playerData = useAsyncData(async () => {
     const [play, playInfoResult, related, detail, deviceInfo] = await Promise.all([
@@ -236,7 +238,7 @@ export function PlayerPage({
   }, [bvid, cid, qualityPreference]);
 
   const progressKey = `${bvid}:${cid}`;
-  const savedProgress = watchProgress[progressKey];
+  const savedProgress = readWatchProgressEntry(progressKey);
   const playerDataValue = playerData.status === 'success' ? playerData.data : null;
   const play = playerDataValue?.play ?? null;
   const playInfo = playerDataValue?.playInfo ?? null;
@@ -257,6 +259,29 @@ export function PlayerPage({
     [capability, codecPreference],
   );
   const resolvedCodecPreference = normalizedCodecPreference.codecPreference;
+
+  const persistWatchProgress = useCallback((current: number, duration: number, force = false) => {
+    const lastPersisted = lastPersistedProgressRef.current;
+    const reachedTail = duration > 0 && duration - current <= 1;
+    if (
+      !force
+      && lastPersisted >= 0
+      && current !== 0
+      && !reachedTail
+      && Math.abs(current - lastPersisted) < PLAYER_PROGRESS_PERSIST_INTERVAL_S
+    ) {
+      return;
+    }
+
+    lastPersistedProgressRef.current = current;
+    setWatchProgress({
+      bvid,
+      cid,
+      title,
+      progress: current,
+      duration,
+    });
+  }, [bvid, cid, title]);
 
   const episodeEntries = useMemo<VideoPart[]>(() => {
     if (!detail) {
@@ -1101,17 +1126,7 @@ export function PlayerPage({
           : { current, duration }
       ));
       resumeProgressRef.current = current;
-
-      if (lastPersistedProgressRef.current !== current) {
-        lastPersistedProgressRef.current = current;
-        setWatchProgress({
-          bvid,
-          cid,
-          title,
-          progress: current,
-          duration,
-        });
-      }
+      persistWatchProgress(current, duration);
 
       void reportHistoryHeartbeat('playing', current, duration).catch(() => undefined);
 
@@ -1163,6 +1178,7 @@ export function PlayerPage({
 
       const current = Math.floor(video.currentTime);
       const duration = getDurationSeconds(video, play.durationMs);
+      persistWatchProgress(current, duration, true);
       void reportHistoryHeartbeat('status', current, duration).catch(() => undefined);
       void reportHistoryFlush(current, duration, 'pause').catch(() => undefined);
       setIsPlaying(false);
@@ -1175,6 +1191,7 @@ export function PlayerPage({
 
       const current = Math.floor(video.currentTime);
       const duration = getDurationSeconds(video, play.durationMs);
+      persistWatchProgress(current, duration, true);
       await Promise.allSettled([
         reportHistoryHeartbeat('completed', current, duration),
         reportHistoryFlush(current, duration, 'completed'),
@@ -1279,6 +1296,7 @@ export function PlayerPage({
       }
       const current = Math.floor(video.currentTime);
       const duration = getDurationSeconds(video, play.durationMs);
+      persistWatchProgress(current, duration, true);
       void reportHistoryHeartbeat('status', current, duration).catch(() => undefined);
       void reportHistoryFlush(current, duration, 'cleanup').catch(() => undefined);
       manifestRevoke?.();
@@ -1296,11 +1314,11 @@ export function PlayerPage({
     engineLabel,
     playbackPlan,
     play,
+    persistWatchProgress,
     rawCurrentCandidate,
     reloadNonce,
     reportHistoryFlush,
     reportHistoryHeartbeat,
-    setWatchProgress,
     title,
   ]);
 

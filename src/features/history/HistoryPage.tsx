@@ -71,6 +71,7 @@ export function HistoryPage({ onLogin, onOpenPlayer }: HistoryPageProps) {
         title="观看历史"
         items={videoItems}
         onOpenPlayer={onOpenPlayer}
+        visibilityMode="progressive"
         hasMore={history.hasMore}
         isLoadingMore={history.isLoadingMore}
         loadMoreError={history.loadMoreError}

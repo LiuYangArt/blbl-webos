@@ -105,6 +105,8 @@ export function SearchResultsPage({ keyword, onSubmit, onOpenPlayer }: SearchRes
         items={videoItems}
         onOpenPlayer={onOpenPlayer}
         leaveFor={{ left: '@side-nav', up: '@search-results-actions' }}
+        visibilityMode="progressive"
+        resetKey={keyword}
         hasMore={result.hasMore}
         isLoadingMore={result.isLoadingMore}
         loadMoreError={result.loadMoreError}

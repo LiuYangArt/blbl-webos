@@ -3,7 +3,7 @@ import { AppShell } from './components/AppShell';
 import { FocusOverlay } from './components/FocusOverlay';
 import { AppStoreProvider, useAppStore } from './app/AppStore';
 import { shouldAutofocusContentAfterMutation } from './app/focusPolicy';
-import { resolveInitialRoute } from './app/launchParams';
+import { readDebugFocusEnabled, resolveInitialRoute } from './app/launchParams';
 import { PageBackHandlerProvider } from './app/PageBackHandler';
 import { type AppRoute, type PlayerRoutePayload, getActiveNav } from './app/routes';
 import { usePageStack } from './app/usePageStack';
@@ -45,6 +45,7 @@ function markBootMounted() {
 function AppContent() {
   const { auth, refreshAuth } = useAppStore();
   const initialRoute = useMemo<AppRoute>(() => resolveInitialRoute(), []);
+  const isFocusDebugEnabled = useMemo(() => readDebugFocusEnabled(), []);
   const pageStack = usePageStack<AppRoute>(initialRoute);
   const { current: currentPage, pop, push, replace } = pageStack;
   const backHandlerRef = useRef<(() => boolean) | null>(null);
@@ -218,7 +219,7 @@ function AppContent() {
           })}
         </div>
       </AppShell>
-      <FocusOverlay />
+      <FocusOverlay debugEnabled={isFocusDebugEnabled} />
     </PageBackHandlerProvider>
   );
 }

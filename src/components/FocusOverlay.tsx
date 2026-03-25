@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { readDebugFocusEnabled } from '../app/launchParams';
+import { useEffect, useState } from 'react';
 import { expandBorderRadius } from './focusOverlayRadius';
 
 type FocusOverlaySnapshot = {
@@ -15,6 +14,10 @@ type FocusOverlaySnapshot = {
   width: number;
   height: number;
   borderRadius: string;
+};
+
+type FocusOverlayProps = {
+  debugEnabled?: boolean;
 };
 
 function readActiveFocusElement(): HTMLElement | null {
@@ -58,8 +61,7 @@ function buildSnapshot(element: HTMLElement | null): FocusOverlaySnapshot | null
   };
 }
 
-export function FocusOverlay() {
-  const debugEnabled = useMemo(() => readDebugFocusEnabled(), []);
+export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps) {
   const [snapshot, setSnapshot] = useState<FocusOverlaySnapshot | null>(null);
 
   useEffect(() => {
@@ -78,8 +80,10 @@ export function FocusOverlay() {
       rafId = window.requestAnimationFrame(update);
     };
 
-    const observer = new MutationObserver(scheduleUpdate);
-    observer.observe(document.body, {
+    const observer = debugEnabled
+      ? new MutationObserver(scheduleUpdate)
+      : null;
+    observer?.observe(document.body, {
       subtree: true,
       childList: true,
       attributes: true,
@@ -96,7 +100,7 @@ export function FocusOverlay() {
     scheduleUpdate();
 
     return () => {
-      observer.disconnect();
+      observer?.disconnect();
       window.removeEventListener('focusin', scheduleUpdate, true);
       window.removeEventListener('focusout', scheduleUpdate, true);
       window.removeEventListener('keydown', scheduleUpdate, true);
@@ -108,7 +112,7 @@ export function FocusOverlay() {
         window.cancelAnimationFrame(rafId);
       }
     };
-  }, []);
+  }, [debugEnabled]);
 
   if (!snapshot) {
     return debugEnabled ? (

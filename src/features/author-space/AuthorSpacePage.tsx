@@ -183,6 +183,7 @@ export function AuthorSpacePage({
           items={archiveItems}
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: `@${AUTHOR_SPACE_HERO_SECTION_ID}` }}
+          visibilityMode="progressive"
           hasMore={archive.hasMore}
           isLoadingMore={archive.isLoadingMore}
           loadMoreError={archive.loadMoreError}

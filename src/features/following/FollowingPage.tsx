@@ -121,6 +121,7 @@ export function FollowingPage({ onLogin, onOpenPlayer }: FollowingPageProps) {
         title="正在关注"
         items={items}
         onOpenPlayer={onOpenPlayer}
+        visibilityMode="progressive"
         hasMore={followingItems.hasMore}
         isLoadingMore={followingItems.isLoadingMore}
         loadMoreError={followingItems.loadMoreError}

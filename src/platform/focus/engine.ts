@@ -31,6 +31,8 @@ type RegisteredSection = {
   mounted: boolean;
   lastFocusedId: string | null;
   lastFocusedElement: FocusableElement | null;
+  cachedElements: FocusableElement[] | null;
+  cacheDirty: boolean;
 };
 
 type FocusCapture = {
@@ -78,6 +80,7 @@ const pressedStateTimers = new WeakMap<FocusableElement, number>();
 let orderSeed = 0;
 let initialized = false;
 let activeFocusedElement: FocusableElement | null = null;
+let sectionMutationObserver: MutationObserver | null = null;
 
 function scheduleFocusWork(callback: () => void): void {
   window.setTimeout(callback, 0);
@@ -90,6 +93,15 @@ function ensureInitialized() {
 
   document.addEventListener('focusin', handleFocusIn, true);
   window.addEventListener('blur', clearActiveFocusMarker);
+  if (!sectionMutationObserver && document.body) {
+    sectionMutationObserver = new MutationObserver(handleSectionMutations);
+    sectionMutationObserver.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-focusable', 'data-focus-section'],
+    });
+  }
   initialized = true;
 }
 
@@ -151,22 +163,81 @@ function getSectionElements(sectionId: string): FocusableElement[] {
     return [];
   }
 
-  return Array.from(document.querySelectorAll<FocusableElement>(getSectionSelector(section.config)))
-    .filter((element) => isElementNavigable(element));
+  if (!section.cacheDirty && section.cachedElements) {
+    return section.cachedElements;
+  }
+
+  const nextElements = Array.from(document.querySelectorAll<FocusableElement>(getSectionSelector(section.config)));
+  section.cachedElements = nextElements;
+  section.cacheDirty = false;
+  return nextElements;
 }
 
 function getMountedSections(): RegisteredSection[] {
   return Array.from(sections.values())
-    .filter((section) => section.mounted && !section.config.disabled && getSectionElements(section.config.id).length > 0)
+    .filter((section) => section.mounted && !section.config.disabled && getNavigableSectionElements(section.config.id).length > 0)
     .sort((left, right) => left.order - right.order);
 }
 
-function isElementNavigable(element: FocusableElement): boolean {
-  if (element.hasAttribute('disabled') || element.getAttribute('aria-hidden') === 'true') {
+function invalidateSectionCache(sectionId: string): void {
+  const section = sections.get(sectionId);
+  if (!section) {
+    return;
+  }
+
+  section.cacheDirty = true;
+}
+
+function collectAffectedSectionIds(node: Node, sectionIds: Set<string>): void {
+  if (node.nodeType !== 1) {
+    return;
+  }
+  const elementNode = node as HTMLElement;
+
+  const collectFromElement = (element: HTMLElement) => {
+    const focusSection = element.dataset.focusSection;
+    if (focusSection) {
+      sectionIds.add(focusSection);
+    }
+
+    const rootSection = element.dataset.focusSectionRoot;
+    if (rootSection) {
+      sectionIds.add(rootSection);
+    }
+  };
+
+  collectFromElement(elementNode);
+  elementNode.querySelectorAll<HTMLElement>('[data-focus-section], [data-focus-section-root]').forEach(collectFromElement);
+}
+
+function handleSectionMutations(records: MutationRecord[]): void {
+  const affectedSectionIds = new Set<string>();
+
+  records.forEach((record) => {
+    if (record.type === 'attributes' && record.target.nodeType === 1) {
+      collectAffectedSectionIds(record.target, affectedSectionIds);
+      return;
+    }
+
+    record.addedNodes.forEach((node) => collectAffectedSectionIds(node, affectedSectionIds));
+    record.removedNodes.forEach((node) => collectAffectedSectionIds(node, affectedSectionIds));
+    if (record.target.nodeType === 1) {
+      collectAffectedSectionIds(record.target, affectedSectionIds);
+    }
+  });
+
+  affectedSectionIds.forEach(invalidateSectionCache);
+}
+
+function isElementNavigable(
+  element: FocusableElement,
+  rectCache?: WeakMap<FocusableElement, FocusRect>,
+): boolean {
+  if (!element.isConnected || element.hasAttribute('disabled') || element.getAttribute('aria-hidden') === 'true') {
     return false;
   }
 
-  const rect = element.getBoundingClientRect();
+  const rect = getElementRect(element, rectCache);
   return rect.width > 0 && rect.height > 0;
 }
 
@@ -189,9 +260,17 @@ function escapeAttributeValue(value: string): string {
   return value.replace(/["\\]/g, '\\$&');
 }
 
-function getElementRect(element: FocusableElement): FocusRect {
+function getElementRect(
+  element: FocusableElement,
+  rectCache?: WeakMap<FocusableElement, FocusRect>,
+): FocusRect {
+  const cachedRect = rectCache?.get(element);
+  if (cachedRect) {
+    return cachedRect;
+  }
+
   const rect = element.getBoundingClientRect();
-  return {
+  const nextRect = {
     element,
     left: rect.left,
     top: rect.top,
@@ -202,6 +281,15 @@ function getElementRect(element: FocusableElement): FocusRect {
     centerX: rect.left + rect.width / 2,
     centerY: rect.top + rect.height / 2,
   };
+  rectCache?.set(element, nextRect);
+  return nextRect;
+}
+
+function getNavigableSectionElements(
+  sectionId: string,
+  rectCache?: WeakMap<FocusableElement, FocusRect>,
+): FocusableElement[] {
+  return getSectionElements(sectionId).filter((element) => isElementNavigable(element, rectCache));
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -352,13 +440,20 @@ function getSectionAnchorElement(sectionId: string, anchor: FocusScrollAnchor, f
 }
 
 function isFirstRowFocused(element: FocusableElement, sectionId: string): boolean {
-  const elements = getSectionElements(sectionId);
+  const rectCache = new WeakMap<FocusableElement, FocusRect>();
+  const elements = getNavigableSectionElements(sectionId, rectCache);
   if (elements.length <= 1) {
     return true;
   }
 
-  const elementRect = getElementRect(element);
-  const firstRowTop = Math.min(...elements.map((candidate) => getElementRect(candidate).top));
+  const elementRect = getElementRect(element, rectCache);
+  let firstRowTop = Number.POSITIVE_INFINITY;
+  elements.forEach((candidate) => {
+    const candidateTop = getElementRect(candidate, rectCache).top;
+    if (candidateTop < firstRowTop) {
+      firstRowTop = candidateTop;
+    }
+  });
   const rowTolerance = Math.max(28, Math.min(72, Math.round(elementRect.height * 0.2)));
 
   return elementRect.top <= firstRowTop + rowTolerance;
@@ -403,7 +498,7 @@ function ensureFocusedElementComfort(element: FocusableElement): void {
 
   const scrollRoot = getScrollRoot(element);
   const viewportFrame = getViewportFrame(scrollRoot);
-  const rect = element.getBoundingClientRect();
+  const rect = getElementRect(element);
   const comfortZone = getViewportComfortZone(viewportFrame);
   const comfortTop = viewportFrame.top + comfortZone.top;
   const comfortLeft = viewportFrame.left + comfortZone.left;
@@ -532,6 +627,11 @@ function focusElement(element: FocusableElement | null): FocusableElement | null
     return null;
   }
 
+  if (document.activeElement === element) {
+    ensureFocusedElementComfort(element);
+    return element;
+  }
+
   element.focus({ preventScroll: true });
   ensureFocusedElementComfort(element);
   return element;
@@ -612,19 +712,27 @@ function getCandidateScore(current: FocusRect, next: FocusRect, direction: Direc
 }
 
 function findNextInSection(current: FocusableElement, direction: Direction, sectionId: string): FocusableElement | null {
-  const candidates = getSectionElements(sectionId).filter((element) => element !== current);
+  const rectCache = new WeakMap<FocusableElement, FocusRect>();
+  const candidates = getNavigableSectionElements(sectionId, rectCache).filter((element) => element !== current);
   if (candidates.length === 0) {
     return null;
   }
 
-  const currentRect = getElementRect(current);
-  return candidates
-    .map((element) => {
-      const score = getCandidateScore(currentRect, getElementRect(element), direction);
-      return { element, score };
-    })
-    .filter((item): item is { element: FocusableElement; score: number } => item.score !== null)
-    .sort((left, right) => left.score - right.score)[0]?.element ?? null;
+  const currentRect = getElementRect(current, rectCache);
+  let bestElement: FocusableElement | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  candidates.forEach((element) => {
+    const score = getCandidateScore(currentRect, getElementRect(element, rectCache), direction);
+    if (score === null || score >= bestScore) {
+      return;
+    }
+
+    bestScore = score;
+    bestElement = element;
+  });
+
+  return bestElement;
 }
 
 function getFocusableSnapshot(): FocusTarget {
@@ -642,6 +750,7 @@ export function registerSection(config: FocusSectionConfig) {
   if (existing) {
     existing.config = config;
     existing.mounted = true;
+    existing.cacheDirty = true;
     return;
   }
 
@@ -651,6 +760,8 @@ export function registerSection(config: FocusSectionConfig) {
     mounted: true,
     lastFocusedId: null,
     lastFocusedElement: null,
+    cachedElements: null,
+    cacheDirty: true,
   });
 }
 
@@ -661,6 +772,8 @@ export function unregisterSection(sectionId: string) {
   }
 
   section.mounted = false;
+  section.cachedElements = null;
+  section.cacheDirty = true;
 }
 
 export function isFocusableElement(element: HTMLElement): element is FocusableElement {

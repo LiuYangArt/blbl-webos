@@ -44,6 +44,7 @@ export function HotPage({ onOpenPlayer }: HotPageProps) {
         title="热门精选"
         items={videoItems}
         onOpenPlayer={onOpenPlayer}
+        visibilityMode="progressive"
         hasMore={hot.hasMore}
         isLoadingMore={hot.isLoadingMore}
         loadMoreError={hot.loadMoreError}

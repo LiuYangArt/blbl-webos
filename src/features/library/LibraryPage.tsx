@@ -122,6 +122,7 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
           title="稍后再看"
           items={items}
           onOpenPlayer={onOpenPlayer}
+          visibilityMode="progressive"
           hasMore={later.hasMore}
           isLoadingMore={later.isLoadingMore}
           loadMoreError={later.loadMoreError}
@@ -222,6 +223,7 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
         onOpenPlayer={onOpenPlayer}
         resetKey={String(activeFolderId ?? 'favorites')}
         leaveFor={buildFavoriteVideoSectionLeaveFor(activeFolderIndex)}
+        visibilityMode="progressive"
         hasMore={favoriteItems.hasMore}
         isLoadingMore={favoriteItems.isLoadingMore}
         loadMoreError={favoriteItems.loadMoreError}
