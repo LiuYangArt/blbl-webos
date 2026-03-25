@@ -76,7 +76,11 @@ import {
   type PlayerHistoryHeartbeatTrigger,
 } from './playerHistoryReporting';
 import { syncPlayerHistoryHeartbeat, syncPlayerHistoryProgress } from './playerHistorySync';
-import { decidePlayerChromeRemoteAction } from './playerRemoteMode';
+import {
+  decidePlayerChromeRemoteAction,
+  resolveTogglePlayFocusTargetBeforeRemoteToggle,
+  type PlayerChromeFocusTarget,
+} from './playerRemoteMode';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
 
 type PlayerNavigationTarget = {
@@ -568,7 +572,7 @@ export function PlayerPage({
     setActiveCandidateIndex(0);
   }, [playbackPlan]);
 
-  function revealPlayerChrome(focusTarget: 'none' | 'controls' | 'toggle-play'): void {
+  function revealPlayerChrome(focusTarget: PlayerChromeFocusTarget): void {
     setOverlayMode('none');
     setIsChromeVisible(true);
 
@@ -858,8 +862,8 @@ export function PlayerPage({
           remoteEvent.preventDefault();
           return;
         case 'toggle-play': {
-          const shouldFocusToggle = !videoRef.current?.paused;
-          revealPlayerChrome(shouldFocusToggle ? 'toggle-play' : 'none');
+          const focusTarget = resolveTogglePlayFocusTargetBeforeRemoteToggle(videoRef.current?.paused);
+          revealPlayerChrome(focusTarget);
           togglePlaybackFromRemote();
           remoteEvent.preventDefault();
           return;

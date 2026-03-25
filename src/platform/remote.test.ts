@@ -104,6 +104,8 @@ describe('remote', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { keyCode: REMOTE_KEYS.PAUSE }));
 
     expect(actions).toEqual(['play', 'pause']);
+    expect(moveFocusMock).not.toHaveBeenCalled();
+    expect(activateFocusedMock).not.toHaveBeenCalled();
 
     window.removeEventListener(REMOTE_INTENT_EVENT, listener);
     detach();

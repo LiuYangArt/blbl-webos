@@ -11,12 +11,20 @@ export type PlayerChromeRemoteDecision =
   | 'delegate'
   | 'keep-alive';
 
+export type PlayerChromeFocusTarget = 'none' | 'controls' | 'toggle-play';
+
 function mapMediaRemoteAction(action: RemoteIntentAction): 'play' | 'pause' | null {
   if (action === 'play' || action === 'pause') {
     return action;
   }
 
   return null;
+}
+
+export function resolveTogglePlayFocusTargetBeforeRemoteToggle(
+  isPaused: boolean | undefined,
+): PlayerChromeFocusTarget {
+  return isPaused ? 'none' : 'toggle-play';
 }
 
 export function decidePlayerChromeRemoteAction(
