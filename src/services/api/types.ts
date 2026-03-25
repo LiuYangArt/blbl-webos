@@ -301,6 +301,30 @@ export type UserProfile = {
   follower: number;
 };
 
+export type SpaceUserProfile = {
+  mid: number;
+  name: string;
+  face: string;
+  sign: string;
+  level: number;
+  vipLabel: string | null;
+};
+
+export type SpaceRelationStat = {
+  following: number;
+  follower: number;
+};
+
+export type SpaceArchiveOrder = 'pubdate' | 'click';
+
+export type SpaceArchivePage = {
+  items: VideoCardItem[];
+  total: number;
+  hasMore: boolean;
+  page: number;
+  pageSize: number;
+};
+
 export type HistoryItem = {
   kid: string;
   aid: number;

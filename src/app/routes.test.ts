@@ -23,5 +23,11 @@ describe('routes', () => {
       cid: 12345,
       title: '播放页',
     }, true)).toBeNull();
+    expect(getActiveNav({
+      name: 'author-space',
+      mid: 10086,
+      authorName: '作者',
+      sourceBvid: 'BV1xx411c7mD',
+    }, true)).toBeNull();
   });
 });

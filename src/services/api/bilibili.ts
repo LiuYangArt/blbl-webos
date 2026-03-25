@@ -43,6 +43,10 @@ import type {
   PlaySubtitleTrack,
   PlayVideoStream,
   SearchDefaultWord,
+  SpaceArchiveOrder,
+  SpaceArchivePage,
+  SpaceRelationStat,
+  SpaceUserProfile,
   UserProfile,
   VideoCardItem,
   VideoDetail,
@@ -213,6 +217,41 @@ type RawNavData = {
 type RawNavStatData = {
   following?: Numeric;
   follower?: Numeric;
+};
+
+type RawSpaceProfile = {
+  mid?: Numeric;
+  name?: string;
+  face?: string;
+  sign?: string;
+  level?: Numeric;
+  level_info?: {
+    current_level?: Numeric;
+  };
+  vip_label?: {
+    text?: string;
+  };
+  vip?: {
+    label?: {
+      text?: string;
+    };
+  };
+};
+
+type RawSpaceRelationStat = {
+  following?: Numeric;
+  follower?: Numeric;
+};
+
+type RawSpaceArchivePage = {
+  list?: {
+    vlist?: RawVideoCard[];
+  };
+  page?: {
+    count?: Numeric;
+    pn?: Numeric;
+    ps?: Numeric;
+  };
 };
 
 type RawHistoryEntry = {
@@ -1599,6 +1638,82 @@ export async function fetchCurrentUserProfile(): Promise<UserProfile> {
     following: Number(statData.following ?? 0),
     follower: Number(statData.follower ?? 0),
   };
+}
+
+export async function fetchUserSpaceProfile(mid: number): Promise<SpaceUserProfile> {
+  const params = await signWbi({
+    mid,
+  });
+  const payload = await fetchJson<ApiEnvelope<RawSpaceProfile>>(
+    getBiliApiUrl(`/x/space/wbi/acc/info?${params.toString()}`),
+  );
+  const data = unwrapData(payload);
+
+  return {
+    mid: Number(data.mid ?? mid),
+    name: String(data.name ?? ''),
+    face: normalizeCover(String(data.face ?? '')),
+    sign: String(data.sign ?? ''),
+    level: Number(data.level ?? data.level_info?.current_level ?? 0),
+    vipLabel: getVipLabel(data),
+  };
+}
+
+export async function fetchUserRelationStat(mid: number): Promise<SpaceRelationStat> {
+  const payload = await fetchJson<ApiEnvelope<RawSpaceRelationStat>>(
+    getBiliApiUrl(`/x/relation/stat?vmid=${encodeURIComponent(String(mid))}`),
+  );
+  const data = unwrapData(payload);
+
+  return {
+    following: Number(data.following ?? 0),
+    follower: Number(data.follower ?? 0),
+  };
+}
+
+export async function fetchUserArchivePage(options: {
+  mid: number;
+  page?: number;
+  pageSize?: number;
+  order?: SpaceArchiveOrder;
+}): Promise<SpaceArchivePage> {
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = Math.max(1, options.pageSize ?? 24);
+  const order = options.order ?? 'pubdate';
+  const params = await signWbi({
+    mid: options.mid,
+    pn: page,
+    ps: pageSize,
+    order,
+    platform: 'web',
+    web_location: 333.1387,
+  });
+  const payload = await fetchJson<ApiEnvelope<RawSpaceArchivePage>>(
+    getBiliApiUrl(`/x/space/wbi/arc/search?${params.toString()}`),
+  );
+  const data = unwrapData(payload);
+  const items = (data.list?.vlist ?? []).map(mapVideoCard);
+  const total = Number(data.page?.count ?? 0);
+
+  return {
+    items,
+    total,
+    hasMore: total > 0 ? page * pageSize < total : items.length >= pageSize,
+    page: Number(data.page?.pn ?? page),
+    pageSize: Number(data.page?.ps ?? pageSize),
+  };
+}
+
+function getVipLabel(data: RawSpaceProfile): string | null {
+  if (data.vip?.label?.text) {
+    return String(data.vip.label.text);
+  }
+
+  if (data.vip_label?.text) {
+    return String(data.vip_label.text);
+  }
+
+  return null;
 }
 
 export function readBiliCsrfToken() {

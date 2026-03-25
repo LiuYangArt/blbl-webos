@@ -107,7 +107,7 @@ const COMPONENT_STATUS = {
     'FocusButton / TvIconButton：主按钮、图标按钮、导航项、播放器控制按钮',
     'MediaCard：首页、热门、搜索、收藏等视频卡片',
     'SectionHeader：内容分区标题',
-    'PlayerControlBar：播放器底部主控制条',
+    'PlayerControlBar：播放器底部主控制条（含分P、UP主页、字幕、设置、推荐）',
     'SearchComposer：搜索页与搜索结果页输入面板',
     'TvProgressBar：播放器进度展示与 UI Debug 进度样本',
     'PlayerSettingsDrawer / PlayerSubtitlePanel：播放器设置类抽屉',
@@ -686,7 +686,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
         >
           <ShowcaseCard
             title="播放器底部控制条"
-            usedIn="用于：播放器主操作区，包含返回、快退快进、播放暂停、分P、字幕、设置、推荐。"
+            usedIn="用于：播放器主操作区，包含返回、快退快进、播放暂停、分P、UP主页、字幕、设置、推荐。"
             source="PlayerControlBar"
           >
             <div className="ui-debug-player-bar-stage">
@@ -700,6 +700,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps) {
                 onRestartFromBeginning={() => {}}
                 onRefresh={() => {}}
                 onOpenEpisodes={() => {}}
+                onOpenAuthor={() => {}}
                 onOpenSubtitles={() => {}}
                 onOpenSettings={() => {}}
                 onOpenRecommendations={() => {}}

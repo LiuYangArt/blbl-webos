@@ -13,6 +13,7 @@ export type AppRoute =
   | { name: 'video-detail'; bvid: string; title?: string }
   | { name: 'pgc-detail'; seasonId: number; title?: string }
   | { name: 'player'; aid?: number; bvid: string; cid: number; title: string; part?: string }
+  | { name: 'author-space'; mid: number; authorName?: string; sourceBvid?: string }
   | { name: 'history' }
   | { name: 'login' }
   | { name: 'profile' }
@@ -79,6 +80,7 @@ export function getActiveNav(route: AppRoute, isLoggedIn: boolean): RootNavKey |
     case 'pgc-detail':
       return isLoggedIn ? 'subscriptions' : null;
     case 'player':
+    case 'author-space':
       return null;
   }
 }
@@ -91,4 +93,10 @@ export type PlayerRoutePayload = Pick<VideoCardItem, 'bvid' | 'cid' | 'title'> &
 export type PgcDetailRoutePayload = {
   seasonId: number;
   title: string;
+};
+
+export type AuthorSpaceRoutePayload = {
+  mid: number;
+  authorName?: string;
+  sourceBvid?: string;
 };

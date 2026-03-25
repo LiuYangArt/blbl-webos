@@ -7,6 +7,7 @@ type PlayerControlBarProps = {
   sectionId: string;
   isPlaying: boolean;
   disabled?: boolean;
+  authorAvailable?: boolean;
   subtitleAvailable?: boolean;
   onBack: () => void;
   onReplay: () => void;
@@ -15,15 +16,26 @@ type PlayerControlBarProps = {
   onRestartFromBeginning: () => void;
   onRefresh: () => void;
   onOpenEpisodes: () => void;
+  onOpenAuthor: () => void;
   onOpenSubtitles: () => void;
   onOpenSettings: () => void;
   onOpenRecommendations: () => void;
+};
+
+type PlayerControlAction = {
+  focusId: string;
+  symbol: (typeof TV_ICONS)[keyof typeof TV_ICONS];
+  label: string;
+  onClick: () => void;
+  className?: string;
+  defaultFocus?: boolean;
 };
 
 export function PlayerControlBar({
   sectionId,
   isPlaying,
   disabled = false,
+  authorAvailable = true,
   subtitleAvailable = true,
   onBack,
   onReplay,
@@ -32,18 +44,13 @@ export function PlayerControlBar({
   onRestartFromBeginning,
   onRefresh,
   onOpenEpisodes,
+  onOpenAuthor,
   onOpenSubtitles,
   onOpenSettings,
   onOpenRecommendations,
 }: PlayerControlBarProps) {
   const [focusedActionId, setFocusedActionId] = useState<string | null>(null);
-  const secondaryActions: Array<{
-    focusId: string;
-    symbol: (typeof TV_ICONS)[keyof typeof TV_ICONS];
-    label: string;
-    onClick: () => void;
-    className?: string;
-  }> = [
+  const secondaryActions: PlayerControlAction[] = [
     { focusId: 'player-back', symbol: TV_ICONS.playerBack, label: '返回', onClick: onBack },
     { focusId: 'player-replay', symbol: TV_ICONS.playerReplay10, label: '-10 秒', onClick: onReplay },
     { focusId: 'player-forward', symbol: TV_ICONS.playerForward10, label: '+10 秒', onClick: onForward },
@@ -51,26 +58,24 @@ export function PlayerControlBar({
     { focusId: 'player-refresh', symbol: TV_ICONS.playerRefresh, label: '重载播放源', onClick: onRefresh },
     { focusId: 'player-open-episodes', symbol: TV_ICONS.playerEpisodes, label: '分P / 选集', onClick: onOpenEpisodes },
     {
+      focusId: 'player-open-author',
+      symbol: TV_ICONS.playerAuthor,
+      label: 'UP主页',
+      onClick: onOpenAuthor,
+      className: getAvailabilityActionClass(authorAvailable),
+    },
+    {
       focusId: 'player-open-subtitles',
       symbol: TV_ICONS.playerSubtitle,
       label: 'CC 字幕',
       onClick: onOpenSubtitles,
-      className: subtitleAvailable ? undefined : 'focus-button--disabled player-control-bar__action--inactive',
+      className: getAvailabilityActionClass(subtitleAvailable),
     },
     { focusId: 'player-open-settings', symbol: TV_ICONS.playerSettings, label: '设置', onClick: onOpenSettings },
     { focusId: 'player-open-recommendations', symbol: TV_ICONS.playerRecommendations, label: '推荐视频', onClick: onOpenRecommendations },
   ];
 
-  const renderAction = (
-    action: {
-      focusId: string;
-      symbol: (typeof TV_ICONS)[keyof typeof TV_ICONS];
-      label: string;
-      onClick: () => void;
-      className?: string;
-      defaultFocus?: boolean;
-    },
-  ) => {
+  const renderAction = (action: PlayerControlAction) => {
     const isExpanded = focusedActionId === action.focusId;
 
     return (
@@ -119,4 +124,12 @@ export function PlayerControlBar({
       </FocusSection>
     </div>
   );
+}
+
+function getAvailabilityActionClass(isAvailable: boolean): string | undefined {
+  if (isAvailable) {
+    return undefined;
+  }
+
+  return 'focus-button--disabled player-control-bar__action--inactive';
 }
