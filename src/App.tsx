@@ -262,6 +262,7 @@ type RouteActions = {
 function pushPlayer(actions: RouteActions, item: PlayerRoutePayload): void {
   actions.push({
     name: 'player',
+    aid: item.aid,
     bvid: item.bvid,
     cid: item.cid,
     title: item.title,
@@ -329,6 +330,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
           onOpenPlayer={(item) => pushPlayer(actions, item)}
           onPlay={(entry) => actions.push({
             name: 'player',
+            aid: entry.aid,
             bvid: route.bvid,
             cid: entry.cid,
             title: entry.title,
@@ -347,6 +349,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
     case 'player':
       return (
         <PlayerPage
+          aid={route.aid}
           bvid={route.bvid}
           cid={route.cid}
           title={route.title}
@@ -354,6 +357,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
           onBack={() => actions.pop()}
           onOpenPlayer={(item) => actions.replace({
             name: 'player',
+            aid: item.aid,
             bvid: item.bvid,
             cid: item.cid,
             title: item.title,

@@ -34,6 +34,13 @@ export type RelayPlayurlResponse<T> = {
   relay: RelayPlayurlMeta;
 };
 
+export type RelayMutationResponse = {
+  ok: true;
+  code: number;
+  message: string;
+  data?: unknown;
+};
+
 export type RelayEnsureResult = {
   usable: boolean;
   healthOk: boolean | null;
@@ -136,6 +143,40 @@ export async function fetchRelayPlayurl<T>(settings: RelaySettings, params: URLS
       formatHint: typeof response.relay?.formatHint === 'string' ? response.relay.formatHint : null,
     },
   };
+}
+
+export async function reportRelayHeartbeat(settings: RelaySettings, payload: {
+  aid?: number;
+  bvid: string;
+  cid: number;
+  playedTime: number;
+}) {
+  return requestRelay<RelayMutationResponse>(settings, '/api/history/heartbeat', {
+    method: 'POST',
+    timeoutMs: settings.requestTimeoutMs,
+    body: JSON.stringify({
+      aid: payload.aid,
+      bvid: payload.bvid,
+      cid: payload.cid,
+      playedTime: payload.playedTime,
+    }),
+  });
+}
+
+export async function reportRelayHistoryProgress(settings: RelaySettings, payload: {
+  aid: number;
+  cid: number;
+  progress: number;
+}) {
+  return requestRelay<RelayMutationResponse>(settings, '/api/history/report', {
+    method: 'POST',
+    timeoutMs: settings.requestTimeoutMs,
+    body: JSON.stringify({
+      aid: payload.aid,
+      cid: payload.cid,
+      progress: payload.progress,
+    }),
+  });
 }
 
 export async function ensureRelaySession(

@@ -12,7 +12,7 @@ export type AppRoute =
   | { name: 'search-results'; keyword: string }
   | { name: 'video-detail'; bvid: string; title?: string }
   | { name: 'pgc-detail'; seasonId: number; title?: string }
-  | { name: 'player'; bvid: string; cid: number; title: string; part?: string }
+  | { name: 'player'; aid?: number; bvid: string; cid: number; title: string; part?: string }
   | { name: 'history' }
   | { name: 'login' }
   | { name: 'profile' }
@@ -85,6 +85,7 @@ export function getActiveNav(route: AppRoute, isLoggedIn: boolean): RootNavKey |
 
 export type DetailRoutePayload = Pick<VideoCardItem, 'bvid' | 'title'>;
 export type PlayerRoutePayload = Pick<VideoCardItem, 'bvid' | 'cid' | 'title'> & {
+  aid?: number;
   part?: string;
 };
 export type PgcDetailRoutePayload = {

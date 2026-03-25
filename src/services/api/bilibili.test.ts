@@ -1,12 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { fetchJsonMock, getBiliApiUrlMock, getBiliPassportUrlMock, getBiliSearchUrlMock, unwrapDataMock, signWbiMock } = vi.hoisted(() => ({
+const {
+  fetchJsonMock,
+  getBiliApiUrlMock,
+  getBiliPassportUrlMock,
+  getBiliSearchUrlMock,
+  postFormMock,
+  readCookieValueMock,
+  unwrapDataMock,
+  signWbiMock,
+  readRelayAuthMaterialMock,
+  readRelaySettingsMock,
+} = vi.hoisted(() => ({
   fetchJsonMock: vi.fn(),
   getBiliApiUrlMock: vi.fn((path: string) => `api:${path}`),
   getBiliPassportUrlMock: vi.fn((path: string) => `passport:${path}`),
   getBiliSearchUrlMock: vi.fn((path: string) => `search:${path}`),
+  postFormMock: vi.fn(),
+  readCookieValueMock: vi.fn(),
   unwrapDataMock: vi.fn((payload: { data: unknown }) => payload.data),
   signWbiMock: vi.fn(),
+  readRelayAuthMaterialMock: vi.fn(),
+  readRelaySettingsMock: vi.fn(),
 }));
 
 vi.mock('./http', () => ({
@@ -14,11 +29,18 @@ vi.mock('./http', () => ({
   getBiliApiUrl: getBiliApiUrlMock,
   getBiliPassportUrl: getBiliPassportUrlMock,
   getBiliSearchUrl: getBiliSearchUrlMock,
+  postForm: postFormMock,
+  readCookieValue: readCookieValueMock,
   unwrapData: unwrapDataMock,
 }));
 
 vi.mock('./wbi', () => ({
   signWbi: signWbiMock,
+}));
+
+vi.mock('../relay/settings', () => ({
+  readRelayAuthMaterial: readRelayAuthMaterialMock,
+  readRelaySettings: readRelaySettingsMock,
 }));
 
 async function loadBilibiliModule() {
@@ -32,9 +54,21 @@ describe('bilibili api mapping', () => {
     getBiliApiUrlMock.mockClear();
     getBiliPassportUrlMock.mockClear();
     getBiliSearchUrlMock.mockClear();
+    postFormMock.mockReset();
+    readCookieValueMock.mockReset();
+    readRelayAuthMaterialMock.mockReset();
+    readRelaySettingsMock.mockReset();
     unwrapDataMock.mockClear();
     signWbiMock.mockReset();
     signWbiMock.mockResolvedValue(new URLSearchParams('signed=1'));
+    readRelaySettingsMock.mockReturnValue({
+      enabled: true,
+      host: '',
+      port: 19091,
+      accessToken: '',
+      healthTimeoutMs: 1800,
+      requestTimeoutMs: 7000,
+    });
   });
 
   it('fetchRecommendedVideos 会过滤非视频项并清洗标题、封面和作者信息', async () => {
@@ -368,6 +402,138 @@ describe('bilibili api mapping', () => {
       hasMore: true,
       cursor: 'offset-3',
     });
+  });
+
+  it('fetchHistoryPage 会映射 aid，并生成下一页 cursor', async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: {
+        list: [
+          {
+            kid: 'history-1',
+            title: '历史视频',
+            history: {
+              oid: 1001,
+              bvid: 'BV1history',
+              cid: 2002,
+              part: 'P1',
+            },
+            cover: '//i0.hdslb.com/history.jpg',
+            author_name: '作者',
+            duration: 300,
+            progress: 120,
+            view_at: 1711000000,
+          },
+        ],
+      },
+    });
+
+    const { fetchHistoryPage } = await loadBilibiliModule();
+    const result = await fetchHistoryPage();
+
+    expect(result).toEqual({
+      items: [{
+        kid: 'history-1',
+        aid: 1001,
+        title: '历史视频',
+        bvid: 'BV1history',
+        cid: 2002,
+        cover: 'https://i0.hdslb.com/history.jpg',
+        author: '作者',
+        duration: 300,
+        progress: 120,
+        viewAt: 1711000000,
+        part: 'P1',
+      }],
+      hasMore: true,
+      cursor: JSON.stringify({
+        max: 1001,
+        viewAt: 1711000000,
+      }),
+    });
+  });
+
+  it('reportVideoHeartbeat 会带 csrf 和 played_time 发送表单请求', async () => {
+    readCookieValueMock.mockReturnValue('csrf-token');
+    postFormMock.mockResolvedValue({
+      data: null,
+    });
+
+    const { reportVideoHeartbeat } = await loadBilibiliModule();
+    await reportVideoHeartbeat({
+      aid: 1001,
+      bvid: 'BV1heartbeat',
+      cid: 2002,
+      playedTime: 15,
+    });
+
+    expect(postFormMock).toHaveBeenCalledWith(
+      'api:/x/click-interface/web/heartbeat',
+      {
+        aid: 1001,
+        bvid: 'BV1heartbeat',
+        cid: 2002,
+        played_time: 15,
+        csrf: 'csrf-token',
+      },
+    );
+  });
+
+  it('reportVideoHistoryProgress 会带 aid/cid/progress/csrf 发送表单请求', async () => {
+    readCookieValueMock.mockReturnValue('csrf-token');
+    postFormMock.mockResolvedValue({
+      data: null,
+    });
+
+    const { reportVideoHistoryProgress } = await loadBilibiliModule();
+    await reportVideoHistoryProgress({
+      aid: 1001,
+      cid: 2002,
+      progress: 88,
+    });
+
+    expect(postFormMock).toHaveBeenCalledWith(
+      'api:/x/v2/history/report',
+      {
+        aid: 1001,
+        cid: 2002,
+        progress: 88,
+        csrf: 'csrf-token',
+      },
+    );
+  });
+
+  it('直写接口在 cookie 读不到 csrf 时，会回退到已保存的登录材料', async () => {
+    readCookieValueMock.mockReturnValue(null);
+    readRelayAuthMaterialMock.mockReturnValue({
+      loginUrl: 'https://passport.bilibili.com/x/passport-login/web/crossDomain?bili_jct=query-csrf',
+      refreshToken: 'refresh-token',
+      completedAt: 1710000000000,
+      mid: 12345,
+      uname: '测试用户',
+      vip: false,
+      capturedAt: 1710000001000,
+      csrfToken: 'query-csrf',
+    });
+    postFormMock.mockResolvedValue({
+      data: null,
+    });
+
+    const { reportVideoHeartbeat } = await loadBilibiliModule();
+    await reportVideoHeartbeat({
+      bvid: 'BV1fallback',
+      cid: 2002,
+      playedTime: 22,
+    });
+
+    expect(postFormMock).toHaveBeenCalledWith(
+      'api:/x/click-interface/web/heartbeat',
+      expect.objectContaining({
+        bvid: 'BV1fallback',
+        cid: 2002,
+        played_time: 22,
+        csrf: 'query-csrf',
+      }),
+    );
   });
 
   it('fetchPlaySource 在 DASH 不可用时回退 durl 兼容流', async () => {
@@ -930,6 +1096,7 @@ describe('bilibili api mapping', () => {
     expect(result).toEqual({
       items: [{
         kid: 'history-1',
+        aid: 123,
         title: '历史视频',
         bvid: 'BV1history1',
         cid: 456,

@@ -12,7 +12,7 @@ import { PageStatus } from '../shared/PageStatus';
 type VideoDetailPageProps = {
   bvid: string;
   fallbackTitle?: string;
-  onPlay: (entry: { cid: number; title: string; part?: string }) => void;
+  onPlay: (entry: { aid?: number; cid: number; title: string; part?: string }) => void;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
@@ -80,6 +80,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: V
               focusId="detail-play-primary"
               defaultFocus
               onClick={() => onPlay({
+                aid: video.aid,
                 cid: continueEntry?.cid ?? video.parts[0]?.cid ?? video.cid,
                 title: video.title,
                 part: continueEntry?.part ?? video.parts[0]?.part,
@@ -93,6 +94,7 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: V
               sectionId="detail-hero-actions"
               focusId="detail-play-from-start"
               onClick={() => onPlay({
+                aid: video.aid,
                 cid: video.parts[0]?.cid ?? video.cid,
                 title: video.title,
                 part: video.parts[0]?.part,
@@ -120,10 +122,10 @@ export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: V
               key={part.cid}
               variant={continueEntry?.cid === part.cid ? 'primary' : 'glass'}
               className="detail-chip"
-              sectionId="detail-episodes"
-              focusId={`detail-part-${index}`}
-              onClick={() => onPlay({ cid: part.cid, title: video.title, part: part.part })}
-            >
+                sectionId="detail-episodes"
+                focusId={`detail-part-${index}`}
+                onClick={() => onPlay({ aid: video.aid, cid: part.cid, title: video.title, part: part.part })}
+              >
               <span>{part.part || `P${part.page}`}</span>
               <small>{formatDuration(part.duration)}</small>
             </FocusButton>

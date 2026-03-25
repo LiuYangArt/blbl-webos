@@ -1,4 +1,4 @@
-import { type CSSProperties, type MutableRefObject, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type MutableRefObject, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../app/AppStore';
 import { usePageBackHandler } from '../../app/PageBackHandler';
 import { useAsyncData } from '../../app/useAsyncData';
@@ -9,7 +9,13 @@ import { TvProgressBar } from '../../components/TvProgressBar';
 import { FocusSection, captureFocus, focusById, focusSection, releaseFocus } from '../../platform/focus';
 import { REMOTE_INTENT_EVENT, type RemoteIntentDetail } from '../../platform/remote';
 import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
-import { fetchPlayInfo, fetchPlaySource, fetchRelatedVideos, fetchVideoDetail } from '../../services/api/bilibili';
+import {
+  fetchPlayInfo,
+  fetchPlaySource,
+  fetchRelatedVideos,
+  fetchVideoDetail,
+} from '../../services/api/bilibili';
+import { appendRuntimeDiagnostic } from '../../services/debug/runtimeDiagnostics';
 import type {
   PlayAudioStream,
   PlaySource,
@@ -62,10 +68,18 @@ import {
   resolvePlayerAutoNextTarget,
   type PlayerAutoNextTarget,
 } from './playerAutoNext';
+import {
+  canSyncPlayerHistory,
+  resolvePlayerHistoryFlush,
+  resolvePlayerHistoryHeartbeat,
+  type PlayerHistoryHeartbeatTrigger,
+} from './playerHistoryReporting';
+import { syncPlayerHistoryHeartbeat, syncPlayerHistoryProgress } from './playerHistorySync';
 import { decidePlayerChromeRemoteAction } from './playerRemoteMode';
 import { createShakaPlayer, formatShakaError } from './playerShaka';
 
 type PlayerNavigationTarget = {
+  aid?: number;
   bvid: string;
   cid: number;
   title: string;
@@ -91,6 +105,7 @@ type StripOverlayConfig = OverlayCaptureConfig & {
 };
 
 type PlayerPageProps = {
+  aid?: number;
   bvid: string;
   cid: number;
   title: string;
@@ -137,7 +152,7 @@ const STRIP_OVERLAY_CONFIG: Record<PlayerStripMode, StripOverlayConfig> = {
   },
 };
 
-export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: PlayerPageProps) {
+export function PlayerPage({ aid, bvid, cid, title, part, onBack, onOpenPlayer }: PlayerPageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const subtitleTrackUrlRef = useRef<string | null>(null);
   const subtitleTrackElementRef = useRef<HTMLTrackElement | null>(null);
@@ -152,6 +167,12 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const recordedAttemptIdRef = useRef('');
   const reportedEnvironmentKeyRef = useRef('');
   const chromeFocusTimeoutRef = useRef<number | null>(null);
+  const historyQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastHistoryHeartbeatProgressRef = useRef(0);
+  const lastHistoryFlushProgressRef = useRef(0);
+  const pendingHeartbeatKeyRef = useRef('');
+  const pendingFlushKeyRef = useRef('');
+  const historyCompletedRef = useRef(false);
   const [codecPreference, setCodecPreference] = useState<VideoCodecPreference>(() => readPlayerSettings().codecPreference);
   const [qualityPreference, setQualityPreference] = useState<number>(() => readPlayerSettings().qualityPreference);
   const [subtitleEnabled, setSubtitleEnabled] = useState<boolean>(() => readPlayerSettings().subtitleEnabled);
@@ -172,7 +193,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const [activeSubtitleTrackId, setActiveSubtitleTrackId] = useState<number | null>(null);
   const [subtitleLoadState, setSubtitleLoadState] = useState<SubtitleTrackLoadState>('idle');
   const [subtitleStatusText, setSubtitleStatusText] = useState<string | null>(null);
-  const { setWatchProgress, watchProgress } = useAppStore();
+  const { auth, setWatchProgress, watchProgress } = useAppStore();
 
   const playerData = useAsyncData(async () => {
     const [play, playInfoResult, related, detail, deviceInfo] = await Promise.all([
@@ -208,6 +229,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   const detail = playerDataValue?.detail ?? null;
   const deviceInfo = playerDataValue?.deviceInfo ?? null;
   const capability = playerDataValue?.capability ?? null;
+  const isAuthenticated = auth.status === 'authenticated' && Boolean(auth.profile);
+  const effectiveAid = aid ?? detail?.aid ?? undefined;
   const subtitleTracks = useMemo(() => playInfo?.subtitles ?? [], [playInfo]);
   const hasSubtitleTracks = subtitleTracks.length > 0;
   const codecMemory = useMemo(() => (
@@ -242,14 +265,183 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
   }, [onOpenPlayer]);
 
   useEffect(() => {
+    historyQueueRef.current = Promise.resolve();
+    lastHistoryHeartbeatProgressRef.current = 0;
+    lastHistoryFlushProgressRef.current = 0;
+    pendingHeartbeatKeyRef.current = '';
+    pendingFlushKeyRef.current = '';
+    historyCompletedRef.current = false;
+  }, [aid, bvid, cid]);
+
+  const enqueueHistoryTask = useCallback((task: () => Promise<void>) => {
+    const queued = historyQueueRef.current
+      .catch(() => undefined)
+      .then(task);
+    historyQueueRef.current = queued.catch(() => undefined);
+    return queued;
+  }, []);
+
+  const reportHistoryHeartbeat = useCallback((
+    trigger: PlayerHistoryHeartbeatTrigger,
+    progress: number,
+    duration: number,
+  ) => {
+    if (!canSyncPlayerHistory(isAuthenticated, cid) || historyCompletedRef.current) {
+      return Promise.resolve();
+    }
+
+    const decision = resolvePlayerHistoryHeartbeat({
+      trigger,
+      progress,
+      duration,
+      lastReportedProgress: lastHistoryHeartbeatProgressRef.current,
+    });
+    if (!decision) {
+      return Promise.resolve();
+    }
+
+    const heartbeatKey = `${trigger}:${decision.playedTime}:${decision.nextReportedProgress}`;
+    if (pendingHeartbeatKeyRef.current === heartbeatKey) {
+      return Promise.resolve();
+    }
+    pendingHeartbeatKeyRef.current = heartbeatKey;
+
+    return enqueueHistoryTask(async () => {
+      try {
+        const syncResult = await syncPlayerHistoryHeartbeat({
+          aid: effectiveAid,
+          bvid,
+          cid,
+          playedTime: decision.playedTime,
+        });
+        lastHistoryHeartbeatProgressRef.current = decision.nextReportedProgress;
+        if (decision.completed) {
+          historyCompletedRef.current = true;
+        }
+        appendRuntimeDiagnostic('player-history', 'heartbeat-sent', {
+          path: syncResult.path,
+          relayAttempted: syncResult.relayAttempted,
+          relayFallbackReason: syncResult.relayFallbackReason,
+          trigger,
+          bvid,
+          cid,
+          aid: effectiveAid ?? null,
+          playedTime: decision.playedTime,
+          progress: decision.nextReportedProgress,
+          duration,
+          completed: decision.completed,
+        });
+      } catch (error) {
+        appendRuntimeDiagnostic('player-history', 'heartbeat-failed', {
+          trigger,
+          bvid,
+          cid,
+          aid: effectiveAid ?? null,
+          playedTime: decision.playedTime,
+          progress: decision.nextReportedProgress,
+          duration,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'warn');
+        throw error;
+      } finally {
+        if (pendingHeartbeatKeyRef.current === heartbeatKey) {
+          pendingHeartbeatKeyRef.current = '';
+        }
+      }
+    });
+  }, [
+    cid,
+    effectiveAid,
+    enqueueHistoryTask,
+    isAuthenticated,
+    bvid,
+  ]);
+
+  const reportHistoryFlush = useCallback((
+    progress: number,
+    duration: number,
+    reason: 'pause' | 'cleanup' | 'completed',
+  ) => {
+    if (!canSyncPlayerHistory(isAuthenticated, cid) || !effectiveAid) {
+      return Promise.resolve();
+    }
+
+    const decision = resolvePlayerHistoryFlush({
+      progress,
+      duration,
+      lastReportedProgress: lastHistoryFlushProgressRef.current,
+      completed: reason === 'completed',
+      completedReported: historyCompletedRef.current,
+    });
+    if (!decision) {
+      return Promise.resolve();
+    }
+
+    const flushKey = `${reason}:${decision.progress}:${decision.completed}`;
+    if (pendingFlushKeyRef.current === flushKey) {
+      return Promise.resolve();
+    }
+    pendingFlushKeyRef.current = flushKey;
+
+    return enqueueHistoryTask(async () => {
+      try {
+        const syncResult = await syncPlayerHistoryProgress({
+          aid: effectiveAid,
+          cid,
+          progress: decision.progress,
+        });
+        lastHistoryFlushProgressRef.current = decision.progress;
+        if (decision.completed) {
+          historyCompletedRef.current = true;
+        }
+        appendRuntimeDiagnostic('player-history', decision.completed ? 'progress-completed' : 'progress-flush', {
+          path: syncResult.path,
+          relayAttempted: syncResult.relayAttempted,
+          relayFallbackReason: syncResult.relayFallbackReason,
+          reason,
+          bvid,
+          cid,
+          aid: effectiveAid,
+          progress: decision.progress,
+          duration,
+          completed: decision.completed,
+        });
+      } catch (error) {
+        appendRuntimeDiagnostic('player-history', 'progress-report-failed', {
+          reason,
+          bvid,
+          cid,
+          aid: effectiveAid,
+          progress: decision.progress,
+          duration,
+          completed: decision.completed,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'warn');
+        throw error;
+      } finally {
+        if (pendingFlushKeyRef.current === flushKey) {
+          pendingFlushKeyRef.current = '';
+        }
+      }
+    });
+  }, [
+    cid,
+    effectiveAid,
+    enqueueHistoryTask,
+    isAuthenticated,
+    bvid,
+  ]);
+
+  useEffect(() => {
     autoPlayNextTargetRef.current = resolvePlayerAutoNextTarget({
+      aid: effectiveAid,
       bvid,
       cid,
       title,
       episodeEntries,
       related,
     });
-  }, [bvid, cid, episodeEntries, related, title]);
+  }, [effectiveAid, bvid, cid, episodeEntries, related, title]);
 
   const playbackPlan = useMemo(() => {
     if (!play || !capability) {
@@ -890,6 +1082,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         });
       }
 
+      void reportHistoryHeartbeat('playing', current, duration).catch(() => undefined);
+
       if (!progressReported && current >= 2) {
         progressReported = true;
         reportPlayerDebugEvent({
@@ -936,13 +1130,24 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
         return;
       }
 
+      const current = Math.floor(video.currentTime);
+      const duration = getDurationSeconds(video, play.durationMs);
+      void reportHistoryHeartbeat('status', current, duration).catch(() => undefined);
+      void reportHistoryFlush(current, duration, 'pause').catch(() => undefined);
       setIsPlaying(false);
       setIsChromeVisible(true);
     };
 
-    const handleEnded = () => {
+    const handleEnded = async () => {
       setIsPlaying(false);
       setIsChromeVisible(true);
+
+      const current = Math.floor(video.currentTime);
+      const duration = getDurationSeconds(video, play.durationMs);
+      await Promise.allSettled([
+        reportHistoryHeartbeat('completed', current, duration),
+        reportHistoryFlush(current, duration, 'completed'),
+      ]);
 
       const nextTarget = autoPlayNextTargetRef.current;
       if (!nextTarget || autoPlayHandledRef.current) {
@@ -1041,6 +1246,10 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
       if (destroyPlayer) {
         void destroyPlayer();
       }
+      const current = Math.floor(video.currentTime);
+      const duration = getDurationSeconds(video, play.durationMs);
+      void reportHistoryHeartbeat('status', current, duration).catch(() => undefined);
+      void reportHistoryFlush(current, duration, 'cleanup').catch(() => undefined);
       manifestRevoke?.();
     };
   }, [
@@ -1058,6 +1267,8 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
     play,
     rawCurrentCandidate,
     reloadNonce,
+    reportHistoryFlush,
+    reportHistoryHeartbeat,
     setWatchProgress,
     title,
   ]);
@@ -1528,6 +1739,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                 defaultFocus={index === 0}
                 item={item}
                 onClick={() => onOpenPlayer({
+                  aid: item.aid,
                   bvid: item.bvid,
                   cid: item.cid,
                   title: item.title,
@@ -1556,6 +1768,7 @@ export function PlayerPage({ bvid, cid, title, part, onBack, onOpenPlayer }: Pla
                   focusId={buildStripFocusId(STRIP_OVERLAY_CONFIG.episodes.focusPrefix, index)}
                   defaultFocus={index === 0}
                   onClick={() => onOpenPlayer({
+                    aid: effectiveAid,
                     bvid,
                     cid: entry.cid,
                     title,

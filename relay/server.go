@@ -32,6 +32,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/auth/sync", s.withAuth(s.handleAuthSync))
 	mux.HandleFunc("/api/auth/logout", s.withAuth(s.handleAuthLogout))
 	mux.HandleFunc("/api/playurl", s.withAuth(s.handlePlayurl))
+	mux.HandleFunc("/api/history/heartbeat", s.withAuth(s.handleHistoryHeartbeat))
+	mux.HandleFunc("/api/history/report", s.withAuth(s.handleHistoryReport))
 	mux.HandleFunc("/media", s.handleMediaProxy)
 	return mux
 }
@@ -184,13 +186,8 @@ func (s *Server) handleAuthLogout(writer http.ResponseWriter, request *http.Requ
 }
 
 func (s *Server) handlePlayurl(writer http.ResponseWriter, request *http.Request) {
-	state := s.store.Snapshot()
-	if len(state.Cookies) == 0 {
-		s.writeJSON(writer, http.StatusConflict, map[string]any{
-			"ok":      false,
-			"error":   "auth_missing",
-			"message": "relay 还没有当前账号会话",
-		})
+	state, ok := s.requireRelaySession(writer)
+	if !ok {
 		return
 	}
 
@@ -213,6 +210,106 @@ func (s *Server) handlePlayurl(writer http.ResponseWriter, request *http.Request
 	}
 
 	s.writeJSON(writer, http.StatusOK, response)
+}
+
+func (s *Server) handleHistoryHeartbeat(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		s.writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{"ok": false, "error": "method_not_allowed"})
+		return
+	}
+
+	state, ok := s.requireRelaySession(writer)
+	if !ok {
+		return
+	}
+
+	var payload struct {
+		Aid        int64  `json:"aid"`
+		Bvid       string `json:"bvid"`
+		Cid        int64  `json:"cid"`
+		PlayedTime int64  `json:"playedTime"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		s.writeJSON(writer, http.StatusBadRequest, map[string]any{"ok": false, "error": "bad_request", "message": "请求体不是合法 JSON"})
+		return
+	}
+	if strings.TrimSpace(payload.Bvid) == "" || payload.Cid <= 0 || payload.PlayedTime < -1 {
+		s.writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"ok":      false,
+			"error":   "bad_request",
+			"message": "bvid、cid、playedTime 参数不合法",
+		})
+		return
+	}
+
+	response, err := s.bili.ReportVideoHeartbeat(request.Context(), state.Cookies, RelayHeartbeatInput{
+		Aid:        payload.Aid,
+		Bvid:       payload.Bvid,
+		Cid:        payload.Cid,
+		PlayedTime: payload.PlayedTime,
+	})
+	if err != nil {
+		s.writeRelayError(writer, err)
+		return
+	}
+
+	s.writeJSON(writer, http.StatusOK, response)
+}
+
+func (s *Server) handleHistoryReport(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		s.writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{"ok": false, "error": "method_not_allowed"})
+		return
+	}
+
+	state, ok := s.requireRelaySession(writer)
+	if !ok {
+		return
+	}
+
+	var payload struct {
+		Aid      int64 `json:"aid"`
+		Cid      int64 `json:"cid"`
+		Progress int64 `json:"progress"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		s.writeJSON(writer, http.StatusBadRequest, map[string]any{"ok": false, "error": "bad_request", "message": "请求体不是合法 JSON"})
+		return
+	}
+	if payload.Aid <= 0 || payload.Cid <= 0 || payload.Progress < 0 {
+		s.writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"ok":      false,
+			"error":   "bad_request",
+			"message": "aid、cid、progress 参数不合法",
+		})
+		return
+	}
+
+	response, err := s.bili.ReportHistoryProgress(request.Context(), state.Cookies, RelayHistoryReportInput{
+		Aid:      payload.Aid,
+		Cid:      payload.Cid,
+		Progress: payload.Progress,
+	})
+	if err != nil {
+		s.writeRelayError(writer, err)
+		return
+	}
+
+	s.writeJSON(writer, http.StatusOK, response)
+}
+
+func (s *Server) requireRelaySession(writer http.ResponseWriter) (RelayState, bool) {
+	state := s.store.Snapshot()
+	if len(state.Cookies) == 0 {
+		s.writeJSON(writer, http.StatusConflict, map[string]any{
+			"ok":      false,
+			"error":   "auth_missing",
+			"message": "relay 还没有当前账号会话",
+		})
+		return RelayState{}, false
+	}
+
+	return state, true
 }
 
 func (s *Server) writeRelayError(writer http.ResponseWriter, err error) {

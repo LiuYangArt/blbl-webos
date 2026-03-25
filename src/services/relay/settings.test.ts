@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clearRelayAuthMaterial,
+  extractLoginUrlCookies,
   getRelayBaseUrl,
   readRelayAuthMaterial,
   readRelaySettings,
@@ -102,9 +103,42 @@ describe('relay settings', () => {
       uname: '测试用户',
       vip: true,
       capturedAt: 1710000001000,
+      csrfToken: undefined,
     });
 
     clearRelayAuthMaterial();
     expect(readRelayAuthMaterial()).toBeNull();
+  });
+
+  it('会从登录完成链接里提取可复用 cookie，供无 relay 时兜底使用', () => {
+    const loginUrl = 'https://passport.bilibili.com/x/passport-login/web/crossDomain?SESSDATA=query-sess&DedeUserID=654321&bili_jct=query-csrf&DedeUserID__ckMd5=query-md5';
+
+    expect(extractLoginUrlCookies(loginUrl)).toEqual({
+      SESSDATA: 'query-sess',
+      DedeUserID: '654321',
+      bili_jct: 'query-csrf',
+      DedeUserID__ckMd5: 'query-md5',
+    });
+
+    writeRelayAuthMaterial({
+      loginUrl,
+      refreshToken: 'refresh-token',
+      completedAt: 1710000000000,
+      mid: 654321,
+      uname: 'Query 用户',
+      vip: false,
+      capturedAt: 1710000001000,
+    });
+
+    expect(readRelayAuthMaterial()).toEqual({
+      loginUrl,
+      refreshToken: 'refresh-token',
+      completedAt: 1710000000000,
+      mid: 654321,
+      uname: 'Query 用户',
+      vip: false,
+      capturedAt: 1710000001000,
+      csrfToken: 'query-csrf',
+    });
   });
 });

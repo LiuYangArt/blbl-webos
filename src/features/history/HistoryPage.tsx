@@ -1,3 +1,4 @@
+import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
 import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchHistoryPage } from '../../services/api/bilibili';
@@ -7,7 +8,7 @@ import { PageStatus } from '../shared/PageStatus';
 
 type HistoryPageProps = {
   onLogin: () => void;
-  onOpenPlayer: (item: { bvid: string; cid: number; title: string; part?: string }) => void;
+  onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
 export function HistoryPage({ onLogin, onOpenPlayer }: HistoryPageProps) {
@@ -55,6 +56,7 @@ export function HistoryPage({ onLogin, onOpenPlayer }: HistoryPageProps) {
     item.kid,
     mapHistoryItemToVideoCard(item),
     {
+      aid: item.aid,
       bvid: item.bvid,
       cid: item.cid,
       title: item.title,

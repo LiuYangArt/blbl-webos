@@ -3,6 +3,8 @@ import {
   getBiliApiUrl,
   getBiliPassportUrl,
   getBiliSearchUrl,
+  postForm,
+  readCookieValue,
   unwrapData,
 } from './http';
 import { signWbi } from './wbi';
@@ -1599,6 +1601,54 @@ export async function fetchCurrentUserProfile(): Promise<UserProfile> {
   };
 }
 
+export function readBiliCsrfToken() {
+  return readCookieValue('bili_jct') || readRelayAuthMaterial()?.csrfToken || null;
+}
+
+export async function reportVideoHistoryProgress(options: {
+  aid: number;
+  cid: number;
+  progress: number;
+}) {
+  const csrf = readBiliCsrfToken();
+  if (!csrf) {
+    throw new Error('当前登录态缺少 csrf；如果未连接 relay，请重新扫码一次以补齐登录材料');
+  }
+
+  await postForm<ApiEnvelope<Record<string, never> | null>>(
+    getBiliApiUrl('/x/v2/history/report'),
+    {
+      aid: options.aid,
+      cid: options.cid,
+      progress: Math.max(0, Math.floor(options.progress)),
+      csrf,
+    },
+  ).then(unwrapData);
+}
+
+export async function reportVideoHeartbeat(options: {
+  bvid: string;
+  cid: number;
+  playedTime: number;
+  aid?: number;
+}) {
+  const csrf = readBiliCsrfToken();
+  if (!csrf) {
+    throw new Error('当前登录态缺少 csrf；如果未连接 relay，请重新扫码一次以补齐登录材料');
+  }
+
+  await postForm<ApiEnvelope<Record<string, never> | null>>(
+    getBiliApiUrl('/x/click-interface/web/heartbeat'),
+    {
+      aid: options.aid,
+      bvid: options.bvid,
+      cid: options.cid,
+      played_time: Math.floor(options.playedTime),
+      csrf,
+    },
+  ).then(unwrapData);
+}
+
 export async function fetchHistoryPage(options?: {
   cursor?: string | null;
   pageSize?: number;
@@ -1617,6 +1667,7 @@ export async function fetchHistoryPage(options?: {
   const data = unwrapData(payload);
   const items = (data.list ?? []).map((item) => ({
     kid: String(item.kid ?? `${item.history?.oid ?? item.bvid}`),
+    aid: Number(item.history?.oid ?? 0),
     title: String(item.title ?? ''),
     bvid: String(item.history?.bvid ?? item.bvid ?? ''),
     cid: Number(item.history?.cid ?? item.cid ?? 0),

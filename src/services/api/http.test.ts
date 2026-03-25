@@ -3,6 +3,8 @@ import {
   BiliApiError,
   fetchJson,
   formatDisplayError,
+  postForm,
+  readCookieValue,
   unwrapData,
 } from './http';
 
@@ -37,6 +39,43 @@ describe('http', () => {
     }));
 
     await expect(fetchJson('https://example.com/api')).rejects.toThrow('网络请求失败（403）');
+  });
+
+  it('postForm 会以表单形式发送 POST，并自动过滤空值', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { ok: true } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await postForm<{ code: number; data: { ok: boolean } }>('https://example.com/api', {
+      aid: 1001,
+      bvid: 'BV1xx411c7mD',
+      progress: 12,
+      ignored: undefined,
+      skipped: null,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/api', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({
+        'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      }),
+      body: expect.any(URLSearchParams),
+    }));
+
+    const body = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
+    expect(body.toString()).toBe('aid=1001&bvid=BV1xx411c7mD&progress=12');
+  });
+
+  it('readCookieValue 会读取并解码 cookie', () => {
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'SESSDATA=abc; bili_jct=csrf%2Dtoken; foo=bar',
+    });
+
+    expect(readCookieValue('bili_jct')).toBe('csrf-token');
+    expect(readCookieValue('missing')).toBeNull();
   });
 
   it('unwrapData 在 code 非 0 时抛出标准化 BiliApiError', () => {
