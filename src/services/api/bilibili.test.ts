@@ -536,6 +536,79 @@ describe('bilibili api mapping', () => {
     );
   });
 
+  it('readBiliCsrfToken 会优先使用 cookie，其次回退到已保存登录材料', async () => {
+    readCookieValueMock.mockReturnValue('cookie-csrf');
+    readRelayAuthMaterialMock.mockReturnValue({
+      loginUrl: 'https://passport.bilibili.com/x/passport-login/web/crossDomain?bili_jct=stored-csrf',
+      refreshToken: 'refresh-token',
+      completedAt: 1710000000000,
+      mid: 12345,
+      uname: '测试用户',
+      vip: false,
+      capturedAt: 1710000001000,
+      csrfToken: 'stored-csrf',
+    });
+
+    const { readBiliCsrfToken } = await loadBilibiliModule();
+    expect(readBiliCsrfToken()).toBe('cookie-csrf');
+
+    readCookieValueMock.mockReturnValue(null);
+    expect(readBiliCsrfToken()).toBe('stored-csrf');
+  });
+
+  it('history report 在 cookie 读不到 csrf 时，也会回退到已保存的登录材料', async () => {
+    readCookieValueMock.mockReturnValue(null);
+    readRelayAuthMaterialMock.mockReturnValue({
+      loginUrl: 'https://passport.bilibili.com/x/passport-login/web/crossDomain?bili_jct=query-csrf',
+      refreshToken: 'refresh-token',
+      completedAt: 1710000000000,
+      mid: 12345,
+      uname: '测试用户',
+      vip: false,
+      capturedAt: 1710000001000,
+      csrfToken: 'query-csrf',
+    });
+    postFormMock.mockResolvedValue({
+      data: null,
+    });
+
+    const { reportVideoHistoryProgress } = await loadBilibiliModule();
+    await reportVideoHistoryProgress({
+      aid: 1001,
+      cid: 2002,
+      progress: 88,
+    });
+
+    expect(postFormMock).toHaveBeenCalledWith(
+      'api:/x/v2/history/report',
+      expect.objectContaining({
+        aid: 1001,
+        cid: 2002,
+        progress: 88,
+        csrf: 'query-csrf',
+      }),
+    );
+  });
+
+  it('直写接口在完全拿不到 csrf 时，会抛出明确错误', async () => {
+    readCookieValueMock.mockReturnValue(null);
+    readRelayAuthMaterialMock.mockReturnValue(null);
+
+    const { reportVideoHeartbeat, reportVideoHistoryProgress } = await loadBilibiliModule();
+
+    await expect(reportVideoHeartbeat({
+      bvid: 'BV1missing',
+      cid: 2002,
+      playedTime: 22,
+    })).rejects.toThrow('当前登录态缺少 csrf');
+
+    await expect(reportVideoHistoryProgress({
+      aid: 1001,
+      cid: 2002,
+      progress: 88,
+    })).rejects.toThrow('当前登录态缺少 csrf');
+  });
+
   it('fetchPlaySource 在 DASH 不可用时回退 durl 兼容流', async () => {
     fetchJsonMock.mockImplementation(async (url: string) => {
       if (url.includes('fnval=1488') || url.includes('fnval=4048') || url.includes('fnval=16')) {

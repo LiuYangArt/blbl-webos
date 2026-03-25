@@ -129,6 +129,55 @@ describe('playerHistorySync', () => {
     });
   });
 
+  it('relay 被显式关闭时，也会直接走本地直写', async () => {
+    readRelaySettingsMock.mockReturnValue({
+      enabled: false,
+      host: '192.168.1.20',
+      port: 19091,
+      accessToken: '',
+      healthTimeoutMs: 1800,
+      requestTimeoutMs: 7000,
+    });
+    hasRelayConfigurationMock.mockReturnValue(true);
+
+    const { syncPlayerHistoryProgress } = await loadHistorySyncModule();
+    const result = await syncPlayerHistoryProgress({
+      aid: 1001,
+      cid: 2002,
+      progress: 66,
+    });
+
+    expect(reportRelayHistoryProgressMock).not.toHaveBeenCalled();
+    expect(reportVideoHistoryProgressMock).toHaveBeenCalledWith({
+      aid: 1001,
+      cid: 2002,
+      progress: 66,
+    });
+    expect(result).toEqual({
+      path: 'direct',
+      relayAttempted: false,
+      relayFallbackReason: 'relay disabled',
+    });
+  });
+
+  it('非 RelayApiError 的异常会落到默认 fallback reason', async () => {
+    hasRelayConfigurationMock.mockReturnValue(true);
+    reportRelayHeartbeatMock.mockRejectedValue(new Error('socket hang up'));
+
+    const { syncPlayerHistoryHeartbeat } = await loadHistorySyncModule();
+    const result = await syncPlayerHistoryHeartbeat({
+      bvid: 'BV1generic',
+      cid: 2002,
+      playedTime: 12,
+    });
+
+    expect(result).toEqual({
+      path: 'direct',
+      relayAttempted: true,
+      relayFallbackReason: 'relay request failed',
+    });
+  });
+
   it('relay 与本地直写都失败时，会抛出合并后的错误信息', async () => {
     hasRelayConfigurationMock.mockReturnValue(true);
     reportRelayHistoryProgressMock.mockRejectedValue(new RelayApiError('relay 超时', 'timeout', 504));
