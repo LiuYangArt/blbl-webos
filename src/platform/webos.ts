@@ -5,6 +5,8 @@ export const REMOTE_KEYS = {
   DOWN: 40,
   ENTER: 13,
   BACK: 461,
+  PLAY: 415,
+  PAUSE: 19,
 } as const;
 
 export type WebOsDeviceInfo = {

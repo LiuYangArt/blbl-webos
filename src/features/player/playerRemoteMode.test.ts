@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { decidePlayerChromeRemoteAction } from './playerRemoteMode';
+import {
+  decidePlayerChromeRemoteAction,
+  resolveTogglePlayFocusTargetBeforeRemoteToggle,
+} from './playerRemoteMode';
 
 describe('playerRemoteMode', () => {
   it('默认播放态下左右键直接 seek，确认键切换播放', () => {
     expect(decidePlayerChromeRemoteAction('left', false)).toBe('seek-backward');
     expect(decidePlayerChromeRemoteAction('right', false)).toBe('seek-forward');
     expect(decidePlayerChromeRemoteAction('enter', false)).toBe('toggle-play');
+  });
+
+  it('专用播放/暂停键直接映射到播放器动作', () => {
+    expect(decidePlayerChromeRemoteAction('play', false)).toBe('play');
+    expect(decidePlayerChromeRemoteAction('pause', false)).toBe('pause');
   });
 
   it('默认播放态下上下键进入 OSD 控件区', () => {
@@ -19,5 +27,16 @@ describe('playerRemoteMode', () => {
     expect(decidePlayerChromeRemoteAction('left', true)).toBe('delegate');
     expect(decidePlayerChromeRemoteAction('right', true)).toBe('delegate');
     expect(decidePlayerChromeRemoteAction('enter', true)).toBe('delegate');
+  });
+
+  it('OSD 控件已聚焦时，专用播放/暂停键仍然生效', () => {
+    expect(decidePlayerChromeRemoteAction('play', true)).toBe('play');
+    expect(decidePlayerChromeRemoteAction('pause', true)).toBe('pause');
+  });
+
+  it('确认键切换播放时，按当前播放状态决定是否将焦点拉到播放按钮', () => {
+    expect(resolveTogglePlayFocusTargetBeforeRemoteToggle(false)).toBe('toggle-play');
+    expect(resolveTogglePlayFocusTargetBeforeRemoteToggle(true)).toBe('none');
+    expect(resolveTogglePlayFocusTargetBeforeRemoteToggle(undefined)).toBe('toggle-play');
   });
 });

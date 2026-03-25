@@ -8,8 +8,10 @@ import {
   mapPgcSubscriptionToVideoCard,
   resolvePgcSubscriptionPlayerPayload,
 } from '../shared/videoListItems';
+import { pickImageUrls } from '../shared/videoListLoading';
 import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
+import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type SubscriptionsPageProps = {
   onLogin: () => void;
@@ -32,6 +34,12 @@ export function SubscriptionsPage({ onLogin, onOpenPlayer }: SubscriptionsPagePr
     },
     getItemKey: (item) => `${item.seasonKind}:${item.seasonId}`,
   });
+  const subscriptionsReady = subscriptions.status === 'success';
+  const showLoadingGate = useVideoListPageLoading({
+    ready: subscriptionsReady,
+    imageUrls: pickImageUrls(subscriptions.items, (item) => item.latestEpisodeCover || item.cover, 12),
+    overlayVisible: subscriptions.status !== 'error' && auth.status === 'authenticated' && Boolean(auth.profile),
+  });
 
   if (auth.status !== 'authenticated' || !auth.profile) {
     return (
@@ -44,18 +52,19 @@ export function SubscriptionsPage({ onLogin, onOpenPlayer }: SubscriptionsPagePr
     );
   }
 
-  if (subscriptions.status !== 'success') {
-    if (subscriptions.status === 'error') {
-      return (
-        <PageStatus
-          title="订阅剧集暂时不可用"
-          description={subscriptions.error}
-          actionLabel="重新加载订阅"
-          onAction={() => void subscriptions.reload()}
-        />
-      );
-    }
-    return <PageStatus title="正在同步订阅剧集" description="准备最近追番和最近追剧列表。" />;
+  if (subscriptions.status === 'error') {
+    return (
+      <PageStatus
+        title="订阅剧集暂时不可用"
+        description={subscriptions.error}
+        actionLabel="重新加载订阅"
+        onAction={() => void subscriptions.reload()}
+      />
+    );
+  }
+
+  if (showLoadingGate || subscriptions.status !== 'success') {
+    return null;
   }
 
   const items = subscriptions.items.map((item) => createResolvedVideoListItem(

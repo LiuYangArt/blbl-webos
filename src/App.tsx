@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from './components/AppShell';
 import { FocusOverlay } from './components/FocusOverlay';
 import { AppStoreProvider, useAppStore } from './app/AppStore';
 import { shouldAutofocusContentAfterMutation } from './app/focusPolicy';
-import { resolveInitialRoute } from './app/launchParams';
+import { readDebugFocusEnabled, resolveInitialRoute } from './app/launchParams';
 import { PageBackHandlerProvider } from './app/PageBackHandler';
+import { RouteLoadingOverlayProvider } from './app/RouteLoadingOverlay';
 import { type AppRoute, type PlayerRoutePayload, getActiveNav } from './app/routes';
 import { usePageStack } from './app/usePageStack';
 import { AuthorSpacePage } from './features/author-space/AuthorSpacePage';
@@ -21,6 +22,7 @@ import { PgcDetailPage } from './features/pgc/PgcDetailPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { SearchPage } from './features/search/SearchPage';
 import { SearchResultsPage } from './features/search/SearchResultsPage';
+import { VideoListLoadingPage } from './features/shared/VideoListLoadingPage';
 import { SubscriptionsPage } from './features/subscriptions/SubscriptionsPage';
 import { VideoDetailPage } from './features/video-detail/VideoDetailPage';
 import { focusById, focusFirst, focusSection, isFocusableElement, readFocusGroup } from './platform/focus';
@@ -45,6 +47,7 @@ function markBootMounted() {
 function AppContent() {
   const { auth, refreshAuth } = useAppStore();
   const initialRoute = useMemo<AppRoute>(() => resolveInitialRoute(), []);
+  const isFocusDebugEnabled = useMemo(() => readDebugFocusEnabled(), []);
   const pageStack = usePageStack<AppRoute>(initialRoute);
   const { current: currentPage, pop, push, replace } = pageStack;
   const backHandlerRef = useRef<(() => boolean) | null>(null);
@@ -52,6 +55,7 @@ function AppContent() {
   const nextRouteKeepsNavFocusRef = useRef(false);
   const nextNavFocusIdRef = useRef<string | null>(null);
   const lastRelaySyncKeyRef = useRef<string>('');
+  const [routeLoadingOverlayVisible, setRouteLoadingOverlayVisible] = useState(false);
 
   const focusKey = useMemo(() => summarizeRoute(currentPage), [currentPage]);
 
@@ -193,33 +197,36 @@ function AppContent() {
   const isImmersiveRoute = currentPage.name === 'player';
 
   return (
-    <PageBackHandlerProvider
-      onRegister={(handler) => {
-        backHandlerRef.current = handler;
-      }}
-    >
-      <AppShell
-        activeNav={activeNav}
-        profileName={auth.profile?.name}
-        isLoggedIn={auth.status === 'authenticated'}
-        immersive={isImmersiveRoute}
-        onNavigate={(route, navFocusId) => {
-          nextRouteKeepsNavFocusRef.current = true;
-          nextNavFocusIdRef.current = navFocusId;
-          replace(route);
+    <RouteLoadingOverlayProvider onVisibilityChange={setRouteLoadingOverlayVisible}>
+      <PageBackHandlerProvider
+        onRegister={(handler) => {
+          backHandlerRef.current = handler;
         }}
       >
-        <div className="app-page">
-          {renderRoute(currentPage, {
-            push,
-            replace,
-            pop,
-            isLoggedIn: auth.status === 'authenticated',
-          })}
-        </div>
-      </AppShell>
-      <FocusOverlay />
-    </PageBackHandlerProvider>
+        <AppShell
+          activeNav={activeNav}
+          profileName={auth.profile?.name}
+          isLoggedIn={auth.status === 'authenticated'}
+          immersive={isImmersiveRoute}
+          contentOverlay={routeLoadingOverlayVisible ? <VideoListLoadingPage mode="overlay" /> : null}
+          onNavigate={(route, navFocusId) => {
+            nextRouteKeepsNavFocusRef.current = true;
+            nextNavFocusIdRef.current = navFocusId;
+            replace(route);
+          }}
+        >
+          <div className="app-page">
+            {renderRoute(currentPage, {
+              push,
+              replace,
+              pop,
+              isLoggedIn: auth.status === 'authenticated',
+            })}
+          </div>
+        </AppShell>
+        <FocusOverlay debugEnabled={isFocusDebugEnabled} />
+      </PageBackHandlerProvider>
+    </RouteLoadingOverlayProvider>
   );
 }
 

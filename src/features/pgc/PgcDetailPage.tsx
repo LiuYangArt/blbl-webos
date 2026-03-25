@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useAppStore } from '../../app/AppStore';
+import { useWatchProgressMap } from '../../app/watchProgressStore';
 import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
@@ -15,7 +15,7 @@ type PgcDetailPageProps = {
 };
 
 export function PgcDetailPage({ seasonId, fallbackTitle, onPlay }: PgcDetailPageProps) {
-  const { watchProgress } = useAppStore();
+  const watchProgress = useWatchProgressMap();
   const detail = useAsyncData(async () => fetchPgcSeasonDetail(seasonId), [seasonId]);
 
   const continueEntry = useMemo(() => {

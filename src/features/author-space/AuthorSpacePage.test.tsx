@@ -22,6 +22,14 @@ vi.mock('../shared/usePagedCollection', () => ({
   usePagedCollection: usePagedCollectionMock,
 }));
 
+vi.mock('../shared/useImageReadyGate', () => ({
+  useImageReadyGate: () => true,
+}));
+
+vi.mock('../shared/useVideoListLoadingGate', () => ({
+  useVideoListLoadingGate: (ready: boolean) => !ready,
+}));
+
 vi.mock('../shared/videoListItems', () => ({
   createResolvedVideoListItem: createResolvedVideoListItemMock,
   resolveVideoPlayerPayload: vi.fn(),
@@ -241,7 +249,7 @@ describe('AuthorSpacePage', () => {
     }
   });
 
-  it('资料加载中时会显示作者名兜底文案', () => {
+  it('资料加载中时不会提前渲染作者页内容', () => {
     useAsyncDataMock.mockReturnValue({
       status: 'loading',
       data: null,
@@ -263,8 +271,7 @@ describe('AuthorSpacePage', () => {
 
     renderHandle = renderPage();
 
-    expect(renderHandle.container.textContent).toContain('正在打开作者主页');
-    expect(renderHandle.container.textContent?.replace(/\s+/g, '')).toContain('正在准备回退作者名的资料和投稿视频。');
+    expect(renderHandle.container.textContent).toBe('');
   });
 
   it('资料加载失败时会显示重试按钮并触发 reload', () => {

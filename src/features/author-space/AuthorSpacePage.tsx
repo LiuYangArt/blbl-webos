@@ -12,8 +12,10 @@ import {
 } from '../../services/api/bilibili';
 import type { SpaceArchiveOrder, VideoCardItem } from '../../services/api/types';
 import { useAsyncData } from '../../app/useAsyncData';
+import { pickImageUrls } from '../shared/videoListLoading';
 import { createResolvedVideoListItem, resolveVideoPlayerPayload } from '../shared/videoListItems';
 import { usePagedCollection } from '../shared/usePagedCollection';
+import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type AuthorSpacePageProps = {
   mid: number;
@@ -47,7 +49,7 @@ export function AuthorSpacePage({
   authorName,
   sourceBvid,
   onOpenPlayer,
-}: AuthorSpacePageProps): ReactElement {
+}: AuthorSpacePageProps): ReactElement | null {
   const [activeOrder, setActiveOrder] = useState<SpaceArchiveOrder>('pubdate');
   const [archiveTotal, setArchiveTotal] = useState(0);
 
@@ -89,6 +91,14 @@ export function AuthorSpacePage({
       ? createArchiveVideoItems(archive.items)
       : []
   ), [archive.items, archive.status]);
+  const isPageReady = profile.status === 'success' && (archive.status === 'success' || archive.status === 'error');
+  const showLoadingGate = useVideoListPageLoading({
+    ready: isPageReady && archive.status !== 'success'
+      ? true
+      : profile.status === 'success' && archive.status === 'success',
+    imageUrls: archive.status === 'success' ? pickImageUrls(archive.items, (item) => item.cover, 12) : [],
+    overlayVisible: profile.status !== 'error' && archive.status !== 'error',
+  });
 
   if (profile.status === 'error') {
     return (
@@ -103,14 +113,8 @@ export function AuthorSpacePage({
     );
   }
 
-  if (profile.status !== 'success') {
-    return (
-      <AuthorSpaceStatus
-        sectionId="author-space-loading"
-        title="正在打开作者主页"
-        description={authorName ? `正在准备 ${authorName} 的资料和投稿视频。` : '正在准备作者资料和投稿视频。'}
-      />
-    );
+  if (showLoadingGate || !isPageReady) {
+    return null;
   }
 
   const { user, relation } = profile.data;
@@ -183,6 +187,7 @@ export function AuthorSpacePage({
           items={archiveItems}
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: `@${AUTHOR_SPACE_HERO_SECTION_ID}` }}
+          visibilityMode="progressive"
           hasMore={archive.hasMore}
           isLoadingMore={archive.isLoadingMore}
           loadMoreError={archive.loadMoreError}
@@ -211,26 +216,20 @@ export function AuthorSpacePage({
           scroll={CONTENT_FIRST_ROW_SCROLL}
         >
           <SectionHeader title="作者投稿" description={archiveDescription} actionLabel={totalLabel} />
-          {archive.status === 'error' ? (
-            <>
-              <p className="page-helper-text">{archive.error}</p>
-              <div className="page-inline-actions">
-                <FocusButton
-                  variant="ghost"
-                  size="sm"
-                  className="page-inline-link"
-                  sectionId={AUTHOR_SPACE_GRID_SECTION_ID}
-                  focusId="author-space-retry-archive"
-                  defaultFocus
-                  onClick={() => void archive.reload()}
-                >
-                  重新加载投稿视频
-                </FocusButton>
-              </div>
-            </>
-          ) : (
-            <p className="page-helper-text">正在加载作者投稿视频...</p>
-          )}
+          <p className="page-helper-text">{archive.error}</p>
+          <div className="page-inline-actions">
+            <FocusButton
+              variant="ghost"
+              size="sm"
+              className="page-inline-link"
+              sectionId={AUTHOR_SPACE_GRID_SECTION_ID}
+              focusId="author-space-retry-archive"
+              defaultFocus
+              onClick={() => void archive.reload()}
+            >
+              重新加载投稿视频
+            </FocusButton>
+          </div>
         </FocusSection>
       )}
     </main>

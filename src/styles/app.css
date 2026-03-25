@@ -12,9 +12,9 @@
   --tv-primary: #fb7299;
   --tv-secondary: #00a1d6;
   --tv-secondary-soft: #78d1ff;
-  --tv-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
-  --tv-focus-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
-  --tv-blur: blur(22px);
+  --tv-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --tv-focus-shadow: 0 14px 28px rgba(0, 0, 0, 0.24);
+  --tv-blur: blur(14px);
   --tv-safe-x: 56px;
   --tv-safe-y: 36px;
   --tv-nav-collapsed-width: 104px;
@@ -126,6 +126,7 @@ button {
 }
 
 .tv-app-main {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -133,6 +134,13 @@ button {
   min-width: 0;
   padding: var(--tv-safe-y) var(--tv-safe-x) 48px 20px;
   overflow: hidden;
+}
+
+.tv-app-main__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
 }
 
 .tv-topbar {
@@ -206,6 +214,12 @@ button {
 .tv-page-content::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+.app-page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .focus-debug-ring {
@@ -282,25 +296,25 @@ button {
   overflow: hidden;
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 60;
+  contain: paint;
   background:
     linear-gradient(180deg, rgba(28, 27, 28, 0.96), rgba(19, 19, 20, 0.94)),
     linear-gradient(90deg, rgba(251, 114, 153, 0.08), transparent 60%);
-  box-shadow: 32px 0 64px rgba(0, 0, 0, 0.24);
+  box-shadow: 18px 0 40px rgba(0, 0, 0, 0.22);
   transition:
-    width 220ms ease,
-    box-shadow 220ms ease,
-    background 220ms ease;
+    box-shadow 140ms ease,
+    background 140ms ease;
 }
 
 .side-nav-rail:focus-within {
   width: var(--tv-nav-expanded-width);
-  box-shadow: 40px 0 72px rgba(0, 0, 0, 0.34);
+  box-shadow: 24px 0 48px rgba(0, 0, 0, 0.26);
 }
 
 .side-nav-rail--expanded {
   width: var(--tv-nav-expanded-width);
-  box-shadow: 40px 0 72px rgba(0, 0, 0, 0.34);
+  box-shadow: 24px 0 48px rgba(0, 0, 0, 0.26);
 }
 
 .side-nav-rail__brand {
@@ -425,10 +439,8 @@ button {
 .side-nav-rail__brand-copy,
 .side-nav-item .tv-icon-button__label {
   opacity: 0;
-  transform: translateX(12px);
-  transition:
-    opacity 160ms ease,
-    transform 220ms ease;
+  transform: none;
+  transition: opacity 120ms ease;
 }
 
 .side-nav-rail:focus-within .side-nav-rail__brand-copy,
@@ -475,12 +487,12 @@ button {
 .side-nav-item[data-focus-active="true"],
 .side-nav-item:focus,
 .side-nav-item:focus-visible {
-  transform: scale(1.02);
+  transform: scale(1.01);
   border-color: transparent;
   background: rgba(53, 52, 54, 0.9);
   color: var(--tv-text);
   box-shadow:
-    var(--tv-focus-shadow),
+    0 12px 24px rgba(0, 0, 0, 0.2),
     inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
@@ -518,6 +530,28 @@ button {
 
 .page-shell--home {
   contain: layout paint;
+}
+
+.video-list-loading-page {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100%;
+  background: #000;
+}
+
+.video-list-loading-page--overlay {
+  min-height: 100%;
+}
+
+.video-list-loading-page__text {
+  margin: 0;
+  color: #fff;
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
 }
 
 .player-page {
@@ -603,6 +637,16 @@ button {
 .tv-app-shell--webos .page-status {
   backdrop-filter: none;
   background: rgba(28, 27, 28, 0.96);
+}
+
+.tv-app-shell--webos .player-settings-drawer {
+  backdrop-filter: none;
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  background:
+    linear-gradient(180deg, rgba(24, 24, 26, 0.98), rgba(18, 18, 19, 0.96)),
+    rgba(18, 18, 19, 0.96);
 }
 
 .hero-banner__content,
@@ -724,6 +768,8 @@ button {
 .home-channel-tabs__list {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
+  min-height: 92px;
   margin-right: -28px;
   margin-bottom: -18px;
 }
@@ -1450,9 +1496,9 @@ button {
   background:
     linear-gradient(180deg, rgba(24, 24, 26, 0.96), rgba(18, 18, 19, 0.92)),
     rgba(18, 18, 19, 0.92);
-  backdrop-filter: blur(22px);
+  backdrop-filter: var(--tv-blur);
   box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.42),
+    0 20px 52px rgba(0, 0, 0, 0.32),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   z-index: 3;
 }

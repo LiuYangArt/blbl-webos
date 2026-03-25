@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useAppStore } from '../../app/AppStore';
+import { useWatchProgressMap } from '../../app/watchProgressStore';
 import type { PlayerRoutePayload } from '../../app/routes';
 import { useAsyncData } from '../../app/useAsyncData';
 import { FocusButton } from '../../components/FocusButton';
@@ -17,7 +17,7 @@ type VideoDetailPageProps = {
 };
 
 export function VideoDetailPage({ bvid, fallbackTitle, onPlay, onOpenPlayer }: VideoDetailPageProps) {
-  const { watchProgress } = useAppStore();
+  const watchProgress = useWatchProgressMap();
   const detail = useAsyncData(async () => {
     const [video, related] = await Promise.all([
       fetchVideoDetail(bvid),

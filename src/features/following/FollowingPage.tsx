@@ -6,10 +6,12 @@ import { FocusButton } from '../../components/FocusButton';
 import { VideoGridSection } from '../../components/VideoGridSection';
 import { fetchFollowingChannelData, fetchFollowingFeedPage } from '../../services/api/bilibili';
 import type { PlayerRoutePayload } from '../../app/routes';
+import { pickImageUrls } from '../shared/videoListLoading';
 import { createResolvedVideoListItem, mapFollowItemToVideoCard, resolveVideoPlayerPayload } from '../shared/videoListItems';
 import { usePagedCollection } from '../shared/usePagedCollection';
 import { PageStatus } from '../shared/PageStatus';
 import { appendRuntimeDiagnostic } from '../../services/debug/runtimeDiagnostics';
+import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type FollowingPageProps = {
   onLogin: () => void;
@@ -26,6 +28,15 @@ export function FollowingPage({ onLogin, onOpenPlayer }: FollowingPageProps) {
       limit: 24,
     }),
     getItemKey: (item) => item.id,
+  });
+  const followingReady = followingSummary.status === 'success' && followingItems.status === 'success';
+  const showLoadingGate = useVideoListPageLoading({
+    ready: followingReady,
+    imageUrls: pickImageUrls(followingItems.items, (item) => item.cover, 12),
+    overlayVisible: followingSummary.status !== 'error'
+      && followingItems.status !== 'error'
+      && auth.status === 'authenticated'
+      && Boolean(auth.profile),
   });
 
   useEffect(() => {
@@ -64,24 +75,22 @@ export function FollowingPage({ onLogin, onOpenPlayer }: FollowingPageProps) {
     );
   }
 
-  if (followingSummary.status !== 'success' || followingItems.status !== 'success') {
+  if (followingSummary.status === 'error' || followingItems.status === 'error') {
     const error = followingSummary.status === 'error'
       ? followingSummary.error
-      : followingItems.status === 'error'
-        ? followingItems.error
-        : null;
+      : followingItems.error ?? '关注区加载失败';
+    return (
+      <PageStatus
+        title="关注动态暂时不可用"
+        description={error}
+        actionLabel="重新加载关注区"
+        onAction={reloadFollowing}
+      />
+    );
+  }
 
-    if (error) {
-      return (
-        <PageStatus
-          title="关注动态暂时不可用"
-          description={error}
-          actionLabel="重新加载关注区"
-          onAction={reloadFollowing}
-        />
-      );
-    }
-    return <PageStatus title="正在同步关注区" description="只保留适合电视端直接浏览的视频更新。" />;
+  if (showLoadingGate || !followingReady) {
+    return null;
   }
 
   const data = followingSummary.data;
@@ -121,6 +130,7 @@ export function FollowingPage({ onLogin, onOpenPlayer }: FollowingPageProps) {
         title="正在关注"
         items={items}
         onOpenPlayer={onOpenPlayer}
+        visibilityMode="progressive"
         hasMore={followingItems.hasMore}
         isLoadingMore={followingItems.isLoadingMore}
         loadMoreError={followingItems.loadMoreError}

@@ -189,6 +189,37 @@ describe('focus engine', () => {
     expect((document.activeElement as HTMLElement | null)?.dataset.focusId).toBe('card-2');
   });
 
+  it('会缓存 section 候选元素，并在列表节点变化后自动失效', async () => {
+    const engine = await loadEngineModule();
+
+    const querySpy = vi.spyOn(document, 'querySelectorAll');
+    const current = createFocusableButton({ id: 'card-1', section: 'content', left: 400, top: 100, default: true });
+    const next = createFocusableButton({ id: 'card-2', section: 'content', left: 560, top: 100 });
+
+    engine.registerSection({ id: 'content', group: 'content' });
+    current.focus();
+
+    engine.moveFocus('right');
+    expect((document.activeElement as HTMLElement | null)?.dataset.focusId).toBe('card-2');
+
+    const countSectionQueries = () => querySpy.mock.calls.filter(
+      ([selector]) => String(selector).includes('data-focus-section="content"'),
+    ).length;
+
+    const cachedQueryCount = countSectionQueries();
+    next.focus();
+    engine.moveFocus('left');
+    expect(countSectionQueries()).toBe(cachedQueryCount);
+
+    createFocusableButton({ id: 'card-3', section: 'content', left: 720, top: 100 });
+    await Promise.resolve();
+
+    next.focus();
+    engine.moveFocus('right');
+    expect((document.activeElement as HTMLElement | null)?.dataset.focusId).toBe('card-3');
+    expect(countSectionQueries()).toBeGreaterThan(cachedQueryCount);
+  });
+
   it('显式方向目标优先于自动几何寻路', async () => {
     const engine = await loadEngineModule();
 

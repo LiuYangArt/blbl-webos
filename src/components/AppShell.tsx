@@ -6,6 +6,7 @@ import { TopbarProfilePill } from './TopbarProfilePill';
 
 type AppShellProps = {
   children: ReactNode;
+  contentOverlay?: ReactNode;
   activeNav: RootNavKey | null;
   profileName?: string;
   isLoggedIn: boolean;
@@ -15,6 +16,7 @@ type AppShellProps = {
 
 export function AppShell({
   children,
+  contentOverlay,
   activeNav,
   profileName,
   isLoggedIn,
@@ -32,6 +34,7 @@ export function AppShell({
       <div className={shellClassName}>
         <div className="tv-app-main tv-app-main--immersive">
           <div className="tv-page-content tv-page-content--immersive">{children}</div>
+          {contentOverlay ? <div className="tv-app-main__overlay">{contentOverlay}</div> : null}
         </div>
       </div>
     );
@@ -50,6 +53,7 @@ export function AppShell({
           </div>
         </header>
         <div className="tv-page-content" data-focus-scroll-root="true">{children}</div>
+        {contentOverlay ? <div className="tv-app-main__overlay">{contentOverlay}</div> : null}
       </div>
     </div>
   );

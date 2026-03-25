@@ -90,6 +90,27 @@ describe('remote', () => {
     detach();
   });
 
+  it('播放/暂停键会分发 remote intent 事件', () => {
+    const detach = attachRemoteControl({ onBack: vi.fn() });
+    const actions: string[] = [];
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent<{ action: string }>).detail;
+      actions.push(detail.action);
+    };
+    window.addEventListener(REMOTE_INTENT_EVENT, listener);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { keyCode: REMOTE_KEYS.PLAY }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { keyCode: REMOTE_KEYS.PLAY }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { keyCode: REMOTE_KEYS.PAUSE }));
+
+    expect(actions).toEqual(['play', 'pause']);
+    expect(moveFocusMock).not.toHaveBeenCalled();
+    expect(activateFocusedMock).not.toHaveBeenCalled();
+
+    window.removeEventListener(REMOTE_INTENT_EVENT, listener);
+    detach();
+  });
+
   it('按键防抖会拦截连续重复触发，keyup 或 blur 后允许再次响应', () => {
     const detach = attachRemoteControl({ onBack: vi.fn() });
 

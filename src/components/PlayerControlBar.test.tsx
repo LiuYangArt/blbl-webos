@@ -164,4 +164,20 @@ describe('PlayerControlBar', () => {
     expect(authorButton?.className).toContain('focus-button--disabled');
     expect(authorButton?.className).toContain('player-control-bar__action--inactive');
   });
+
+  it('播放中时主按钮显示“暂停”', () => {
+    renderHandle = renderBar({ isPlaying: true });
+
+    const toggleButton = renderHandle.container.querySelector('[data-focus-id="player-toggle-play"]');
+
+    expect(toggleButton?.textContent).toContain('暂停');
+  });
+
+  it('暂停时主按钮显示“播放”', () => {
+    renderHandle = renderBar({ isPlaying: false });
+
+    const toggleButton = renderHandle.container.querySelector('[data-focus-id="player-toggle-play"]');
+
+    expect(toggleButton?.textContent).toContain('播放');
+  });
 });

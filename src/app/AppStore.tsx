@@ -3,7 +3,6 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useReducer,
   useRef,
@@ -11,15 +10,6 @@ import {
 import { fetchCurrentUserProfile } from '../services/api/bilibili';
 import { readJsonStorage, writeJsonStorage } from '../services/storage/local';
 import type { UserProfile } from '../services/api/types';
-
-type WatchProgressEntry = {
-  bvid: string;
-  cid: number;
-  title: string;
-  progress: number;
-  duration: number;
-  updatedAt: number;
-};
 
 type AuthState = {
   status: 'idle' | 'loading' | 'authenticated' | 'guest';
@@ -30,14 +20,12 @@ type AuthState = {
 type AppState = {
   auth: AuthState;
   searchHistory: string[];
-  watchProgress: Record<string, WatchProgressEntry>;
 };
 
 type AppStoreValue = AppState & {
   hasAuthCookies: boolean;
   rememberSearch: (keyword: string) => void;
   removeSearchHistory: (keyword: string) => void;
-  setWatchProgress: (entry: Omit<WatchProgressEntry, 'updatedAt'>) => void;
   refreshAuth: () => Promise<void>;
   setAuthGuest: () => void;
 };
@@ -45,14 +33,12 @@ type AppStoreValue = AppState & {
 type Action =
   | { type: 'remember-search'; keyword: string }
   | { type: 'remove-search'; keyword: string }
-  | { type: 'set-progress'; entry: WatchProgressEntry }
   | { type: 'auth-loading' }
   | { type: 'auth-success'; profile: UserProfile }
   | { type: 'auth-guest'; error?: string | null };
 
 const STORAGE_KEYS = {
   searchHistory: 'bilibili_webos.search_history',
-  watchProgress: 'bilibili_webos.watch_progress',
 } as const;
 
 const initialState: AppState = {
@@ -62,17 +48,7 @@ const initialState: AppState = {
     error: null,
   },
   searchHistory: readJsonStorage<string[]>(STORAGE_KEYS.searchHistory, []),
-  watchProgress: readJsonStorage<Record<string, WatchProgressEntry>>(STORAGE_KEYS.watchProgress, {}),
 };
-
-function isSameWatchProgressEntry(current: WatchProgressEntry | undefined, next: WatchProgressEntry) {
-  return Boolean(
-    current
-    && current.title === next.title
-    && current.progress === next.progress
-    && current.duration === next.duration,
-  );
-}
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -89,20 +65,6 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         searchHistory: state.searchHistory.filter((item) => item !== action.keyword),
       };
-    case 'set-progress': {
-      const key = `${action.entry.bvid}:${action.entry.cid}`;
-      const current = state.watchProgress[key];
-      if (isSameWatchProgressEntry(current, action.entry)) {
-        return state;
-      }
-      return {
-        ...state,
-        watchProgress: {
-          ...state.watchProgress,
-          [key]: action.entry,
-        },
-      };
-    }
     case 'auth-loading':
       return {
         ...state,
@@ -143,31 +105,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const authInFlight = useRef<Promise<void> | null>(null);
 
-  useEffect(() => {
-    writeJsonStorage(STORAGE_KEYS.searchHistory, state.searchHistory);
-  }, [state.searchHistory]);
-
-  useEffect(() => {
-    writeJsonStorage(STORAGE_KEYS.watchProgress, state.watchProgress);
-  }, [state.watchProgress]);
-
   const rememberSearch = useCallback((keyword: string) => {
+    const normalized = keyword.trim();
     dispatch({ type: 'remember-search', keyword });
-  }, []);
+    if (!normalized) {
+      return;
+    }
+
+    const next = [normalized, ...state.searchHistory.filter((item) => item !== normalized)].slice(0, 10);
+    writeJsonStorage(STORAGE_KEYS.searchHistory, next);
+  }, [state.searchHistory]);
 
   const removeSearchHistory = useCallback((keyword: string) => {
     dispatch({ type: 'remove-search', keyword });
-  }, []);
-
-  const setWatchProgress = useCallback((entry: Omit<WatchProgressEntry, 'updatedAt'>) => {
-    dispatch({
-      type: 'set-progress',
-      entry: {
-        ...entry,
-        updatedAt: Date.now(),
-      },
-    });
-  }, []);
+    writeJsonStorage(
+      STORAGE_KEYS.searchHistory,
+      state.searchHistory.filter((item) => item !== keyword),
+    );
+  }, [state.searchHistory]);
 
   const setAuthGuest = useCallback(() => {
     dispatch({ type: 'auth-guest' });
@@ -198,10 +153,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     hasAuthCookies: hasBilibiliCookies(),
     rememberSearch,
     removeSearchHistory,
-    setWatchProgress,
     setAuthGuest,
     refreshAuth,
-  }), [refreshAuth, rememberSearch, removeSearchHistory, setAuthGuest, setWatchProgress, state]);
+  }), [refreshAuth, rememberSearch, removeSearchHistory, setAuthGuest, state]);
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;
 }
