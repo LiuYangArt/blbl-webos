@@ -92,6 +92,7 @@ function ensureInitialized() {
   }
 
   document.addEventListener('focusin', handleFocusIn, true);
+  document.addEventListener('focusout', handleFocusOut, true);
   window.addEventListener('blur', clearActiveFocusMarker);
   if (!sectionMutationObserver && document.body) {
     sectionMutationObserver = new MutationObserver(handleSectionMutations);
@@ -123,9 +124,17 @@ function markActiveFocusedElement(element: FocusableElement) {
   activeFocusedElement = element;
 }
 
-function handleFocusIn(event: FocusEvent) {
-  const target = event.target;
+function toFocusableElement(target: EventTarget | null): FocusableElement | null {
   if (!(target instanceof HTMLElement) || !isFocusableElement(target)) {
+    return null;
+  }
+
+  return target;
+}
+
+function handleFocusIn(event: FocusEvent) {
+  const target = toFocusableElement(event.target);
+  if (!target) {
     return;
   }
 
@@ -143,6 +152,28 @@ function handleFocusIn(event: FocusEvent) {
   section.lastFocusedElement = target;
   section.lastFocusedId = target.dataset.focusId ?? null;
   ensureFocusedElementComfort(target);
+}
+
+function handleFocusOut(event: FocusEvent) {
+  const target = toFocusableElement(event.target);
+  if (!target) {
+    return;
+  }
+
+  const relatedTarget = event.relatedTarget;
+  if (toFocusableElement(relatedTarget)) {
+    return;
+  }
+
+  scheduleFocusWork(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && isFocusableElement(active)) {
+      markActiveFocusedElement(active);
+      return;
+    }
+
+    clearActiveFocusMarker();
+  });
 }
 
 function readSectionId(element: FocusableElement): string | null {

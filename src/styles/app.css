@@ -732,6 +732,8 @@ button {
 .home-channel-tabs__list {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
+  min-height: 92px;
   margin-right: -28px;
   margin-bottom: -18px;
 }

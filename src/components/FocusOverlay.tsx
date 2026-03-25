@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { expandBorderRadius } from './focusOverlayRadius';
 
 type FocusOverlaySnapshot = {
@@ -20,15 +20,34 @@ type FocusOverlayProps = {
   debugEnabled?: boolean;
 };
 
+const FOLLOW_FRAMES_AFTER_CHANGE = 10;
+const SNAPSHOT_MOVE_EPSILON = 1;
+
+function isFocusableElement(element: HTMLElement | null): element is HTMLElement {
+  return Boolean(element && element.matches('[data-focusable="true"]'));
+}
+
+function hasSnapshotMoved(previous: FocusOverlaySnapshot, next: FocusOverlaySnapshot): boolean {
+  return Math.abs(previous.left - next.left) > SNAPSHOT_MOVE_EPSILON
+    || Math.abs(previous.top - next.top) > SNAPSHOT_MOVE_EPSILON
+    || Math.abs(previous.width - next.width) > SNAPSHOT_MOVE_EPSILON
+    || Math.abs(previous.height - next.height) > SNAPSHOT_MOVE_EPSILON;
+}
+
 function readActiveFocusElement(): HTMLElement | null {
-  const marked = document.querySelector<HTMLElement>('[data-focus-active="true"]');
-  if (marked) {
-    return marked;
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && isFocusableElement(active)) {
+    return active;
   }
 
-  const active = document.activeElement;
-  if (active instanceof HTMLElement && active.matches('[data-focusable="true"]')) {
-    return active;
+  const marked = document.querySelector<HTMLElement>('[data-focus-active="true"]');
+  if (
+    marked
+    && marked.isConnected
+    && isFocusableElement(marked)
+    && marked.dataset.focusActive === 'true'
+  ) {
+    return marked;
   }
 
   return null;
@@ -63,13 +82,33 @@ function buildSnapshot(element: HTMLElement | null): FocusOverlaySnapshot | null
 
 export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps) {
   const [snapshot, setSnapshot] = useState<FocusOverlaySnapshot | null>(null);
+  const previousSnapshotRef = useRef<FocusOverlaySnapshot | null>(null);
+  const followFramesRef = useRef(0);
 
   useEffect(() => {
     let rafId = 0;
 
     const update = () => {
       rafId = 0;
-      setSnapshot(buildSnapshot(readActiveFocusElement()));
+      const nextSnapshot = buildSnapshot(readActiveFocusElement());
+      const previousSnapshot = previousSnapshotRef.current;
+
+      if (!nextSnapshot) {
+        followFramesRef.current = 0;
+      } else if (!previousSnapshot || previousSnapshot.focusId !== nextSnapshot.focusId) {
+        // 焦点切换后的几帧里，继续追踪布局变动，避免首屏抖动时白框“掉队”。
+        followFramesRef.current = FOLLOW_FRAMES_AFTER_CHANGE;
+      } else if (hasSnapshotMoved(previousSnapshot, nextSnapshot)) {
+        followFramesRef.current = FOLLOW_FRAMES_AFTER_CHANGE;
+      }
+
+      previousSnapshotRef.current = nextSnapshot;
+      setSnapshot(nextSnapshot);
+
+      if (followFramesRef.current > 0) {
+        followFramesRef.current -= 1;
+        rafId = window.requestAnimationFrame(update);
+      }
     };
 
     const scheduleUpdate = () => {
@@ -80,14 +119,14 @@ export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps) {
       rafId = window.requestAnimationFrame(update);
     };
 
-    const observer = debugEnabled
-      ? new MutationObserver(scheduleUpdate)
-      : null;
-    observer?.observe(document.body, {
+    const observer = new MutationObserver(scheduleUpdate);
+    observer.observe(document.body, {
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ['data-focus-active', 'data-focus-pressed', 'class', 'style'],
+      attributeFilter: debugEnabled
+        ? ['data-focus-active', 'data-focus-pressed', 'class', 'style']
+        : ['class', 'style'],
     });
 
     window.addEventListener('focusin', scheduleUpdate, true);
@@ -100,7 +139,7 @@ export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps) {
     scheduleUpdate();
 
     return () => {
-      observer?.disconnect();
+      observer.disconnect();
       window.removeEventListener('focusin', scheduleUpdate, true);
       window.removeEventListener('focusout', scheduleUpdate, true);
       window.removeEventListener('keydown', scheduleUpdate, true);
@@ -111,6 +150,7 @@ export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps) {
       if (rafId !== 0) {
         window.cancelAnimationFrame(rafId);
       }
+      followFramesRef.current = 0;
     };
   }, [debugEnabled]);
 
