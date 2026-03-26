@@ -2,13 +2,13 @@ import type { ReactNode } from 'react';
 import type { AppRoute, RootNavKey } from '../app/routes';
 import { isWebOSAvailable } from '../platform/webos';
 import { SideNavRail } from './SideNavRail';
-import { TopbarProfilePill } from './TopbarProfilePill';
 
 type AppShellProps = {
   children: ReactNode;
   contentOverlay?: ReactNode;
   activeNav: RootNavKey | null;
   profileName?: string;
+  profileAvatar?: string;
   isLoggedIn: boolean;
   onNavigate: (route: AppRoute, navFocusId: string) => void;
   immersive?: boolean;
@@ -19,6 +19,7 @@ export function AppShell({
   contentOverlay,
   activeNav,
   profileName,
+  profileAvatar,
   isLoggedIn,
   onNavigate,
   immersive = false,
@@ -42,16 +43,14 @@ export function AppShell({
 
   return (
     <div className={shellClassName}>
-      <SideNavRail activeNav={activeNav} onNavigate={onNavigate} isLoggedIn={isLoggedIn} />
+      <SideNavRail
+        activeNav={activeNav}
+        onNavigate={onNavigate}
+        isLoggedIn={isLoggedIn}
+        profileName={profileName}
+        profileAvatar={profileAvatar}
+      />
       <div className="tv-app-main">
-        <header className="tv-topbar" aria-hidden="true">
-          <div className="tv-topbar__status-group">
-            <TopbarProfilePill
-              title={profileName ?? '游客模式'}
-              badge={isLoggedIn ? 'UP' : 'TV'}
-            />
-          </div>
-        </header>
         <div className="tv-page-content" data-focus-scroll-root="true">{children}</div>
         {contentOverlay ? <div className="tv-app-main__overlay">{contentOverlay}</div> : null}
       </div>

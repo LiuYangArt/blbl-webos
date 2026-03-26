@@ -206,6 +206,7 @@ function AppContent() {
         <AppShell
           activeNav={activeNav}
           profileName={auth.profile?.name}
+          profileAvatar={auth.profile?.face}
           isLoggedIn={auth.status === 'authenticated'}
           immersive={isImmersiveRoute}
           contentOverlay={routeLoadingOverlayVisible ? <VideoListLoadingPage mode="overlay" /> : null}

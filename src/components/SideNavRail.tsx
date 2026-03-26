@@ -3,25 +3,36 @@ import type { AppRoute, RootNavKey } from '../app/routes';
 import { ROOT_NAV_ITEMS } from '../app/routes';
 import { FocusSection } from '../platform/focus';
 import { BilibiliBrandMark } from './BilibiliBrandMark';
+import { FocusButton } from './FocusButton';
 import { TvIconButton } from './TvIconButton';
 
 type SideNavRailProps = {
   activeNav: RootNavKey | null;
   isLoggedIn: boolean;
+  profileName?: string;
+  profileAvatar?: string;
   onNavigate: (route: AppRoute, navFocusId: string) => void;
 };
 
-export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailProps) {
+export function SideNavRail({
+  activeNav,
+  isLoggedIn,
+  profileName,
+  profileAvatar,
+  onNavigate,
+}: SideNavRailProps) {
   const [isPinnedOpen, setPinnedOpen] = useState(false);
   const items = ROOT_NAV_ITEMS.filter((item) => {
-    if (item.key === 'login') {
-      return !isLoggedIn;
-    }
     if (item.key === 'following' || item.key === 'subscriptions') {
       return isLoggedIn;
     }
-    return true;
+    return item.key !== 'profile' && item.key !== 'login';
   });
+  const accountRoute: AppRoute = isLoggedIn ? { name: 'profile' } : { name: 'login' };
+  const accountLabel = isLoggedIn ? (profileName ?? '游客模式') : '游客模式';
+  const accountFocusId = 'side-nav-account';
+  const isAccountActive = activeNav === 'profile' || activeNav === 'login';
+  const avatarFallback = isLoggedIn ? accountLabel.trim().charAt(0) || '我' : '客';
 
   return (
     <aside
@@ -79,6 +90,36 @@ export function SideNavRail({ activeNav, isLoggedIn, onNavigate }: SideNavRailPr
             />
           );
         })}
+
+        <FocusButton
+          sectionId="side-nav"
+          focusId={accountFocusId}
+          focusGroup="nav"
+          variant="nav"
+          size="md"
+          className={[
+            'side-nav-item',
+            'side-nav-item--account',
+            isAccountActive ? 'side-nav-item--active' : '',
+          ].filter(Boolean).join(' ')}
+          onClick={(event) => {
+            event.currentTarget.focus({ preventScroll: true });
+            onNavigate(accountRoute, accountFocusId);
+          }}
+          aria-current={isAccountActive ? 'page' : undefined}
+          title={accountLabel}
+        >
+          <span className="side-nav-account__content">
+            <span className="side-nav-account__avatar" aria-hidden="true">
+              {profileAvatar ? (
+                <img src={profileAvatar} alt="" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="side-nav-account__avatar-fallback">{avatarFallback}</span>
+              )}
+            </span>
+            <span className="side-nav-account__label">{accountLabel}</span>
+          </span>
+        </FocusButton>
       </FocusSection>
     </aside>
   );

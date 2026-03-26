@@ -22,12 +22,9 @@ type PlayerSettingsDrawerProps = {
   sectionId: string;
   badge: string;
   qualityOptions?: PlayerSettingsAction[];
-  qualityHint?: ReactNode;
   codecOptions?: PlayerSettingsAction[];
-  infoRows?: PlayerSettingsInfoRow[];
-  infoHint?: ReactNode;
+  summaryText?: ReactNode;
   actionOptions?: PlayerSettingsAction[];
-  planText?: ReactNode;
 };
 
 function renderActionButton(sectionId: string, action: PlayerSettingsAction, links?: FocusLinks) {
@@ -56,12 +53,9 @@ export function PlayerSettingsDrawer({
   sectionId,
   badge,
   qualityOptions = [],
-  qualityHint,
   codecOptions = [],
-  infoRows = [],
-  infoHint,
+  summaryText,
   actionOptions = [],
-  planText,
 }: PlayerSettingsDrawerProps) {
   const qualityIds = qualityOptions.map((action) => action.key);
   const codecIds = codecOptions.map((action) => action.key);
@@ -85,7 +79,6 @@ export function PlayerSettingsDrawer({
           <div className="player-settings-drawer__chips">
             {qualityOptions.map((action) => renderActionButton(sectionId, action, focusMap[action.key]))}
           </div>
-          {qualityHint ? <p className="player-settings-drawer__hint">{qualityHint}</p> : null}
         </div>
       ) : null}
 
@@ -98,18 +91,10 @@ export function PlayerSettingsDrawer({
         </div>
       ) : null}
 
-      {infoRows.length ? (
+      {summaryText ? (
         <div className="player-settings-drawer__section">
-          <span className="player-settings-drawer__label">当前线路信息</span>
-          <div className="player-settings-drawer__info">
-            {infoRows.map((row) => (
-              <div key={row.key} className="player-settings-drawer__info-row">
-                <span>{row.label}</span>
-                <strong>{row.value}</strong>
-              </div>
-            ))}
-          </div>
-          {infoHint ? <p className="player-settings-drawer__hint">{infoHint}</p> : null}
+          <span className="player-settings-drawer__label">当前播放</span>
+          <p className="player-settings-drawer__summary">{summaryText}</p>
         </div>
       ) : null}
 
@@ -119,13 +104,6 @@ export function PlayerSettingsDrawer({
           <div className="player-settings-drawer__actions">
             {actionOptions.map((action) => renderActionButton(sectionId, action, focusMap[action.key]))}
           </div>
-        </div>
-      ) : null}
-
-      {planText ? (
-        <div className="player-settings-drawer__section">
-          <span className="player-settings-drawer__label">当前候选顺序</span>
-          <p className="player-settings-drawer__hint">{planText}</p>
         </div>
       ) : null}
     </>

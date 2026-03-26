@@ -9,7 +9,7 @@ import { PlayerControlBar } from '../../components/PlayerControlBar';
 import { TvProgressBar } from '../../components/TvProgressBar';
 import { FocusSection, captureFocus, focusById, focusSection, releaseFocus } from '../../platform/focus';
 import { REMOTE_INTENT_EVENT, type RemoteIntentDetail } from '../../platform/remote';
-import { isWebOSAvailable, readDeviceInfo } from '../../platform/webos';
+import { readDeviceInfo } from '../../platform/webos';
 import {
   fetchPlayInfo,
   fetchPlaySource,
@@ -18,20 +18,18 @@ import {
 } from '../../services/api/bilibili';
 import { appendRuntimeDiagnostic } from '../../services/debug/runtimeDiagnostics';
 import type {
-  PlayAudioStream,
   PlaySource,
   PlaySubtitleTrack,
   VideoCodecPreference,
   VideoPart,
 } from '../../services/api/types';
 import { PageStatus } from '../shared/PageStatus';
-import { PlayerSettingsDrawer, type PlayerSettingsAction, type PlayerSettingsInfoRow } from './PlayerSettingsDrawer';
+import { PlayerSettingsDrawer, type PlayerSettingsAction } from './PlayerSettingsDrawer';
 import { PlayerSubtitlePanel } from './PlayerSubtitlePanel';
 import {
   buildPlaybackAttempts,
   buildPlayerCodecCapability,
   formatAttemptResolution,
-  getAvailableCodecsForQuality,
   getCodecLabel,
   getReturnedCodecsForQuality,
   isCodecSupportedByCapability,
@@ -507,10 +505,6 @@ export function PlayerPage({
     [capability?.deviceClass, play, rawCurrentCandidate],
   );
   const currentSourceUrl = currentCandidate?.videoUrl ?? '';
-  const currentCandidateHost = getUrlHost(rawCurrentCandidate?.videoUrl ?? '');
-  const declaredCodecs = useMemo(() => (
-    play && currentAttempt ? getAvailableCodecsForQuality(play, currentAttempt.quality) : []
-  ), [currentAttempt, play]);
   const returnedCodecs = useMemo(() => (
     play && currentAttempt ? getReturnedCodecsForQuality(play, currentAttempt.quality) : []
   ), [currentAttempt, play]);
@@ -544,9 +538,7 @@ export function PlayerPage({
   const episodePageCount = getPageCount(episodeEntries.length, STRIP_PAGE_SIZE);
   const recommendationItems = getPagedItems(related, recommendationPage, STRIP_PAGE_SIZE);
   const episodeItems = getPagedItems(episodeEntries, episodePage, STRIP_PAGE_SIZE);
-  const isWebOS = isWebOSAvailable();
   const engineLabel = currentAttempt?.mode === 'dash' ? 'Shaka Player + MSE' : 'HTML5 Video';
-  const playbackModeLabel = currentAttempt?.mode === 'dash' ? 'App 内生成 DASH 清单' : '兼容流直连';
   const currentMimeType = currentAttempt?.videoStream?.mimeType ?? 'video/mp4';
   const shouldShowPlayerChrome = overlayMode === 'none' && isChromeVisible;
 
@@ -555,10 +547,7 @@ export function PlayerPage({
   const isRecommendationsOpen = overlayMode === 'recommendations';
   const isEpisodesOpen = overlayMode === 'episodes';
   const overlayCaptureConfig = getOverlayCaptureConfig(overlayMode);
-  const requestedQualityOption = play?.qualities.find((item) => item.qn === play.requestedQuality) ?? null;
   const returnedQualityOption = play?.qualities.find((item) => item.qn === play.returnedQuality) ?? null;
-  const compatibleQualityOption = play?.qualities.find((item) => item.qn === play.compatibleQuality) ?? null;
-  const qualityAvailabilityNotice = play?.qualityReason ?? null;
   const selectedSubtitleTrack = subtitleTracks.find((track) => track.id === activeSubtitleTrackId) ?? null;
   const subtitleTrackSummary = getSubtitleTrackSummary(selectedSubtitleTrack, subtitleEnabled, hasSubtitleTracks);
   const subtitleStyleVars = useMemo<CSSProperties>(() => ({
@@ -1554,42 +1543,11 @@ export function PlayerPage({
       setReloadNonce((previous) => previous + 1);
     },
   }));
-  const playerInfoRows: PlayerSettingsInfoRow[] = [
-    { key: 'bvid', label: 'BV 号', value: bvid },
-    { key: 'cid', label: 'CID', value: cid },
-    { key: 'requested-quality', label: '请求画质', value: requestedQualityOption?.label ?? play.requestedQualityLabel },
-    { key: 'returned-quality', label: '接口实际返回', value: returnedQualityOption?.label ?? play.returnedQualityLabel },
-    {
-      key: 'compatible-quality',
-      label: '兼容流最高回退',
-      value: compatibleQualityOption?.label ?? play.compatibleQualityLabel ?? '无',
-    },
-    { key: 'current-execution-quality', label: '当前执行画质', value: currentAttempt.qualityLabel },
-    { key: 'codec-preference', label: '编码偏好', value: getCodecLabel(resolvedCodecPreference) },
-    { key: 'quality-limit-reason', label: '接口限制码', value: play.qualityLimitReason || '0' },
-    { key: 'effective-strategy', label: '当前执行策略', value: getCodecLabel(playbackPlan.effectivePreference) },
-    { key: 'current-codec', label: '当前执行 codec', value: currentAttempt.codecLabel },
-    { key: 'quality-reason', label: '画质决策', value: play.qualityReason ?? '无' },
-    { key: 'resolution', label: '当前分辨率', value: formatAttemptResolution(currentAttempt) },
-    { key: 'playback-mode', label: '播放模式', value: playbackModeLabel },
-    { key: 'engine', label: '播放引擎', value: engineLabel },
-    { key: 'mime', label: '视频 MIME', value: currentMimeType },
-    { key: 'audio', label: '音频轨', value: formatAudioStreamLabel(currentAttempt.audioStream) },
-    { key: 'candidate-count', label: '可切换地址', value: currentAttempt.candidates.length },
-    { key: 'active-candidate', label: '当前候选', value: `${activeCandidateIndex + 1} / ${currentAttempt.candidates.length}` },
-    { key: 'current-host', label: '当前 Host', value: currentCandidateHost },
-    {
-      key: 'returned-codecs',
-      label: '实际返回编码',
-      value: returnedCodecs.length ? returnedCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回',
-    },
-    {
-      key: 'declared-codecs',
-      label: '接口宣称编码',
-      value: declaredCodecs.length ? declaredCodecs.map((item) => getCodecLabel(item)).join(' / ') : '未返回',
-    },
-    { key: 'environment', label: '运行环境', value: isWebOS ? 'webOS TV' : '浏览器开发环境' },
-  ];
+  const playerSummaryText = [
+    returnedQualityOption?.label ?? play.returnedQualityLabel,
+    currentAttempt.codecLabel,
+    formatAttemptResolution(currentAttempt),
+  ].join(' / ');
   const drawerActions = [
     {
       key: 'player-reload-current-strategy',
@@ -1621,8 +1579,6 @@ export function PlayerPage({
       },
     },
   ];
-  const playbackPlanText = playbackPlan.attempts.map((attempt) => `${attempt.qualityLabel} ${attempt.codecLabel}`).join(' -> ');
-
   return (
     <main className="player-page">
       <FocusSection
@@ -1733,12 +1689,9 @@ export function PlayerPage({
               sectionId={PLAYER_SETTINGS_SECTION_ID}
               badge="播放设置"
               qualityOptions={qualityActions}
-              qualityHint={qualityAvailabilityNotice}
               codecOptions={codecActions}
-              infoRows={playerInfoRows}
-              infoHint={currentAttempt.codecNote}
+              summaryText={playerSummaryText}
               actionOptions={drawerActions}
-              planText={playbackPlanText}
             />
           </FocusSection>
         ) : null}
@@ -2208,13 +2161,6 @@ function readTimeRanges(ranges: TimeRanges | null | undefined) {
     });
   }
   return values;
-}
-
-function formatAudioStreamLabel(audioStream: PlayAudioStream | null): string {
-  if (!audioStream) {
-    return '未提供独立音频轨';
-  }
-  return audioStream.label || audioStream.codecs || '未知音频';
 }
 
 function getUrlHost(url: string): string {

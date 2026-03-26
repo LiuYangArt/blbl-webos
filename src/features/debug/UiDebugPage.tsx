@@ -106,13 +106,6 @@ const GUIDE_RULES = [
   '如果组合块需要新语义，必须先补到上半区基础单体元素，再允许进入下半区。',
 ] as const;
 
-const PLAYER_INFO_ROWS = [
-  ['当前画质', '1080P 高码率'],
-  ['编码偏好', 'Auto / AVC / HEVC / AV1'],
-  ['线路来源', 'DASH + 兼容源回退'],
-  ['最近用途', '播放器右侧设置抽屉'],
-] as const;
-
 type TopSwitcherSample = {
   key: string;
   label: string;
@@ -899,7 +892,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps): React.JSX.Element {
                       variant: 'glass',
                     },
                   ]}
-                  infoRows={PLAYER_INFO_ROWS.map(([label, value]) => ({ key: label, label, value }))}
+                  summaryText="当前播放：1080P / AVC / 1920x1080"
                   actionOptions={[
                     {
                       key: 'ui-debug-refresh-source',
@@ -912,7 +905,6 @@ export function UiDebugPage({ onExit }: UiDebugPageProps): React.JSX.Element {
                       variant: 'glass',
                     },
                   ]}
-                  planText="1080P AVC -> 1080P HEVC -> 720P AVC"
                 />
               </div>
             </FocusSection>
