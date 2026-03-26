@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { PlayerRoutePayload } from '../app/routes';
 import { CONTENT_FIRST_ROW_SCROLL, FocusSection } from '../platform/focus';
@@ -9,6 +9,7 @@ import { SectionHeader } from './SectionHeader';
 
 type LoadMoreTrigger = 'prefetch' | 'manual';
 type VisibilityMode = 'loaded' | 'progressive';
+const DEFAULT_REVEAL_FRAME_STEP = 6;
 
 type VisibleResetSignature = {
   firstVisibleItemId: string | null;
@@ -68,6 +69,61 @@ export function VideoGridSection({
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
   const firstVisibleItemId = items[0]?.id ?? null;
   const previousResetSignatureRef = useRef<VisibleResetSignature | null>(null);
+  const revealFrameRef = useRef<number | null>(null);
+  const visibleCountRef = useRef(visibleCount);
+  const revealFrameStep = Math.min(revealStep, Math.max(1, Math.ceil(revealStep / 2), DEFAULT_REVEAL_FRAME_STEP));
+
+  const stopRevealAnimation = useCallback(() => {
+    if (revealFrameRef.current === null) {
+      return;
+    }
+
+    window.cancelAnimationFrame(revealFrameRef.current);
+    revealFrameRef.current = null;
+  }, []);
+
+  const commitVisibleCount = useCallback((nextCount: number) => {
+    const clampedCount = clampVisibleCount(nextCount, items.length);
+    stopRevealAnimation();
+    visibleCountRef.current = clampedCount;
+    setVisibleCount(clampedCount);
+  }, [items.length, stopRevealAnimation]);
+
+  const animateVisibleCountTo = useCallback((targetCount: number) => {
+    const normalizedTarget = clampVisibleCount(targetCount, items.length);
+    const currentVisibleCount = visibleCountRef.current;
+
+    if (normalizedTarget <= currentVisibleCount) {
+      commitVisibleCount(normalizedTarget);
+      return;
+    }
+
+    if (normalizedTarget - currentVisibleCount <= revealFrameStep) {
+      commitVisibleCount(normalizedTarget);
+      return;
+    }
+
+    stopRevealAnimation();
+
+    const advance = () => {
+      const nextVisibleCount = Math.min(normalizedTarget, visibleCountRef.current + revealFrameStep);
+      visibleCountRef.current = nextVisibleCount;
+      setVisibleCount(nextVisibleCount);
+
+      if (nextVisibleCount >= normalizedTarget) {
+        revealFrameRef.current = null;
+        return;
+      }
+
+      revealFrameRef.current = window.requestAnimationFrame(advance);
+    };
+
+    revealFrameRef.current = window.requestAnimationFrame(advance);
+  }, [commitVisibleCount, items.length, revealFrameStep, stopRevealAnimation]);
+
+  useEffect(() => {
+    visibleCountRef.current = visibleCount;
+  }, [visibleCount]);
 
   useEffect(() => {
     const previousSignature = previousResetSignatureRef.current;
@@ -81,14 +137,16 @@ export function VideoGridSection({
 
     if (visibilityMode === 'progressive') {
       if (isVisibleWindowResetRequired(previousSignature, nextSignature)) {
-        setVisibleCount(clampVisibleCount(initialVisibleCount, items.length));
+        commitVisibleCount(initialVisibleCount);
       } else {
-        setVisibleCount((current) => clampVisibleCount(current, items.length));
+        commitVisibleCount(visibleCountRef.current);
       }
     }
     setResolveError(null);
     setPendingTitle(null);
-  }, [firstVisibleItemId, initialVisibleCount, items.length, resetKey, visibilityMode]);
+  }, [commitVisibleCount, firstVisibleItemId, initialVisibleCount, items.length, resetKey, visibilityMode]);
+
+  useEffect(() => stopRevealAnimation, [stopRevealAnimation]);
 
   const visibleItems = useMemo(
     () => (visibilityMode === 'progressive' ? items.slice(0, visibleCount) : items),
@@ -96,9 +154,9 @@ export function VideoGridSection({
   );
   const hasHiddenLocalItems = visibilityMode === 'progressive' && items.length > visibleCount;
 
-  const revealOrRequestMore = (trigger: LoadMoreTrigger) => {
+  const revealOrRequestMore = useCallback((trigger: LoadMoreTrigger) => {
     if (hasHiddenLocalItems) {
-      setVisibleCount((current) => Math.min(items.length, current + revealStep));
+      animateVisibleCountTo(visibleCountRef.current + revealStep);
       return;
     }
 
@@ -111,9 +169,17 @@ export function VideoGridSection({
     }
 
     onRequestMore(trigger);
-  };
+  }, [
+    animateVisibleCountTo,
+    hasHiddenLocalItems,
+    hasMore,
+    isLoadingMore,
+    loadMoreError,
+    onRequestMore,
+    revealStep,
+  ]);
 
-  const openPlayer = async (item: UnifiedVideoListItem) => {
+  const openPlayer = useCallback(async (item: UnifiedVideoListItem) => {
     setResolveError(null);
     setPendingTitle(item.card.title);
 
@@ -125,7 +191,7 @@ export function VideoGridSection({
     } finally {
       setPendingTitle(null);
     }
-  };
+  }, [onOpenPlayer]);
 
   return (
     <FocusSection
@@ -143,18 +209,16 @@ export function VideoGridSection({
       {visibleItems.length > 0 ? (
         <div className="media-grid">
           {visibleItems.map((item, index) => (
-            <MediaCard
+            <VideoGridCard
               key={item.id}
+              item={item}
+              index={index}
               sectionId={sectionId}
-              focusId={`${sectionId}-item-${index}`}
               defaultFocus={index === 0}
-              item={item.card}
-              onFocus={() => {
-                if (index >= visibleItems.length - prefetchThreshold) {
-                  revealOrRequestMore('prefetch');
-                }
-              }}
-              onClick={() => void openPlayer(item)}
+              visibleItemsLength={visibleItems.length}
+              prefetchThreshold={prefetchThreshold}
+              onPrefetch={revealOrRequestMore}
+              onOpenPlayer={openPlayer}
             />
           ))}
         </div>
@@ -201,4 +265,62 @@ function isVisibleWindowResetRequired(
 
 function clampVisibleCount(count: number, total: number): number {
   return Math.min(total, count);
+}
+
+type VideoGridCardProps = {
+  item: UnifiedVideoListItem;
+  index: number;
+  sectionId: string;
+  defaultFocus: boolean;
+  visibleItemsLength: number;
+  prefetchThreshold: number;
+  onPrefetch: (trigger: LoadMoreTrigger) => void;
+  onOpenPlayer: (item: UnifiedVideoListItem) => Promise<void>;
+};
+
+const VideoGridCard = memo(function VideoGridCard({
+  item,
+  index,
+  sectionId,
+  defaultFocus,
+  visibleItemsLength,
+  prefetchThreshold,
+  onPrefetch,
+  onOpenPlayer,
+}: VideoGridCardProps) {
+  const shouldPrefetchOnFocus = index >= visibleItemsLength - prefetchThreshold;
+  const imageLoading = index < DEFAULT_REVEAL_FRAME_STEP ? 'eager' : 'lazy';
+
+  const handleFocus = useCallback(() => {
+    if (shouldPrefetchOnFocus) {
+      onPrefetch('prefetch');
+    }
+  }, [onPrefetch, shouldPrefetchOnFocus]);
+
+  const handleClick = useCallback(() => {
+    void onOpenPlayer(item);
+  }, [item, onOpenPlayer]);
+
+  return (
+    <MediaCard
+      sectionId={sectionId}
+      focusId={`${sectionId}-item-${index}`}
+      defaultFocus={defaultFocus}
+      item={item.card}
+      imageLoading={imageLoading}
+      onFocus={handleFocus}
+      onClick={handleClick}
+    />
+  );
+}, areVideoGridCardPropsEqual);
+
+function areVideoGridCardPropsEqual(previous: VideoGridCardProps, next: VideoGridCardProps): boolean {
+  return previous.item === next.item
+    && previous.index === next.index
+    && previous.sectionId === next.sectionId
+    && previous.defaultFocus === next.defaultFocus
+    && previous.visibleItemsLength === next.visibleItemsLength
+    && previous.prefetchThreshold === next.prefetchThreshold
+    && previous.onPrefetch === next.onPrefetch
+    && previous.onOpenPlayer === next.onOpenPlayer;
 }

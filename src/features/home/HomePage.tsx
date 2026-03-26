@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAsyncData } from '../../app/useAsyncData';
 import type { PlayerRoutePayload } from '../../app/routes';
 import { useAppStore } from '../../app/AppStore';
@@ -26,6 +26,7 @@ import type {
 } from '../../services/api/types';
 import { pickImageUrls } from '../shared/videoListLoading';
 import {
+  type UnifiedVideoListItem,
   createResolvedVideoListItem,
   mapFollowItemToVideoCard,
   mapPgcSubscriptionToVideoCard,
@@ -77,6 +78,10 @@ const EMPTY_VIDEO_OPTIONAL: AsyncOptional<VideoCardItem[]> = {
   data: [],
   error: null,
 };
+const EMPTY_VIDEO_LIST_ITEMS: UnifiedVideoListItem[] = [];
+const EMPTY_FOLLOWING_ITEMS: FollowingChannelData['items'] = [];
+const EMPTY_SUBSCRIPTION_ITEMS: PgcSubscriptionItem[] = [];
+const EMPTY_VIDEO_CARD_ITEMS: VideoCardItem[] = [];
 
 export function HomePage({
   isLoggedIn,
@@ -277,6 +282,61 @@ export function HomePage({
     () => `${recommendedFeed.data[0]?.bvid ?? 'empty'}:${recommendedFeed.data.length}:${isAuthenticated ? 'auth' : 'guest'}`,
     [isAuthenticated, recommendedFeed.data],
   );
+  const followingFeedItems = feed.status === 'success' ? feed.data.following.data.items : EMPTY_FOLLOWING_ITEMS;
+  const animeSubscriptionItems = feed.status === 'success' ? feed.data.subscriptions.anime.data : EMPTY_SUBSCRIPTION_ITEMS;
+  const cinemaSubscriptionItems = feed.status === 'success' ? feed.data.subscriptions.cinema.data : EMPTY_SUBSCRIPTION_ITEMS;
+  const popularFeedItems = feed.status === 'success' ? feed.data.popular.data : EMPTY_VIDEO_CARD_ITEMS;
+  const rankingFeedItems = feed.status === 'success' ? feed.data.ranking.data : EMPTY_VIDEO_CARD_ITEMS;
+  const homeChannelVideoItems = useMemo(() => {
+    if (feed.status !== 'success') {
+      return {
+        personalized: EMPTY_VIDEO_LIST_ITEMS,
+        following: EMPTY_VIDEO_LIST_ITEMS,
+        subscriptions: EMPTY_VIDEO_LIST_ITEMS,
+        popular: EMPTY_VIDEO_LIST_ITEMS,
+        ranking: EMPTY_VIDEO_LIST_ITEMS,
+      };
+    }
+
+    return {
+      personalized: personalizedItems.map((item) => createResolvedVideoListItem(
+        item.bvid,
+        item,
+        () => resolveVideoPlayerPayload(item),
+      )),
+      following: followingFeedItems.map((item) => createResolvedVideoListItem(
+        item.id,
+        mapFollowItemToVideoCard(item),
+        () => resolveVideoPlayerPayload({
+          bvid: item.bvid,
+          title: item.title,
+        }),
+      )),
+      subscriptions: [...animeSubscriptionItems, ...cinemaSubscriptionItems].map((item) => createResolvedVideoListItem(
+        `${item.seasonKind}:${item.seasonId}`,
+        mapPgcSubscriptionToVideoCard(item),
+        () => resolvePgcSubscriptionPlayerPayload(item),
+      )),
+      popular: popularFeedItems.map((item) => createResolvedVideoListItem(
+        item.bvid,
+        item,
+        () => resolveVideoPlayerPayload(item),
+      )),
+      ranking: rankingFeedItems.map((item) => createResolvedVideoListItem(
+        item.bvid,
+        item,
+        () => resolveVideoPlayerPayload(item),
+      )),
+    };
+  }, [
+    feed.status,
+    personalizedItems,
+    followingFeedItems,
+    animeSubscriptionItems,
+    cinemaSubscriptionItems,
+    popularFeedItems,
+    rankingFeedItems,
+  ]);
 
   useLayoutEffect(() => {
     if (feed.status !== 'success') {
@@ -341,13 +401,15 @@ export function HomePage({
         totalCount: mergedItems.length,
       });
 
-      setPersonalizedItems(mergedItems);
-      setNextRecommendFreshIndex((current) => current + 1);
-      setHasMorePersonalized(nextBatch.length > 0 && addedCount > 0);
+      startTransition(() => {
+        setPersonalizedItems(mergedItems);
+        setNextRecommendFreshIndex((current) => current + 1);
+        setHasMorePersonalized(nextBatch.length > 0 && addedCount > 0);
 
-      if (addedCount > 0 && trigger === 'manual') {
-        setPendingPersonalizedFocusId(`home-personalized-${previousCount}`);
-      }
+        if (addedCount > 0 && trigger === 'manual') {
+          setPendingPersonalizedFocusId(`home-personalized-${previousCount}`);
+        }
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : '加载更多推荐失败';
       setPersonalizedLoadMoreError(message);
@@ -413,7 +475,11 @@ export function HomePage({
         onOpenPlayer,
         onOpenSearch,
         onOpenHot,
-        personalizedItems: effectivePersonalizedItems,
+        personalizedItems: homeChannelVideoItems.personalized,
+        followingItems: homeChannelVideoItems.following,
+        subscriptionItems: homeChannelVideoItems.subscriptions,
+        popularItems: homeChannelVideoItems.popular,
+        rankingItems: homeChannelVideoItems.ranking,
         hasMorePersonalized,
         isLoadingMorePersonalized,
         personalizedLoadMoreError,
@@ -436,7 +502,11 @@ function renderChannelContent(params: {
   onOpenPlayer: (item: PlayerRoutePayload) => void;
   onOpenSearch: () => void;
   onOpenHot: () => void;
-  personalizedItems: VideoCardItem[];
+  personalizedItems: UnifiedVideoListItem[];
+  followingItems: UnifiedVideoListItem[];
+  subscriptionItems: UnifiedVideoListItem[];
+  popularItems: UnifiedVideoListItem[];
+  rankingItems: UnifiedVideoListItem[];
   hasMorePersonalized: boolean;
   isLoadingMorePersonalized: boolean;
   personalizedLoadMoreError: string | null;
@@ -453,6 +523,10 @@ function renderChannelContent(params: {
     onOpenSearch,
     onOpenHot,
     personalizedItems,
+    followingItems,
+    subscriptionItems,
+    popularItems,
+    rankingItems,
     hasMorePersonalized,
     isLoadingMorePersonalized,
     personalizedLoadMoreError,
@@ -461,16 +535,11 @@ function renderChannelContent(params: {
 
   switch (activeChannel) {
     case 'personalized': {
-      const videoItems = personalizedItems.map((item) => createResolvedVideoListItem(
-        item.bvid,
-        item,
-        () => resolveVideoPlayerPayload(item),
-      ));
       return (
         <VideoGridSection
           sectionId="home-channel-content"
           title="个性推荐"
-          items={videoItems}
+          items={personalizedItems}
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           initialVisibleCount={12}
@@ -506,14 +575,7 @@ function renderChannelContent(params: {
         <VideoGridSection
           sectionId="home-channel-content"
           title="正在关注"
-          items={following.data.items.map((item) => createResolvedVideoListItem(
-            item.id,
-            mapFollowItemToVideoCard(item),
-            () => resolveVideoPlayerPayload({
-              bvid: item.bvid,
-              title: item.title,
-            }),
-          ))}
+          items={followingItems}
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           initialVisibleCount={6}
@@ -566,11 +628,6 @@ function renderChannelContent(params: {
         />
       );
     case 'subscriptions': {
-      const subscriptionItems = [...subscriptions.anime.data, ...subscriptions.cinema.data].map((item) => createResolvedVideoListItem(
-        `${item.seasonKind}:${item.seasonId}`,
-        mapPgcSubscriptionToVideoCard(item),
-        () => resolvePgcSubscriptionPlayerPayload(item),
-      ));
       return (
         <VideoGridSection
           sectionId="home-channel-content"
@@ -627,11 +684,7 @@ function renderChannelContent(params: {
         <VideoGridSection
           sectionId="home-channel-content"
           title="热门视频"
-          items={popular.data.map((item) => createResolvedVideoListItem(
-            item.bvid,
-            item,
-            () => resolveVideoPlayerPayload(item),
-          ))}
+          items={popularItems}
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           initialVisibleCount={6}
@@ -661,11 +714,7 @@ function renderChannelContent(params: {
         <VideoGridSection
           sectionId="home-channel-content"
           title="排行"
-          items={ranking.data.map((item) => createResolvedVideoListItem(
-            item.bvid,
-            item,
-            () => resolveVideoPlayerPayload(item),
-          ))}
+          items={rankingItems}
           onOpenPlayer={onOpenPlayer}
           leaveFor={{ left: '@side-nav', up: '@home-channel-tabs' }}
           initialVisibleCount={6}

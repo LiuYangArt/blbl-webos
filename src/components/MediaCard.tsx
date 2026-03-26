@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { ButtonHTMLAttributes } from 'react';
 import type { VideoCardItem } from '../services/api/types';
 import { FocusButton } from './FocusButton';
@@ -12,9 +13,10 @@ type MediaCardProps = {
   focusRight?: string;
   focusUp?: string;
   focusDown?: string;
+  imageLoading?: 'eager' | 'lazy';
 } & Pick<ButtonHTMLAttributes<HTMLButtonElement>, 'onFocus'>;
 
-export function MediaCard({
+function MediaCardInner({
   item,
   onClick,
   focusId,
@@ -25,6 +27,7 @@ export function MediaCard({
   focusUp,
   focusDown,
   onFocus,
+  imageLoading = 'lazy',
 }: MediaCardProps) {
   return (
     <FocusButton
@@ -41,7 +44,15 @@ export function MediaCard({
       onFocus={onFocus}
     >
       <div className="media-card__poster" aria-hidden="true">
-        {item.cover ? <img src={item.cover} alt="" referrerPolicy="no-referrer" /> : null}
+        {item.cover ? (
+          <img
+            src={item.cover}
+            alt=""
+            referrerPolicy="no-referrer"
+            loading={imageLoading}
+            decoding="async"
+          />
+        ) : null}
         <span className="media-card__duration">{formatDuration(item.duration)}</span>
         {item.reason ? <span className="media-card__reason">{item.reason}</span> : null}
       </div>
@@ -54,8 +65,24 @@ export function MediaCard({
   );
 }
 
+export const MediaCard = memo(MediaCardInner, areMediaCardPropsEqual);
+
 function formatDuration(duration: number) {
   const minutes = Math.floor(duration / 60);
   const seconds = duration % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function areMediaCardPropsEqual(previous: MediaCardProps, next: MediaCardProps): boolean {
+  return previous.item === next.item
+    && previous.onClick === next.onClick
+    && previous.onFocus === next.onFocus
+    && previous.focusId === next.focusId
+    && previous.sectionId === next.sectionId
+    && previous.defaultFocus === next.defaultFocus
+    && previous.focusLeft === next.focusLeft
+    && previous.focusRight === next.focusRight
+    && previous.focusUp === next.focusUp
+    && previous.focusDown === next.focusDown
+    && previous.imageLoading === next.imageLoading;
 }
