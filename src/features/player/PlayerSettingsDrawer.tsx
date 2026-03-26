@@ -24,6 +24,7 @@ type PlayerSettingsDrawerProps = {
   qualityOptions?: PlayerSettingsAction[];
   codecOptions?: PlayerSettingsAction[];
   summaryText?: ReactNode;
+  debugText?: ReactNode;
   actionOptions?: PlayerSettingsAction[];
 };
 
@@ -55,6 +56,7 @@ export function PlayerSettingsDrawer({
   qualityOptions = [],
   codecOptions = [],
   summaryText,
+  debugText,
   actionOptions = [],
 }: PlayerSettingsDrawerProps) {
   const qualityIds = qualityOptions.map((action) => action.key);
@@ -95,6 +97,7 @@ export function PlayerSettingsDrawer({
         <div className="player-settings-drawer__section">
           <span className="player-settings-drawer__label">当前播放</span>
           <p className="player-settings-drawer__summary">{summaryText}</p>
+          {debugText ? <p className="player-settings-drawer__meta">{debugText}</p> : null}
         </div>
       ) : null}
 

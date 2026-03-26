@@ -893,6 +893,7 @@ export function UiDebugPage({ onExit }: UiDebugPageProps): React.JSX.Element {
                     },
                   ]}
                   summaryText="当前播放：1080P / AVC / 1920x1080"
+                  debugText="BV号：BV1xx411c7mD"
                   actionOptions={[
                     {
                       key: 'ui-debug-refresh-source',

@@ -1548,6 +1548,7 @@ export function PlayerPage({
     currentAttempt.codecLabel,
     formatAttemptResolution(currentAttempt),
   ].join(' / ');
+  const playerDebugText = `BV号：${bvid}`;
   const drawerActions = [
     {
       key: 'player-reload-current-strategy',
@@ -1691,6 +1692,7 @@ export function PlayerPage({
               qualityOptions={qualityActions}
               codecOptions={codecActions}
               summaryText={playerSummaryText}
+              debugText={playerDebugText}
               actionOptions={drawerActions}
             />
           </FocusSection>

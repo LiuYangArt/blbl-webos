@@ -132,7 +132,7 @@ button {
   height: 100vh;
   min-height: 100vh;
   min-width: 0;
-  padding: var(--tv-safe-y) var(--tv-safe-x) 48px 20px;
+  padding: 0 var(--tv-safe-x) 0 20px;
   overflow: hidden;
 }
 
@@ -396,8 +396,9 @@ button {
 }
 
 .side-nav-item .tv-icon-button__content {
-  width: auto;
-  justify-content: center;
+  width: 100%;
+  justify-content: flex-start;
+  padding-left: 19px;
   gap: 0;
 }
 
@@ -471,8 +472,6 @@ button {
 
 .side-nav-rail:focus-within .side-nav-item .tv-icon-button__content,
 .side-nav-rail--expanded .side-nav-item .tv-icon-button__content {
-  width: 100%;
-  justify-content: flex-start;
   gap: 16px;
 }
 
@@ -516,7 +515,8 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 28px;
+  min-height: 100%;
+  padding: 0;
   overflow: visible;
   border-radius: 0;
   background: transparent;
@@ -1586,6 +1586,13 @@ button {
   line-height: 1.55;
 }
 
+.player-settings-drawer__meta {
+  margin: 12px 0 0;
+  color: var(--tv-text-muted);
+  font-size: 17px;
+  line-height: 1.5;
+}
+
 .player-subtitle-panel > * + * {
   margin-top: 28px;
 }
@@ -1702,9 +1709,11 @@ button {
 .side-nav-account__content {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 0;
   min-width: 0;
-  width: auto;
+  width: 100%;
+  padding-left: 19px;
 }
 
 .side-nav-account__avatar {
@@ -1753,8 +1762,6 @@ button {
 
 .side-nav-rail:focus-within .side-nav-account__content,
 .side-nav-rail--expanded .side-nav-account__content {
-  width: 100%;
-  justify-content: flex-start;
   gap: 16px;
 }
 
