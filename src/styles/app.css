@@ -326,8 +326,9 @@ button {
 .side-nav-rail__brand {
   min-height: 76px;
   width: 100%;
-  justify-content: center;
-  padding: 0;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0 0 0 29px;
 }
 
 .side-nav-rail__brand-copy {
@@ -454,8 +455,7 @@ button {
 
 .side-nav-rail:focus-within .side-nav-rail__brand,
 .side-nav-rail--expanded .side-nav-rail__brand {
-  justify-content: flex-start;
-  padding: 0 10px;
+  gap: 16px;
 }
 
 .side-nav-rail:focus-within .side-nav-rail__brand-copy,
