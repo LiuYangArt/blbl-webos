@@ -22,6 +22,17 @@ type FocusOverlayProps = {
 
 const FOLLOW_FRAMES_AFTER_CHANGE = 10;
 const SNAPSHOT_MOVE_EPSILON = 1;
+const DEBUG_MUTATION_ATTRIBUTE_FILTER = ['data-focus-active', 'data-focus-pressed', 'class', 'style'] as const;
+const CAPTURE_SYNC_EVENT_TYPES = [
+  'focusin',
+  'focusout',
+  'keydown',
+  'keyup',
+  'transitionrun',
+  'transitionend',
+  'animationstart',
+  'animationend',
+] as const;
 
 function isFocusableElement(element: HTMLElement | null): element is HTMLElement {
   return Boolean(element && element.matches('[data-focusable="true"]'));
@@ -53,7 +64,13 @@ function readActiveFocusElement(): HTMLElement | null {
   return null;
 }
 
-function buildSnapshot(element: HTMLElement | null): FocusOverlaySnapshot | null {
+function readMutationRoot(element: HTMLElement | null): HTMLElement {
+  return element?.closest<HTMLElement>('[data-focus-scroll-root="true"]')
+    ?? element?.closest<HTMLElement>('[data-focus-section-root]')
+    ?? document.body;
+}
+
+function buildSnapshot(element: HTMLElement | null, debugEnabled: boolean): FocusOverlaySnapshot | null {
   if (!element) {
     return null;
   }
@@ -66,12 +83,12 @@ function buildSnapshot(element: HTMLElement | null): FocusOverlaySnapshot | null
   const style = window.getComputedStyle(element);
   return {
     focusId: element.dataset.focusId ?? null,
-    focusSection: element.dataset.focusSection ?? null,
-    focusGroup: element.dataset.focusGroup ?? null,
+    focusSection: debugEnabled ? element.dataset.focusSection ?? null : null,
+    focusGroup: debugEnabled ? element.dataset.focusGroup ?? null : null,
     focusPressed: element.dataset.focusPressed === 'true',
-    tagName: element.tagName.toLowerCase(),
-    className: element.className,
-    text: element.textContent?.trim().replace(/\s+/g, ' ').slice(0, 80) ?? '',
+    tagName: debugEnabled ? element.tagName.toLowerCase() : '',
+    className: debugEnabled ? element.className : '',
+    text: debugEnabled ? element.textContent?.trim().replace(/\s+/g, ' ').slice(0, 80) ?? '' : '',
     left: Math.round(rect.left),
     top: Math.round(rect.top),
     width: Math.round(rect.width),
@@ -80,17 +97,81 @@ function buildSnapshot(element: HTMLElement | null): FocusOverlaySnapshot | null
   };
 }
 
-export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps) {
+function areSnapshotsEqual(previous: FocusOverlaySnapshot | null, next: FocusOverlaySnapshot | null): boolean {
+  if (previous === next) {
+    return true;
+  }
+
+  if (!previous || !next) {
+    return false;
+  }
+
+  return previous.focusId === next.focusId
+    && previous.focusSection === next.focusSection
+    && previous.focusGroup === next.focusGroup
+    && previous.focusPressed === next.focusPressed
+    && previous.tagName === next.tagName
+    && previous.className === next.className
+    && previous.text === next.text
+    && previous.left === next.left
+    && previous.top === next.top
+    && previous.width === next.width
+    && previous.height === next.height
+    && previous.borderRadius === next.borderRadius;
+}
+
+function buildMutationObserverOptions(debugEnabled: boolean): MutationObserverInit {
+  return {
+    subtree: true,
+    childList: true,
+    attributes: debugEnabled,
+    ...(debugEnabled ? { attributeFilter: [...DEBUG_MUTATION_ATTRIBUTE_FILTER] } : {}),
+  };
+}
+
+function bindCaptureSyncEvents(listener: () => void): () => void {
+  CAPTURE_SYNC_EVENT_TYPES.forEach((type) => {
+    window.addEventListener(type, listener, true);
+  });
+
+  return () => {
+    CAPTURE_SYNC_EVENT_TYPES.forEach((type) => {
+      window.removeEventListener(type, listener, true);
+    });
+  };
+}
+
+export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps): React.JSX.Element | null {
   const [snapshot, setSnapshot] = useState<FocusOverlaySnapshot | null>(null);
   const previousSnapshotRef = useRef<FocusOverlaySnapshot | null>(null);
   const followFramesRef = useRef(0);
+  const mutationObserverRef = useRef<MutationObserver | null>(null);
+  const observedRootRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let rafId = 0;
 
+    const observeMutationRoot = (element: HTMLElement | null) => {
+      const observer = mutationObserverRef.current;
+      if (!observer) {
+        return;
+      }
+
+      const nextRoot = readMutationRoot(element);
+      if (observedRootRef.current === nextRoot) {
+        return;
+      }
+
+      observer.disconnect();
+      observer.observe(nextRoot, buildMutationObserverOptions(debugEnabled));
+      observedRootRef.current = nextRoot;
+    };
+
     const update = () => {
       rafId = 0;
-      const nextSnapshot = buildSnapshot(readActiveFocusElement());
+      const activeElement = readActiveFocusElement();
+      observeMutationRoot(activeElement);
+      const nextSnapshot = buildSnapshot(activeElement, debugEnabled);
       const previousSnapshot = previousSnapshotRef.current;
 
       if (!nextSnapshot) {
@@ -103,7 +184,9 @@ export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps) {
       }
 
       previousSnapshotRef.current = nextSnapshot;
-      setSnapshot(nextSnapshot);
+      setSnapshot((currentSnapshot) => (
+        areSnapshotsEqual(currentSnapshot, nextSnapshot) ? currentSnapshot : nextSnapshot
+      ));
 
       if (followFramesRef.current > 0) {
         followFramesRef.current -= 1;
@@ -119,31 +202,20 @@ export function FocusOverlay({ debugEnabled = false }: FocusOverlayProps) {
       rafId = window.requestAnimationFrame(update);
     };
 
-    const observer = new MutationObserver(scheduleUpdate);
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: debugEnabled
-        ? ['data-focus-active', 'data-focus-pressed', 'class', 'style']
-        : ['class', 'style'],
-    });
+    mutationObserverRef.current = new MutationObserver(scheduleUpdate);
+    observeMutationRoot(readActiveFocusElement());
 
-    window.addEventListener('focusin', scheduleUpdate, true);
-    window.addEventListener('focusout', scheduleUpdate, true);
-    window.addEventListener('keydown', scheduleUpdate, true);
-    window.addEventListener('keyup', scheduleUpdate, true);
+    const unbindCaptureSyncEvents = bindCaptureSyncEvents(scheduleUpdate);
     window.addEventListener('resize', scheduleUpdate);
     window.addEventListener('scroll', scheduleUpdate, true);
 
     scheduleUpdate();
 
     return () => {
-      observer.disconnect();
-      window.removeEventListener('focusin', scheduleUpdate, true);
-      window.removeEventListener('focusout', scheduleUpdate, true);
-      window.removeEventListener('keydown', scheduleUpdate, true);
-      window.removeEventListener('keyup', scheduleUpdate, true);
+      mutationObserverRef.current?.disconnect();
+      mutationObserverRef.current = null;
+      observedRootRef.current = null;
+      unbindCaptureSyncEvents();
       window.removeEventListener('resize', scheduleUpdate);
       window.removeEventListener('scroll', scheduleUpdate, true);
 
