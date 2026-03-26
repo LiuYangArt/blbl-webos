@@ -12,12 +12,6 @@ export type PlayerSettingsAction = {
   onClick?: () => void;
 };
 
-export type PlayerSettingsInfoRow = {
-  key: string;
-  label: ReactNode;
-  value: ReactNode;
-};
-
 type PlayerSettingsDrawerProps = {
   sectionId: string;
   badge: string;

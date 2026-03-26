@@ -14,6 +14,34 @@ type SideNavRailProps = {
   onNavigate: (route: AppRoute, navFocusId: string) => void;
 };
 
+function isRailItemVisible(key: RootNavKey, isLoggedIn: boolean): boolean {
+  if (key === 'following' || key === 'subscriptions') {
+    return isLoggedIn;
+  }
+
+  return key !== 'profile' && key !== 'login';
+}
+
+function getAccountRoute(isLoggedIn: boolean): AppRoute {
+  return isLoggedIn ? { name: 'profile' } : { name: 'login' };
+}
+
+function getAccountLabel(isLoggedIn: boolean, profileName?: string): string {
+  if (!isLoggedIn) {
+    return '游客模式';
+  }
+
+  return profileName ?? '游客模式';
+}
+
+function getAvatarFallback(isLoggedIn: boolean, accountLabel: string): string {
+  if (!isLoggedIn) {
+    return '客';
+  }
+
+  return accountLabel.trim().charAt(0) || '我';
+}
+
 export function SideNavRail({
   activeNav,
   isLoggedIn,
@@ -22,17 +50,12 @@ export function SideNavRail({
   onNavigate,
 }: SideNavRailProps) {
   const [isPinnedOpen, setPinnedOpen] = useState(false);
-  const items = ROOT_NAV_ITEMS.filter((item) => {
-    if (item.key === 'following' || item.key === 'subscriptions') {
-      return isLoggedIn;
-    }
-    return item.key !== 'profile' && item.key !== 'login';
-  });
-  const accountRoute: AppRoute = isLoggedIn ? { name: 'profile' } : { name: 'login' };
-  const accountLabel = isLoggedIn ? (profileName ?? '游客模式') : '游客模式';
+  const items = ROOT_NAV_ITEMS.filter((item) => isRailItemVisible(item.key, isLoggedIn));
+  const accountRoute = getAccountRoute(isLoggedIn);
+  const accountLabel = getAccountLabel(isLoggedIn, profileName);
   const accountFocusId = 'side-nav-account';
   const isAccountActive = activeNav === 'profile' || activeNav === 'login';
-  const avatarFallback = isLoggedIn ? accountLabel.trim().charAt(0) || '我' : '客';
+  const avatarFallback = getAvatarFallback(isLoggedIn, accountLabel);
 
   return (
     <aside
