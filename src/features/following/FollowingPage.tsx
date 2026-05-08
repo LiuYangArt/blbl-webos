@@ -14,15 +14,16 @@ import { appendRuntimeDiagnostic } from '../../services/debug/runtimeDiagnostics
 import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type FollowingPageProps = {
+  refreshToken: number;
   onLogin: () => void;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function FollowingPage({ onLogin, onOpenPlayer }: FollowingPageProps) {
+export function FollowingPage({ refreshToken, onLogin, onOpenPlayer }: FollowingPageProps) {
   const { auth } = useAppStore();
-  const followingSummary = useAsyncData(async () => fetchFollowingChannelData(12), []);
+  const followingSummary = useAsyncData(async () => fetchFollowingChannelData(12), [refreshToken]);
   const followingItems = usePagedCollection({
-    deps: [],
+    deps: [refreshToken],
     loadPage: (_page, cursor) => fetchFollowingFeedPage({
       offset: cursor,
       limit: 24,

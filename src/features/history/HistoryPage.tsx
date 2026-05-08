@@ -9,14 +9,15 @@ import { PageStatus } from '../shared/PageStatus';
 import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type HistoryPageProps = {
+  refreshToken: number;
   onLogin: () => void;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function HistoryPage({ onLogin, onOpenPlayer }: HistoryPageProps) {
+export function HistoryPage({ refreshToken, onLogin, onOpenPlayer }: HistoryPageProps) {
   const { auth } = useAppStore();
   const history = usePagedCollection({
-    deps: [auth.profile?.mid ?? 0],
+    deps: [auth.profile?.mid ?? 0, refreshToken],
     enabled: auth.status === 'authenticated' && Boolean(auth.profile),
     loadPage: (_page, cursor) => fetchHistoryPage({
       cursor,

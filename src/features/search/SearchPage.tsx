@@ -16,11 +16,12 @@ import {
 import { PageStatus } from '../shared/PageStatus';
 
 type SearchPageProps = {
+  refreshToken: number;
   onSubmit: (keyword: string) => void;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
+export function SearchPage({ refreshToken, onSubmit, onOpenPlayer }: SearchPageProps) {
   const { searchHistory, rememberSearch, removeSearchHistory } = useAppStore();
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -32,7 +33,7 @@ export function SearchPage({ onSubmit, onOpenPlayer }: SearchPageProps) {
       fetchRecommendedVideos(6, 2),
     ]);
     return { defaultWord, hotKeywords, preview };
-  }, []);
+  }, [refreshToken]);
 
   usePageBackHandler(isComposerOpen ? () => {
     setComposerOpen(false);

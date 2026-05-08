@@ -12,6 +12,7 @@ type AppShellProps = {
   isLoggedIn: boolean;
   onNavigate: (route: AppRoute, navFocusId: string) => void;
   immersive?: boolean;
+  hidden?: boolean;
 };
 
 export function AppShell({
@@ -23,16 +24,18 @@ export function AppShell({
   isLoggedIn,
   onNavigate,
   immersive = false,
+  hidden = false,
 }: AppShellProps) {
   const shellClassName = [
     'tv-app-shell',
     isWebOSAvailable() ? 'tv-app-shell--webos' : '',
     immersive ? 'tv-app-shell--immersive' : '',
+    hidden ? 'tv-app-shell--hidden' : '',
   ].filter(Boolean).join(' ');
 
   if (immersive) {
     return (
-      <div className={shellClassName}>
+      <div className={shellClassName} aria-hidden={hidden || undefined}>
         <div className="tv-app-main tv-app-main--immersive">
           <div className="tv-page-content tv-page-content--immersive">{children}</div>
           {contentOverlay ? <div className="tv-app-main__overlay">{contentOverlay}</div> : null}
@@ -42,7 +45,7 @@ export function AppShell({
   }
 
   return (
-    <div className={shellClassName}>
+    <div className={shellClassName} aria-hidden={hidden || undefined}>
       <SideNavRail
         activeNav={activeNav}
         onNavigate={onNavigate}

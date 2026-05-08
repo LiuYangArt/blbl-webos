@@ -125,6 +125,10 @@ button {
   align-items: start;
 }
 
+.tv-app-shell--hidden {
+  display: none;
+}
+
 .tv-app-main {
   position: relative;
   display: flex;

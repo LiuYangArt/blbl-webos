@@ -31,16 +31,17 @@ import {
 
 type LibraryPageProps = {
   mode: 'later' | 'favorites';
+  refreshToken: number;
   onLogin: () => void;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
+export function LibraryPage({ mode, refreshToken, onLogin, onOpenPlayer }: LibraryPageProps) {
   const { auth } = useAppStore();
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
 
   const later = usePagedCollection({
-    deps: [mode],
+    deps: [mode, refreshToken],
     enabled: mode === 'later',
     loadPage: (page) => fetchLaterList(page, 24),
     getItemKey: (item) => `${item.bvid}:${item.cid}`,
@@ -53,7 +54,7 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
 
     const profile = auth.profile ?? await fetchCurrentUserProfile();
     return fetchFavoriteFolders(profile.mid);
-  }, [mode, auth.profile?.mid]);
+  }, [mode, auth.profile?.mid, refreshToken]);
 
   useEffect(() => {
     if (mode !== 'favorites' || folders.status !== 'success') {
@@ -72,7 +73,7 @@ export function LibraryPage({ mode, onLogin, onOpenPlayer }: LibraryPageProps) {
   }, [activeFolderId, folders, mode]);
 
   const favoriteItems = usePagedCollection({
-    deps: [mode, activeFolderId],
+    deps: [mode, activeFolderId, refreshToken],
     enabled: mode === 'favorites' && activeFolderId !== null,
     loadPage: (page) => fetchFavoriteFolderDetail(activeFolderId ?? 0, page, 24),
     getItemKey: (item) => `${item.bvid}:${item.cid}`,

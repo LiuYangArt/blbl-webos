@@ -32,6 +32,14 @@ import { platformBack } from './platform/webos';
 import { ensureRelaySession } from './services/relay/client';
 import { readRelayAuthMaterial, readRelaySettings } from './services/relay/settings';
 
+type RefreshableRootRouteName = 'home' | 'following' | 'subscriptions' | 'hot' | 'search' | 'history' | 'later' | 'favorites';
+type RootRouteRefreshTokens = Record<RefreshableRootRouteName, number>;
+
+type FocusRestoreSnapshot = {
+  focusId: string | null;
+  sectionId: string | null;
+};
+
 function markBootMounted() {
   const diagnostics = (window as typeof window & {
     __biliBootDiag?: {
@@ -42,6 +50,35 @@ function markBootMounted() {
 
   diagnostics?.update?.('app-mounted', 'React 应用已经完成首屏挂载');
   diagnostics?.mounted?.();
+}
+
+function createRootRefreshTokens(): RootRouteRefreshTokens {
+  return {
+    home: 0,
+    following: 0,
+    subscriptions: 0,
+    hot: 0,
+    search: 0,
+    history: 0,
+    later: 0,
+    favorites: 0,
+  };
+}
+
+function isRefreshableRootRoute(route: AppRoute): route is Extract<AppRoute, { name: RefreshableRootRouteName }> {
+  switch (route.name) {
+    case 'home':
+    case 'following':
+    case 'subscriptions':
+    case 'hot':
+    case 'search':
+    case 'history':
+    case 'later':
+    case 'favorites':
+      return true;
+    default:
+      return false;
+  }
 }
 
 function AppContent() {
@@ -55,9 +92,20 @@ function AppContent() {
   const nextRouteKeepsNavFocusRef = useRef(false);
   const nextNavFocusIdRef = useRef<string | null>(null);
   const lastRelaySyncKeyRef = useRef<string>('');
+  const pendingPlayerExitFocusRestoreRef = useRef<FocusRestoreSnapshot | null>(null);
+  const playerExitFocusRestoreArmedRef = useRef(false);
   const [routeLoadingOverlayVisible, setRouteLoadingOverlayVisible] = useState(false);
+  const [refreshTokens, setRefreshTokens] = useState<RootRouteRefreshTokens>(() => createRootRefreshTokens());
 
   const focusKey = useMemo(() => summarizeRoute(currentPage), [currentPage]);
+  const backgroundPage = useMemo<AppRoute>(() => {
+    if (currentPage.name !== 'player') {
+      return currentPage;
+    }
+
+    return pageStack.stack[pageStack.stack.length - 2] ?? { name: 'home' };
+  }, [currentPage, pageStack.stack]);
+  const visibleShellRoute = currentPage.name === 'player' ? backgroundPage : currentPage;
 
   useEffect(() => {
     void refreshAuth();
@@ -94,6 +142,52 @@ function AppContent() {
     lastRouteKeyRef.current = currentRouteKey;
   }, [currentPage, pageStack.depth]);
 
+  function restorePendingPlayerExitFocus(): boolean {
+    if (!playerExitFocusRestoreArmedRef.current) {
+      return false;
+    }
+
+    playerExitFocusRestoreArmedRef.current = false;
+    const snapshot = pendingPlayerExitFocusRestoreRef.current;
+    pendingPlayerExitFocusRestoreRef.current = null;
+    if (!snapshot) {
+      return false;
+    }
+
+    if (snapshot.focusId && focusById(snapshot.focusId)) {
+      return true;
+    }
+
+    if (snapshot.sectionId && focusSection(snapshot.sectionId)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function captureCurrentContentFocus(): void {
+    playerExitFocusRestoreArmedRef.current = false;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !isFocusableElement(active)) {
+      pendingPlayerExitFocusRestoreRef.current = null;
+      return;
+    }
+
+    if (readFocusGroup(active) !== 'content') {
+      pendingPlayerExitFocusRestoreRef.current = null;
+      return;
+    }
+
+    pendingPlayerExitFocusRestoreRef.current = {
+      focusId: active.dataset.focusId ?? null,
+      sectionId: active.dataset.focusSection ?? null,
+    };
+  }
+
+  function armPlayerExitFocusRestore(): void {
+    playerExitFocusRestoreArmedRef.current = true;
+  }
+
   useEffect(() => {
     if (nextRouteKeepsNavFocusRef.current) {
       nextRouteKeepsNavFocusRef.current = false;
@@ -105,21 +199,33 @@ function AppContent() {
       }
     }
 
-    const active = document.activeElement;
+    const isHiddenShellFocusedElement = (element: HTMLElement | null) => Boolean(element?.closest('.tv-app-shell--hidden'));
+
+    let activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && isHiddenShellFocusedElement(activeElement)) {
+      activeElement.blur();
+      activeElement = document.activeElement;
+    }
+
     if (
-      active instanceof HTMLElement
-      && isFocusableElement(active)
-      && readFocusGroup(active) !== 'content'
+      activeElement instanceof HTMLElement
+      && isFocusableElement(activeElement)
+      && readFocusGroup(activeElement) !== 'content'
     ) {
-      active.blur();
+      activeElement.blur();
     }
 
     const tryFocusContent = () => {
-      const activeElement = document.activeElement;
+      if (restorePendingPlayerExitFocus()) {
+        return true;
+      }
+
+      const active = document.activeElement;
       if (
-        activeElement instanceof HTMLElement
-        && isFocusableElement(activeElement)
-        && readFocusGroup(activeElement) === 'content'
+        active instanceof HTMLElement
+        && isFocusableElement(active)
+        && readFocusGroup(active) === 'content'
+        && !isHiddenShellFocusedElement(active)
       ) {
         return true;
       }
@@ -135,7 +241,7 @@ function AppContent() {
       return undefined;
     }
 
-    const pageContent = document.querySelector('.tv-page-content');
+    const pageContent = document.querySelector('.tv-app-shell:not(.tv-app-shell--hidden) .tv-page-content');
     const observer = new MutationObserver(() => {
       if (tryFocusContent()) {
         observer.disconnect();
@@ -193,8 +299,17 @@ function AppContent() {
     markBootMounted();
   }, []);
 
-  const activeNav = getActiveNav(currentPage, auth.status === 'authenticated');
+  const activeNav = getActiveNav(visibleShellRoute, auth.status === 'authenticated');
   const isImmersiveRoute = currentPage.name === 'player';
+  const routeActions: RouteActions = {
+    push,
+    replace,
+    pop,
+    isLoggedIn: auth.status === 'authenticated',
+    refreshTokens,
+    capturePlayerReturnFocus: captureCurrentContentFocus,
+    armPlayerExitFocusRestore,
+  };
 
   return (
     <RouteLoadingOverlayProvider onVisibilityChange={setRouteLoadingOverlayVisible}>
@@ -208,23 +323,45 @@ function AppContent() {
           profileName={auth.profile?.name}
           profileAvatar={auth.profile?.face}
           isLoggedIn={auth.status === 'authenticated'}
-          immersive={isImmersiveRoute}
+          immersive={false}
+          hidden={isImmersiveRoute}
           contentOverlay={routeLoadingOverlayVisible ? <VideoListLoadingPage mode="overlay" /> : null}
           onNavigate={(route, navFocusId) => {
             nextRouteKeepsNavFocusRef.current = true;
             nextNavFocusIdRef.current = navFocusId;
+
+            if (visibleShellRoute.name === route.name) {
+              if (isRefreshableRootRoute(route)) {
+                setRefreshTokens((current) => ({
+                  ...current,
+                  [route.name]: current[route.name] + 1,
+                }));
+              }
+              return;
+            }
+
             replace(route);
           }}
         >
           <div className="app-page">
-            {renderRoute(currentPage, {
-              push,
-              replace,
-              pop,
-              isLoggedIn: auth.status === 'authenticated',
-            })}
+            {renderRoute(visibleShellRoute, routeActions)}
           </div>
         </AppShell>
+
+        {isImmersiveRoute ? (
+          <AppShell
+            activeNav={null}
+            profileName={auth.profile?.name}
+            profileAvatar={auth.profile?.face}
+            isLoggedIn={auth.status === 'authenticated'}
+            immersive
+            onNavigate={() => undefined}
+          >
+            <div className="app-page">
+              {renderRoute(currentPage, routeActions)}
+            </div>
+          </AppShell>
+        ) : null}
         <FocusOverlay debugEnabled={isFocusDebugEnabled} />
       </PageBackHandlerProvider>
     </RouteLoadingOverlayProvider>
@@ -255,9 +392,13 @@ type RouteActions = {
   replace: (route: AppRoute) => void;
   pop: () => boolean;
   isLoggedIn: boolean;
+  refreshTokens: RootRouteRefreshTokens;
+  capturePlayerReturnFocus: () => void;
+  armPlayerExitFocusRestore: () => void;
 };
 
 function pushPlayer(actions: RouteActions, item: PlayerRoutePayload): void {
+  actions.capturePlayerReturnFocus();
   actions.push({
     name: 'player',
     aid: item.aid,
@@ -300,6 +441,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
       return (
         <HomePage
           isLoggedIn={actions.isLoggedIn}
+          refreshToken={actions.refreshTokens.home}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
           onOpenSearch={() => actions.replace({ name: 'search' })}
           onOpenHot={() => actions.replace({ name: 'hot' })}
@@ -308,6 +450,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
     case 'following':
       return (
         <FollowingPage
+          refreshToken={actions.refreshTokens.following}
           onLogin={() => actions.push({ name: 'login' })}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
@@ -315,15 +458,17 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
     case 'subscriptions':
       return (
         <SubscriptionsPage
+          refreshToken={actions.refreshTokens.subscriptions}
           onLogin={() => actions.push({ name: 'login' })}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
       );
     case 'hot':
-      return <HotPage onOpenPlayer={(item) => pushPlayer(actions, item)} />;
+      return <HotPage refreshToken={actions.refreshTokens.hot} onOpenPlayer={(item) => pushPlayer(actions, item)} />;
     case 'search':
       return (
         <SearchPage
+          refreshToken={actions.refreshTokens.search}
           onSubmit={(keyword) => actions.push({ name: 'search-results', keyword })}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
@@ -368,7 +513,10 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
           cid={route.cid}
           title={route.title}
           part={route.part}
-          onBack={() => actions.pop()}
+          onBack={() => {
+            actions.armPlayerExitFocusRestore();
+            actions.pop();
+          }}
           onOpenPlayer={(item) => actions.replace({
             name: 'player',
             aid: item.aid,
@@ -392,6 +540,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
     case 'history':
       return (
         <HistoryPage
+          refreshToken={actions.refreshTokens.history}
           onLogin={() => actions.push({ name: 'login' })}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
@@ -412,6 +561,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
       return (
         <LibraryPage
           mode="later"
+          refreshToken={actions.refreshTokens.later}
           onLogin={() => actions.push({ name: 'login' })}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
         />
@@ -420,6 +570,7 @@ function renderRoute(route: AppRoute, actions: RouteActions) {
       return (
         <LibraryPage
           mode="favorites"
+          refreshToken={actions.refreshTokens.favorites}
           onLogin={() => actions.push({ name: 'login' })}
           onOpenPlayer={(item) => pushPlayer(actions, item)}
         />

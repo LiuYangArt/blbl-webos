@@ -14,15 +14,16 @@ import { PageStatus } from '../shared/PageStatus';
 import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type SubscriptionsPageProps = {
+  refreshToken: number;
   onLogin: () => void;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function SubscriptionsPage({ onLogin, onOpenPlayer }: SubscriptionsPageProps) {
+export function SubscriptionsPage({ refreshToken, onLogin, onOpenPlayer }: SubscriptionsPageProps) {
   const { auth } = useAppStore();
   const viewerMid = auth.profile?.mid ?? 0;
   const subscriptions = usePagedCollection({
-    deps: [viewerMid],
+    deps: [viewerMid, refreshToken],
     enabled: viewerMid > 0,
     loadPage: async (page) => {
       const [anime, cinema] = await Promise.all([

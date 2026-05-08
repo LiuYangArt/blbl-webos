@@ -38,6 +38,7 @@ import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type HomePageProps = {
   isLoggedIn: boolean;
+  refreshToken: number;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
   onOpenSearch: () => void;
   onOpenHot: () => void;
@@ -85,6 +86,7 @@ const EMPTY_VIDEO_CARD_ITEMS: VideoCardItem[] = [];
 
 export function HomePage({
   isLoggedIn,
+  refreshToken,
   onOpenPlayer,
   onOpenSearch,
   onOpenHot,
@@ -103,11 +105,18 @@ export function HomePage({
   const [personalizedLoadMoreError, setPersonalizedLoadMoreError] = useState<string | null>(null);
   const [pendingPersonalizedFocusId, setPendingPersonalizedFocusId] = useState<string | null>(null);
   const initialPersonalizedPrefetchDoneRef = useRef(false);
+  const previousRefreshTokenRef = useRef(refreshToken);
   const initialHomeSnapshotRef = useRef({
     activeChannel,
     isAuthenticated,
     viewerMid,
   });
+
+  const shouldBypassFreshCache = refreshToken !== previousRefreshTokenRef.current;
+
+  useEffect(() => {
+    previousRefreshTokenRef.current = refreshToken;
+  }, [refreshToken]);
 
   const tabs = useMemo(() => (
     isAuthenticated
@@ -146,15 +155,17 @@ export function HomePage({
   const feed = useAsyncData<HomeFeedData>(async () => {
     const requestId = createRequestId();
     const startedAt = Date.now();
-    const freshPublicCache = readHomePublicFeedCache();
-    const stalePublicCache = freshPublicCache ?? readHomePublicFeedCache({ allowStale: true });
+    const freshPublicCache = shouldBypassFreshCache ? null : readHomePublicFeedCache();
+    const stalePublicCache = readHomePublicFeedCache({ allowStale: true });
 
     appendRuntimeDiagnostic('home', 'feed-load-start', {
       requestId,
       activeChannel,
       isAuthenticated,
       viewerMid,
-      cacheState: freshPublicCache ? 'fresh-hit' : stalePublicCache ? 'stale-available' : 'miss',
+      cacheState: shouldBypassFreshCache
+        ? (stalePublicCache ? 'manual-refresh-stale-available' : 'manual-refresh-bypass')
+        : freshPublicCache ? 'fresh-hit' : stalePublicCache ? 'stale-available' : 'miss',
     });
 
     try {
@@ -257,7 +268,7 @@ export function HomePage({
       }, 'error');
       throw error;
     }
-  }, [isAuthenticated, viewerMid]);
+  }, [isAuthenticated, shouldBypassFreshCache, viewerMid]);
 
   const recommendedFeed = feed.status === 'success' ? feed.data.recommended : EMPTY_VIDEO_OPTIONAL;
   const effectivePersonalizedItems = personalizedItems.length > 0 || recommendedFeed.data.length === 0

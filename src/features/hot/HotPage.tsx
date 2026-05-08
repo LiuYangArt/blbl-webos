@@ -8,12 +8,13 @@ import { PageStatus } from '../shared/PageStatus';
 import { useVideoListPageLoading } from '../shared/useVideoListPageLoading';
 
 type HotPageProps = {
+  refreshToken: number;
   onOpenPlayer: (item: PlayerRoutePayload) => void;
 };
 
-export function HotPage({ onOpenPlayer }: HotPageProps) {
+export function HotPage({ refreshToken, onOpenPlayer }: HotPageProps) {
   const hot = usePagedCollection({
-    deps: [],
+    deps: [refreshToken],
     loadPage: (page) => fetchPopularVideos(page, 24),
     getItemKey: (item) => `${item.bvid}:${item.cid}`,
   });
