@@ -91,6 +91,27 @@ describe('playerMediaProxy', () => {
     expect(new URL(resolved!.audioUrl ?? '').searchParams.get('url')).toBe('https://upos-sz.bilivideo.com/audio.m4s?bar=2');
   });
 
+  it('relay 配置 token 时会把 token 写入媒体代理 URL', () => {
+    mockReadMediaProxyOrigin.mockReturnValue(null);
+    mockReadRelaySettings.mockReturnValue({
+      enabled: true,
+      host: '192.168.50.81',
+      port: 19091,
+      accessToken: 'relay-token',
+      healthTimeoutMs: 1800,
+      requestTimeoutMs: 7000,
+    });
+
+    const resolved = resolvePlaybackCandidateUrls({
+      id: 'dash-pair:1',
+      videoUrl: 'https://upos-sz.bilivideo.com/video.m4s',
+      audioUrl: 'https://upos-sz.bilivideo.com/audio.m4s',
+    }, 'webos-2021', { preferRelayProxy: true });
+
+    expect(new URL(resolved!.videoUrl).searchParams.get('token')).toBe('relay-token');
+    expect(new URL(resolved!.audioUrl ?? '').searchParams.get('token')).toBe('relay-token');
+  });
+
   it('非模拟器设备保留原始候选地址', () => {
     mockReadMediaProxyOrigin.mockReturnValue(null);
     const candidate = {

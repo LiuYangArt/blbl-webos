@@ -87,6 +87,9 @@ func (s *Server) proxyMediaRequest(
 	if redirectDepth > maxMediaProxyRedirects {
 		return fmt.Errorf("上游重定向次数过多")
 	}
+	if !isAllowedMediaURL(upstreamURL) {
+		return fmt.Errorf("上游媒体地址不受支持")
+	}
 
 	upstreamRequest, err := http.NewRequestWithContext(request.Context(), request.Method, upstreamURL.String(), nil)
 	if err != nil {
@@ -186,9 +189,16 @@ func isAllowedMediaHost(hostname string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(hostname))
 	return strings.HasSuffix(normalized, ".bilivideo.com") ||
 		strings.HasSuffix(normalized, ".bilivideo.cn") ||
+		strings.HasSuffix(normalized, ".edge.mountaintoys.cn") ||
 		normalized == "127.0.0.1" ||
 		normalized == "localhost" ||
 		normalized == "::1"
+}
+
+func isAllowedMediaURL(target *url.URL) bool {
+	return target != nil &&
+		(target.Scheme == "https" || target.Scheme == "http") &&
+		isAllowedMediaHost(target.Hostname())
 }
 
 func isRedirectStatus(statusCode int) bool {

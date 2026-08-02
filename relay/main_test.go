@@ -463,6 +463,60 @@ func TestRelayMediaProxyRejectsUnauthorizedRequest(t *testing.T) {
 	}
 }
 
+func TestAllowedMediaHosts(t *testing.T) {
+	tests := []struct {
+		hostname string
+		allowed  bool
+	}{
+		{"upos-sz.example.bilivideo.com", true},
+		{"example.mcdn.bilivideo.cn", true},
+		{"b-example.edge.mountaintoys.cn", true},
+		{"edge.mountaintoys.cn.evil.example", false},
+		{"mountaintoys.cn", false},
+		{"example.com", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.hostname, func(t *testing.T) {
+			if actual := isAllowedMediaHost(test.hostname); actual != test.allowed {
+				t.Fatalf("expected allowed=%v, got %v", test.allowed, actual)
+			}
+		})
+	}
+}
+
+func TestRelayMediaProxyRejectsRedirectToUnsupportedHost(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Location", "https://example.com/video.m4s")
+		writer.WriteHeader(http.StatusFound)
+	}))
+	defer upstream.Close()
+
+	config := Config{
+		StateDir:        t.TempDir(),
+		RequestTimeout:  time.Second,
+		UserAgent:       "relay-test",
+		BiliAPIBaseURL:  upstream.URL,
+		BiliPassportURL: upstream.URL,
+	}
+	store, err := NewStateStore(config.StateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(&config, store, NewBilibiliClient(config), log.New(io.Discard, "", 0))
+	app := httptest.NewServer(server.routes())
+	defer app.Close()
+
+	response, err := http.Get(app.URL + "/media?url=" + url.QueryEscape(upstream.URL+"/video.m4s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", response.StatusCode)
+	}
+}
+
 type httpResult struct {
 	StatusCode int
 	Body       string
