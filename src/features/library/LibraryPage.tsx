@@ -14,8 +14,10 @@ import {
 } from '../../services/api/bilibili';
 import {
   createDirectVideoListItem,
+  createResolvedVideoListItem,
   mapFavoriteItemToVideoCard,
   mapLaterItemToVideoCard,
+  resolveFavoritePlayerPayload,
 } from '../shared/videoListItems';
 import { pickImageUrls } from '../shared/videoListLoading';
 import { usePagedCollection } from '../shared/usePagedCollection';
@@ -187,15 +189,10 @@ export function LibraryPage({ mode, refreshToken, onLogin, onOpenPlayer }: Libra
     return null;
   }
 
-  const items = favoriteItems.items.map((item) => createDirectVideoListItem(
+  const items = favoriteItems.items.map((item) => createResolvedVideoListItem(
     `${item.bvid}:${item.cid}`,
     mapFavoriteItemToVideoCard(item, activeFolder?.title),
-    {
-      aid: item.aid,
-      bvid: item.bvid,
-      cid: item.cid,
-      title: item.title,
-    },
+    () => resolveFavoritePlayerPayload(item),
   ));
 
   return (

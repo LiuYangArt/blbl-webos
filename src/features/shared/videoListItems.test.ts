@@ -3,6 +3,7 @@ import type { PgcSubscriptionItem } from '../../services/api/types';
 import {
   mapHistoryItemToVideoCard,
   mapPgcSubscriptionToVideoCard,
+  resolveFavoritePlayerPayload,
   resolvePgcSubscriptionPlayerPayload,
   resolveVideoPlayerPayload,
 } from './videoListItems';
@@ -78,6 +79,45 @@ describe('videoListItems', () => {
       title: '详情标题',
       part: 'P1',
     });
+  });
+
+  it('收藏条目即使带有 cid，也会重新确认真实分 P', async () => {
+    vi.mocked(fetchVideoDetail).mockResolvedValue({
+      aid: 1,
+      bvid: 'BV1favorite',
+      cid: 456,
+      title: '详情标题',
+      cover: '',
+      description: '',
+      duration: 120,
+      owner: { mid: 1, name: '作者', face: '' },
+      stats: {
+        playCount: 0,
+        danmakuCount: 0,
+        favoriteCount: 0,
+        likeCount: 0,
+        replyCount: 0,
+        coinCount: 0,
+        shareCount: 0,
+      },
+      parts: [{ cid: 456, page: 1, part: 'P1', duration: 120 }],
+      publishAt: 0,
+      typeName: '视频',
+    });
+
+    const payload = await resolveFavoritePlayerPayload({
+      aid: 1,
+      bvid: 'BV1favorite',
+      cid: 999,
+      title: '收藏标题',
+      cover: '',
+      author: '作者',
+      duration: 120,
+      description: '',
+    });
+
+    expect(fetchVideoDetail).toHaveBeenCalledWith('BV1favorite');
+    expect(payload.cid).toBe(456);
   });
 
   it('订阅条目会解析为首个可播分集', async () => {

@@ -73,6 +73,14 @@ export async function resolveVideoPlayerPayload(item: {
   };
 }
 
+export async function resolveFavoritePlayerPayload(item: FavoriteItem): Promise<PlayerRoutePayload> {
+  return resolveVideoPlayerPayload({
+    aid: item.aid,
+    bvid: item.bvid,
+    title: item.title,
+  });
+}
+
 export async function resolvePgcSubscriptionPlayerPayload(item: PgcSubscriptionItem): Promise<PlayerRoutePayload> {
   const season = await fetchPgcSeasonDetail(item.seasonId);
   const firstPlayableEpisode = season.episodes.find((episode) => episode.isPlayable);
